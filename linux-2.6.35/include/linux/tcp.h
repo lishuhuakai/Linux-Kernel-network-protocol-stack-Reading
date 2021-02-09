@@ -318,10 +318,13 @@ struct tcp_sock {
 	u32	copied_seq;	/* Head of yet unread data		*/
 	u32	rcv_wup;	/* rcv_nxt on last window update sent	*/
  	u32	snd_nxt;	/* Next sequence we send		*/
+                    /* 要发送的下一个序列值 */
 
  	u32	snd_una;	/* First byte we want an ack for	*/
+                    /* 已经确认了的序列号+1   (对方已经收到了) */
  	u32	snd_sml;	/* Last byte of the most recently transmitted small packet */
 	u32	rcv_tstamp;	/* timestamp of last received ACK (for keepalives) */
+                    /* 记录最近一次接收到ack报文的时间 */
 	u32	lsndtime;	/* timestamp of last sent data packet (for restart window) */
 
 	/* Data for direct copy to user */
@@ -342,6 +345,7 @@ struct tcp_sock {
 
 	u32	snd_wl1;	/* Sequence for window update		*/
 	u32	snd_wnd;	/* The window we expect to receive	*/
+                    /* 发送窗口的大小 */
 	u32	max_window;	/* Maximal window ever seen from peer	*/
 	u32	mss_cache;	/* Cached effective mss, not including SACKS */
 
@@ -364,7 +368,9 @@ struct tcp_sock {
 	u32	rtt_seq;	/* sequence number to update rttvar	*/
 
 	u32	packets_out;	/* Packets which are "in flight"	*/
+                        /* 已经发送了,但是还没有收到确认的报文的数目,像还在坐飞机一样 */
 	u32	retrans_out;	/* Retransmitted packets out		*/
+                        /* 重传但是还没有得到确认的TCP段的个数 */
 
 	u16	urg_data;	/* Saved octet of OOB data and control flags */
 	u8	ecn_flags;	/* ECN status bits.			*/
@@ -392,7 +398,14 @@ struct tcp_sock {
 	u32	pushed_seq;	/* Last pushed seq, required to talk to windows */
 	u32	lost_out;	/* Lost packets			*/
 	u32	sacked_out;	/* SACK'd packets			*/
+    /* 启用sack时,通过sack的tcp选项标识已接收到段的数量,不启用sack时,标识
+     * 接收到重复确认的次数 */
 	u32	fackets_out;	/* FACK'd packets			*/
+    /* 记录SND.UNA与sack选项中目前接收方接收到的段中最高序号段之间的段数,FACK算法用
+     * sack选项来计算丢失在网络上的段数,例如:
+     * lost_out = fackets_out - sack_out
+     * left_out = fackets_out
+     */
 	u32	tso_deferred;
 	u32	bytes_acked;	/* Appropriate Byte Counting - RFC3465 */
 
@@ -407,7 +420,7 @@ struct tcp_sock {
 	struct tcp_sack_block duplicate_sack[1]; /* D-SACK block */
 	struct tcp_sack_block selective_acks[4]; /* The SACKS themselves*/
 
-	struct tcp_sack_block recv_sack_cache[4];
+	struct tcp_sack_block recv_sack_cache[4]; /* 用于记录上一次的sack对 */
 
 	struct sk_buff *highest_sack;   /* highest skb with SACK received
 					 * (validity guaranteed only if

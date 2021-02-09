@@ -64,13 +64,15 @@ int sysctl_tcp_cookie_size __read_mostly = 0; /* TCP_COOKIE_MAX */
 EXPORT_SYMBOL_GPL(sysctl_tcp_cookie_size);
 
 
-/* Account for new data that has been sent to the network. */
+/* Account for new data that has been sent to the network.
+ * 统计那些已经被发到网络层的数据
+ */
 static void tcp_event_new_data_sent(struct sock *sk, struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 	unsigned int prior_packets = tp->packets_out;
 
-	tcp_advance_send_head(sk, skb);
+	tcp_advance_send_head(sk, skb); /* 移动发送队列的指针 */
 	tp->snd_nxt = TCP_SKB_CB(skb)->end_seq;
 
 	/* Don't override Nagle indefinately with F-RTO */
@@ -379,7 +381,9 @@ static inline int tcp_urg_mode(const struct tcp_sock *tp)
 
 struct tcp_out_options {
 	u8 options;		/* bit field of OPTION_* */
+    /* ws指的是窗口缩放因子 */
 	u8 ws;			/* window scale, 0 to disable */
+    /* num_sack_blocks -- sack选项中有多少个左右边界块 */
 	u8 num_sack_blocks;	/* number of SACK blocks to include */
 	u8 hash_size;		/* bytes in hash_location */
 	u16 mss;		/* 0 to disable */
@@ -426,6 +430,7 @@ static u8 tcp_cookie_size_check(u8 desired)
  *
  * At least SACK_PERM as the first option is known to lead to a disaster
  * (but it may well be that other scenarios fail similarly).
+ * 开始构建tcp头部选项
  */
 static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			      struct tcp_out_options *opts)
@@ -463,15 +468,15 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			       (TCPOLEN_MSS << 16) |
 			       opts->mss);
 	}
-
+    /* TS表示时间戳选项 */
 	if (likely(OPTION_TS & options)) {
-		if (unlikely(OPTION_SACK_ADVERTISE & options)) {
-			*ptr++ = htonl((TCPOPT_SACK_PERM << 24) |
-				       (TCPOLEN_SACK_PERM << 16) |
-				       (TCPOPT_TIMESTAMP << 8) |
-				       TCPOLEN_TIMESTAMP);
+		if (unlikely(OPTION_SACK_ADVERTISE & options)) { /* 允许sack */
+			*ptr++ = htonl((TCPOPT_SACK_PERM << 24) | /* kind -- 4 */
+				       (TCPOLEN_SACK_PERM << 16) |     /* length -- 2 */
+				       (TCPOPT_TIMESTAMP << 8) |       /* kind -- 8*/
+				       TCPOLEN_TIMESTAMP);             /* 长度 -- 10 */
 			options &= ~OPTION_SACK_ADVERTISE;
-		} else {
+		} else { /* 不允许sack */
 			*ptr++ = htonl((TCPOPT_NOP << 24) |
 				       (TCPOPT_NOP << 16) |
 				       (TCPOPT_TIMESTAMP << 8) |
@@ -525,14 +530,14 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			       (TCPOPT_SACK_PERM << 8) |
 			       TCPOLEN_SACK_PERM);
 	}
-
+    /* 窗口缩放 */
 	if (unlikely(OPTION_WSCALE & options)) {
 		*ptr++ = htonl((TCPOPT_NOP << 24) |
 			       (TCPOPT_WINDOW << 16) |
 			       (TCPOLEN_WINDOW << 8) |
-			       opts->ws);
+			       opts->ws); /* 窗口扩大因子 */
 	}
-
+    /* sack选项 */
 	if (unlikely(opts->num_sack_blocks)) {
 		struct tcp_sack_block *sp = tp->rx_opt.dsack ?
 			tp->duplicate_sack : tp->selective_acks;
@@ -543,7 +548,7 @@ static void tcp_options_write(__be32 *ptr, struct tcp_sock *tp,
 			       (TCPOPT_SACK <<  8) |
 			       (TCPOLEN_SACK_BASE + (opts->num_sack_blocks *
 						     TCPOLEN_SACK_PERBLOCK)));
-
+        /* 填充左边界以及右边界 */
 		for (this_sack = 0; this_sack < opts->num_sack_blocks;
 		     ++this_sack) {
 			*ptr++ = htonl(sp[this_sack].start_seq);
@@ -784,6 +789,10 @@ static unsigned tcp_established_options(struct sock *sk, struct sk_buff *skb,
  *
  * We are working here with either a clone of the original
  * SKB, or a fresh unique copy made by the retransmit engine.
+ * 输出数据段到网络层
+ * @param skb 待发送的段
+ * @param clone_it 标志发送前是拷贝还是复制
+ * @param gfp_mask 为克隆或复制skb时的分配内存的方式
  */
 static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			    gfp_t gfp_mask)
@@ -803,7 +812,7 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	/* If congestion control is doing timestamping, we must
 	 * take such a timestamp before we potentially clone/copy.
 	 */
-	if (icsk->icsk_ca_ops->flags & TCP_CONG_RTT_STAMP)
+	if (icsk->icsk_ca_ops->flags & TCP_CONG_RTT_STAMP) /* 时间采样 */
 		__net_timestamp(skb);
 
 	if (likely(clone_it)) {
@@ -819,8 +828,8 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	tp = tcp_sk(sk);
 	tcb = TCP_SKB_CB(skb);
 	memset(&opts, 0, sizeof(opts));
-
-	if (unlikely(tcb->flags & TCPCB_FLAG_SYN))
+    /* 计算选项的大小 */
+	if (unlikely(tcb->flags & TCPCB_FLAG_SYN)) /* 判断此skb是不是syn段 */
 		tcp_options_size = tcp_syn_options(sk, skb, &opts, &md5);
 	else
 		tcp_options_size = tcp_established_options(sk, skb, &opts,
@@ -835,14 +844,15 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	skb_set_owner_w(skb, sk);
 
 	/* Build TCP header and checksum it. */
-	th = tcp_hdr(skb);
+	th = tcp_hdr(skb); /* 获取tcp首部 */
 	th->source		= inet->inet_sport;
 	th->dest		= inet->inet_dport;
-	th->seq			= htonl(tcb->seq);
-	th->ack_seq		= htonl(tp->rcv_nxt);
+	th->seq			= htonl(tcb->seq); /* 序列值 */
+	th->ack_seq		= htonl(tp->rcv_nxt); /* 确认序列号,或者说下一个报文的起始序号 */
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
-					tcb->flags);
+					tcb->flags); /* 填充头部大小以及对应的flags */
 
+    /* 设置接收窗口的初始值 */
 	if (unlikely(tcb->flags & TCPCB_FLAG_SYN)) {
 		/* RFC1323: The window in SYN & SYN/ACK segments
 		 * is never scaled.
@@ -864,7 +874,7 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 			th->urg = 1;
 		}
 	}
-
+    /* tcp头部之后,就是选项字段 */
 	tcp_options_write((__be32 *)(th + 1), tp, &opts);
 	if (likely((tcb->flags & TCPCB_FLAG_SYN) == 0))
 		TCP_ECN_send(sk, skb, tcp_header_size);
@@ -889,7 +899,7 @@ static int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	if (after(tcb->end_seq, tp->snd_nxt) || tcb->seq == tcb->end_seq)
 		TCP_ADD_STATS(sock_net(sk), TCP_MIB_OUTSEGS,
 			      tcp_skb_pcount(skb));
-
+    /* 这里实际调用的是ip层的ip_queue_xmit */
 	err = icsk->icsk_af_ops->queue_xmit(skb);
 	if (likely(err <= 0))
 		return err;
@@ -1235,17 +1245,18 @@ unsigned int tcp_sync_mss(struct sock *sk, u32 pmtu)
 
 /* Compute the current effective MSS, taking SACKs and IP options,
  * and even PMTU discovery events into account.
+ * 计算当前的有效MSS,考虑IP选项,甚至PMTU discovery事件
  */
 unsigned int tcp_current_mss(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct dst_entry *dst = __sk_dst_get(sk);
+	struct dst_entry *dst = __sk_dst_get(sk); /* 获取路由缓存项 */
 	u32 mss_now;
 	unsigned header_len;
 	struct tcp_out_options opts;
 	struct tcp_md5sig_key *md5;
 
-	mss_now = tp->mss_cache;
+	mss_now = tp->mss_cache; /* 发送方当前的有效MSS */
 
 	if (dst) {
 		u32 mtu = dst_mtu(dst);
@@ -1718,6 +1729,9 @@ static int tcp_mtu_probe(struct sock *sk)
  *
  * Returns 1, if no segments are in flight and we have queued segments, but
  * cannot send anything now because of SWS or another problem.
+ * 此函数将tcp报文发送至网络.
+ * @param mss_now 当前有效的MSS
+ * @param nonagle 标志是否启用nonagle算法
  */
 static int tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			  int push_one, gfp_t gfp)
@@ -1740,13 +1754,13 @@ static int tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 		}
 	}
 
-	while ((skb = tcp_send_head(sk))) {
+	while ((skb = tcp_send_head(sk))) { /* 不停地获取发送队列的数据报 */
 		unsigned int limit;
 
 		tso_segs = tcp_init_tso_segs(sk, skb, mss_now);
 		BUG_ON(!tso_segs);
 
-		cwnd_quota = tcp_cwnd_test(tp, skb);
+		cwnd_quota = tcp_cwnd_test(tp, skb); /* 检测拥塞窗口的大小,如果为0,表示拥塞窗口已经满了 */
 		if (!cwnd_quota)
 			break;
 
@@ -1773,7 +1787,7 @@ static int tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			break;
 
 		TCP_SKB_CB(skb)->when = tcp_time_stamp;
-
+        /* 这里调用tcp_transmit_skb发送数据 */
 		if (unlikely(tcp_transmit_skb(sk, skb, 1, gfp)))
 			break;
 
@@ -1816,6 +1830,8 @@ void __tcp_push_pending_frames(struct sock *sk, unsigned int cur_mss,
 
 /* Send _single_ skb sitting at the send head. This function requires
  * true push pending frames to setup probe timer etc.
+ * 输出发送队列上的第一个skb
+ * @param mss_now 当前的mss
  */
 void tcp_push_one(struct sock *sk, unsigned int mss_now)
 {

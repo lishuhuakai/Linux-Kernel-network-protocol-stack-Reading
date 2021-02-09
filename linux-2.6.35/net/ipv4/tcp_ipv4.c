@@ -1641,7 +1641,6 @@ csum_err:
 /*
  *	From tcp_input.c
  */
-
 int tcp_v4_rcv(struct sk_buff *skb)
 {
 	const struct iphdr *iph;
@@ -1675,10 +1674,10 @@ int tcp_v4_rcv(struct sk_buff *skb)
 
 	th = tcp_hdr(skb);
 	iph = ip_hdr(skb);
-	TCP_SKB_CB(skb)->seq = ntohl(th->seq);
+	TCP_SKB_CB(skb)->seq = ntohl(th->seq); /* 起始序列值 */
 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
-				    skb->len - th->doff * 4);
-	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq);
+				    skb->len - th->doff * 4); /* 终止序列值 */
+	TCP_SKB_CB(skb)->ack_seq = ntohl(th->ack_seq); /* 确认序列号 */
 	TCP_SKB_CB(skb)->when	 = 0;
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;
@@ -1700,7 +1699,7 @@ process:
 		goto discard_and_relse;
 	nf_reset(skb);
 
-	if (sk_filter(sk, skb))
+	if (sk_filter(sk, skb)) /* 过滤器 */
 		goto discard_and_relse;
 
 	skb->dev = NULL;
@@ -1720,7 +1719,7 @@ process:
 			if (!tcp_prequeue(sk, skb))
 				ret = tcp_v4_do_rcv(sk, skb);
 		}
-	} else if (unlikely(sk_add_backlog(sk, skb))) {
+	} else if (unlikely(sk_add_backlog(sk, skb))) { /* 将报文添加到sk_backlog队列中,用户进程解锁传输控制块之后再处理 */
 		bh_unlock_sock(sk);
 		NET_INC_STATS_BH(net, LINUX_MIB_TCPBACKLOGDROP);
 		goto discard_and_relse;

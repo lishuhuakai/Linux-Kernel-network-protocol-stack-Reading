@@ -898,6 +898,11 @@ static inline int select_size(struct sock *sk, int sg)
 	return tmp;
 }
 
+/* 发送tcp数据
+ * @param sock 套接字对应的句柄
+ * @param msg 待发送的消息
+ * @param size 消息长度
+ */
 int tcp_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 		size_t size)
 {
@@ -914,9 +919,10 @@ int tcp_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	TCP_CHECK_TIMER(sk);
 
 	flags = msg->msg_flags;
-	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT);
+	timeo = sock_sndtimeo(sk, flags & MSG_DONTWAIT); /* 超时时间 */
 
 	/* Wait for a connection to finish. */
+    /* TCP只在ESTABLISHED或者CLOSE_WAIT状态下,接收窗口是打开的,才能接收数据 */
 	if ((1 << sk->sk_state) & ~(TCPF_ESTABLISHED | TCPF_CLOSE_WAIT))
 		if ((err = sk_stream_wait_connect(sk, &timeo)) != 0)
 			goto out_err;
@@ -929,7 +935,7 @@ int tcp_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	/* Ok commence sending. */
 	iovlen = msg->msg_iovlen;
 	iov = msg->msg_iov;
-	copied = 0;
+	copied = 0; /* copied用于记录从用户数据块复制到skb中的字节数 */
 
 	err = -EPIPE;
 	if (sk->sk_err || (sk->sk_shutdown & SEND_SHUTDOWN))
@@ -947,11 +953,11 @@ int tcp_sendmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 			int copy = 0;
 			int max = size_goal;
 
-			skb = tcp_write_queue_tail(sk);
+			skb = tcp_write_queue_tail(sk); /* 获取发送队尾部的skb */
 			if (tcp_send_head(sk)) {
 				if (skb->ip_summed == CHECKSUM_NONE)
 					max = mss_now;
-				copy = max - skb->len;
+				copy = max - skb->len; /* 计算拷贝的字节数 */
 			}
 
 			if (copy <= 0) {
@@ -964,7 +970,7 @@ new_segment:
 
 				skb = sk_stream_alloc_skb(sk,
 							  select_size(sk, sg),
-							  sk->sk_allocation);
+							  sk->sk_allocation); /* 分配空间 */
 				if (!skb)
 					goto wait_for_memory;
 
@@ -974,13 +980,13 @@ new_segment:
 				if (sk->sk_route_caps & NETIF_F_ALL_CSUM)
 					skb->ip_summed = CHECKSUM_PARTIAL;
 
-				skb_entail(sk, skb);
+				skb_entail(sk, skb); /* 将skb添加到发送队列的尾部 */
 				copy = size_goal;
 				max = size_goal;
 			}
 
 			/* Try to append data to the end of skb. */
-			if (copy > seglen)
+			if (copy > seglen) /* seglen是待复制数据长度 */
 				copy = seglen;
 
 			/* Where to copy to? */
@@ -990,7 +996,7 @@ new_segment:
 					copy = skb_tailroom(skb);
 				if ((err = skb_add_data(skb, from, copy)) != 0)
 					goto do_fault;
-			} else {
+			} else { /* skb的线性存储区已经没有空间了 */
 				int merge = 0;
 				int i = skb_shinfo(skb)->nr_frags;
 				struct page *page = TCP_PAGE(sk);
@@ -1078,9 +1084,10 @@ new_segment:
 
 			if (forced_push(tp)) {
 				tcp_mark_push(tp, skb);
+                /* 下面实际也会调用tcp_write_xmit */
 				__tcp_push_pending_frames(sk, mss_now, TCP_NAGLE_PUSH);
 			} else if (skb == tcp_send_head(sk))
-				tcp_push_one(sk, mss_now);
+				tcp_push_one(sk, mss_now); /* 这里实际会调用tcp_write_xmit函数 */
 			continue;
 
 wait_for_sndbuf:

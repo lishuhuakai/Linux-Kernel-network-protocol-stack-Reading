@@ -254,7 +254,7 @@ typedef unsigned int sk_buff_data_t;
 typedef unsigned char *sk_buff_data_t;
 #endif
 
-/** 
+/**
  *	struct sk_buff - socket buffer
  *	@next: Next buffer in list
  *	@prev: Previous buffer in list
@@ -283,7 +283,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@priority: Packet queueing priority
  *	@users: User count - see {datagram,tcp}.c
  *	@protocol: Packet protocol from driver
- *	@truesize: Buffer size 
+ *	@truesize: Buffer size
  *	@head: Head of buffer
  *	@data: Data head pointer
  *	@tail: Tail pointer
@@ -437,7 +437,7 @@ struct sk_buff {
  */
 static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
 {
-	/* If refdst was not refcounted, check we still are in a 
+	/* If refdst was not refcounted, check we still are in a
 	 * rcu_read_lock section
 	 */
 	WARN_ON((skb->_skb_refdst & SKB_DST_NOREF) &&
@@ -1643,7 +1643,7 @@ static inline int skb_cow_head(struct sk_buff *skb, unsigned int headroom)
  *	is untouched. Otherwise it is extended. Returns zero on
  *	success. The skb is freed on error.
  */
- 
+
 static inline int skb_padto(struct sk_buff *skb, unsigned int len)
 {
 	unsigned int size = skb->len;
@@ -1652,6 +1652,10 @@ static inline int skb_padto(struct sk_buff *skb, unsigned int len)
 	return skb_pad(skb, len - size);
 }
 
+/* 将用户空间的数据拷贝到skb之中
+ * @param skb 数据目的地
+ * @param from 数据来源
+ */
 static inline int skb_add_data(struct sk_buff *skb,
 			       char __user *from, int copy)
 {

@@ -6,6 +6,8 @@
  * Copyright (C) 2005 Stephen Hemminger <shemminger@osdl.org>
  */
 
+/* TCP拥塞的实现 */
+
 #include <linux/module.h>
 #include <linux/mm.h>
 #include <linux/types.h>
@@ -18,7 +20,9 @@ int sysctl_tcp_max_ssthresh = 0;
 static DEFINE_SPINLOCK(tcp_cong_list_lock);
 static LIST_HEAD(tcp_cong_list);
 
-/* Simple linear search, don't expect many entries! */
+/* Simple linear search, don't expect many entries!
+ * 查找对应的拥塞处理方法
+ */
 static struct tcp_congestion_ops *tcp_ca_find(const char *name)
 {
 	struct tcp_congestion_ops *e;
@@ -108,7 +112,9 @@ void tcp_cleanup_congestion_control(struct sock *sk)
 	module_put(icsk->icsk_ca_ops->owner);
 }
 
-/* Used by sysctl to change default congestion control */
+/* Used by sysctl to change default congestion control
+ * 设置默认的拥塞避免方法
+ */
 int tcp_set_default_congestion_control(const char *name)
 {
 	struct tcp_congestion_ops *ca;
@@ -356,6 +362,7 @@ EXPORT_SYMBOL_GPL(tcp_cong_avoid_ai);
  */
 /* This is Jacobson's slow start and congestion avoidance.
  * SIGCOMM '88, p. 328.
+ * Reno拥塞避免
  */
 void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 {
@@ -365,8 +372,8 @@ void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 		return;
 
 	/* In "safe" area, increase. */
-	if (tp->snd_cwnd <= tp->snd_ssthresh)
-		tcp_slow_start(tp);
+	if (tp->snd_cwnd <= tp->snd_ssthresh) /* 发送窗口小于ssthresh */
+		tcp_slow_start(tp); /* 执行慢启动 */
 
 	/* In dangerous area, increase slowly. */
 	else if (sysctl_tcp_abc) {
@@ -376,7 +383,7 @@ void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 		if (tp->bytes_acked >= tp->snd_cwnd*tp->mss_cache) {
 			tp->bytes_acked -= tp->snd_cwnd*tp->mss_cache;
 			if (tp->snd_cwnd < tp->snd_cwnd_clamp)
-				tp->snd_cwnd++;
+				tp->snd_cwnd++; /* 超过阈值之后,逐渐加1 */
 		}
 	} else {
 		tcp_cong_avoid_ai(tp, tp->snd_cwnd);
@@ -385,6 +392,8 @@ void tcp_reno_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 EXPORT_SYMBOL_GPL(tcp_reno_cong_avoid);
 
 /* Slow start threshold is half the congestion window (min 2) */
+/* 获取reno算法的慢启动阈值,一般是65535
+ */
 u32 tcp_reno_ssthresh(struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -392,7 +401,9 @@ u32 tcp_reno_ssthresh(struct sock *sk)
 }
 EXPORT_SYMBOL_GPL(tcp_reno_ssthresh);
 
-/* Lower bound on congestion window with halving. */
+/* Lower bound on congestion window with halving.
+ * 出现拥塞时,将ssthresh减半
+ */
 u32 tcp_reno_min_cwnd(const struct sock *sk)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);

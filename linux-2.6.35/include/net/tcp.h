@@ -54,9 +54,9 @@ extern void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define MAX_TCP_HEADER	(128 + MAX_HEADER)
 #define MAX_TCP_OPTION_SPACE 40
 
-/* 
+/*
  * Never offer a window over 32767 without using window scaling. Some
- * poor stacks do signed 16bit maths! 
+ * poor stacks do signed 16bit maths!
  */
 #define MAX_TCP_WINDOW		32767U
 
@@ -156,7 +156,7 @@ extern void tcp_time_wait(struct sock *sk, int state, int timeo);
 /*
  *	TCP option
  */
- 
+
 #define TCPOPT_NOP		1	/* Padding */
 #define TCPOPT_EOL		0	/* End of options */
 #define TCPOPT_MSS		2	/* Segment size negotiating */
@@ -310,18 +310,18 @@ extern int			tcp_sendmsg(struct kiocb *iocb, struct socket *sock,
 					    struct msghdr *msg, size_t size);
 extern ssize_t			tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags);
 
-extern int			tcp_ioctl(struct sock *sk, 
-					  int cmd, 
+extern int			tcp_ioctl(struct sock *sk,
+					  int cmd,
 					  unsigned long arg);
 
-extern int			tcp_rcv_state_process(struct sock *sk, 
+extern int			tcp_rcv_state_process(struct sock *sk,
 						      struct sk_buff *skb,
 						      struct tcphdr *th,
 						      unsigned len);
 
-extern int			tcp_rcv_established(struct sock *sk, 
+extern int			tcp_rcv_established(struct sock *sk,
 						    struct sk_buff *skb,
-						    struct tcphdr *th, 
+						    struct tcphdr *th,
 						    unsigned len);
 
 extern void			tcp_rcv_space_adjust(struct sock *sk);
@@ -388,16 +388,16 @@ extern void			tcp_enter_loss(struct sock *sk, int how);
 extern void			tcp_clear_retrans(struct tcp_sock *tp);
 extern void			tcp_update_metrics(struct sock *sk);
 
-extern void			tcp_close(struct sock *sk, 
+extern void			tcp_close(struct sock *sk,
 					  long timeout);
 extern unsigned int		tcp_poll(struct file * file, struct socket *sock, struct poll_table_struct *wait);
 
-extern int			tcp_getsockopt(struct sock *sk, int level, 
+extern int			tcp_getsockopt(struct sock *sk, int level,
 					       int optname,
-					       char __user *optval, 
+					       char __user *optval,
 					       int __user *optlen);
-extern int			tcp_setsockopt(struct sock *sk, int level, 
-					       int optname, char __user *optval, 
+extern int			tcp_setsockopt(struct sock *sk, int level,
+					       int optname, char __user *optval,
 					       unsigned int optlen);
 extern int			compat_tcp_getsockopt(struct sock *sk,
 					int level, int optname,
@@ -410,7 +410,7 @@ extern void			tcp_syn_ack_timeout(struct sock *sk,
 						    struct request_sock *req);
 extern int			tcp_recvmsg(struct kiocb *iocb, struct sock *sk,
 					    struct msghdr *msg,
-					    size_t len, int nonblock, 
+					    size_t len, int nonblock,
 					    int flags, int *addr_len);
 
 extern void			tcp_parse_options(struct sk_buff *skb,
@@ -458,9 +458,9 @@ extern int			tcp_disconnect(struct sock *sk, int flags);
 
 /* From syncookies.c */
 extern __u32 syncookie_secret[2][16-4+SHA_DIGEST_WORDS];
-extern struct sock *cookie_v4_check(struct sock *sk, struct sk_buff *skb, 
+extern struct sock *cookie_v4_check(struct sock *sk, struct sk_buff *skb,
 				    struct ip_options *opt);
-extern __u32 cookie_v4_init_sequence(struct sock *sk, struct sk_buff *skb, 
+extern __u32 cookie_v4_init_sequence(struct sock *sk, struct sk_buff *skb,
 				     __u16 *mss);
 
 extern __u32 cookie_init_timestamp(struct request_sock *req);
@@ -692,7 +692,7 @@ struct tcp_congestion_ops {
 	void (*release)(struct sock *sk);
 
 	/* return slow start threshold (required) */
-	u32 (*ssthresh)(struct sock *sk);
+	u32 (*ssthresh)(struct sock *sk); /* 获取慢启动阈值 */
 	/* lower bound for congestion window (optional) */
 	u32 (*min_cwnd)(const struct sock *sk);
 	/* do new cwnd calculation (required) */
@@ -795,6 +795,7 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
  *	"Packets sent once on transmission queue" MINUS
  *	"Packets left network, but not honestly ACKed yet" PLUS
  *	"Packets fast retransmitted"
+ * 获取正在传输中的报文的个数
  */
 static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 {
@@ -925,7 +926,7 @@ static inline int tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 	if (sysctl_tcp_low_latency || !tp->ucopy.task)
 		return 0;
 
-	__skb_queue_tail(&tp->ucopy.prequeue, skb);
+	__skb_queue_tail(&tp->ucopy.prequeue, skb); /* 添加到尾部 */
 	tp->ucopy.memory += skb->truesize;
 	if (tp->ucopy.memory > sk->sk_rcvbuf) {
 		struct sk_buff *skb1;
@@ -933,7 +934,7 @@ static inline int tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 		BUG_ON(sock_owned_by_user(sk));
 
 		while ((skb1 = __skb_dequeue(&tp->ucopy.prequeue)) != NULL) {
-			sk_backlog_rcv(sk, skb1);
+			sk_backlog_rcv(sk, skb1); /* 拷贝到用户空间? */
 			NET_INC_STATS_BH(sock_net(sk),
 					 LINUX_MIB_TCPPREQUEUEDROPPED);
 		}
@@ -941,7 +942,7 @@ static inline int tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 		tp->ucopy.memory = 0;
 	} else if (skb_queue_len(&tp->ucopy.prequeue) == 1) {
 		wake_up_interruptible_sync_poll(sk_sleep(sk),
-					   POLLIN | POLLRDNORM | POLLRDBAND);
+					   POLLIN | POLLRDNORM | POLLRDBAND); /* 唤醒poll? */
 		if (!inet_csk_ack_scheduled(sk))
 			inet_csk_reset_xmit_timer(sk, ICSK_TIME_DACK,
 						  (3 * tcp_rto_min(sk)) / 4,
@@ -983,16 +984,16 @@ static inline int tcp_win_from_space(int space)
 		space - (space>>sysctl_tcp_adv_win_scale);
 }
 
-/* Note: caller must be prepared to deal with negative returns */ 
+/* Note: caller must be prepared to deal with negative returns */
 static inline int tcp_space(const struct sock *sk)
 {
 	return tcp_win_from_space(sk->sk_rcvbuf -
 				  atomic_read(&sk->sk_rmem_alloc));
-} 
+}
 
 static inline int tcp_full_space(const struct sock *sk)
 {
-	return tcp_win_from_space(sk->sk_rcvbuf); 
+	return tcp_win_from_space(sk->sk_rcvbuf);
 }
 
 static inline void tcp_openreq_init(struct request_sock *req,

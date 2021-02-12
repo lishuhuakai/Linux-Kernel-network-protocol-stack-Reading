@@ -102,7 +102,7 @@ struct listen_sock {
 	/* 3 bytes hole, try to use */
 	int			qlen; /* 当前连接请求块的数目 */
 	int			qlen_young; /* 当前没有重传过syn+ack请求连接块的数目 */
-	int			clock_hand;
+	int			clock_hand; /* 记录已经处理到了的索引 */
 	u32			hash_rnd;
 	u32			nr_table_entries; /* 实际分配用来保存syn请求连接的request_sock结构数组的长度 */
 	struct request_sock	*syn_table[0];

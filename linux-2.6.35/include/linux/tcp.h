@@ -354,6 +354,7 @@ struct tcp_sock {
 	u32	rcv_ssthresh;	/* Current window clamp			*/
 
 	u32	frto_highmark;	/* snd_nxt when RTO occurred */
+                        /* frto_highmark记录了RTO发生时的snd_nxt */
 	u16	advmss;		/* Advertised MSS			*/
 	u8	frto_counter;	/* Number of new acks after RTO */
 	u8	nonagle     : 4,/* Disable Nagle algorithm?             */

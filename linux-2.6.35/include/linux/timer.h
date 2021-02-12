@@ -88,6 +88,11 @@ void init_timer_deferrable_key(struct timer_list *timer,
 		init_timer_on_stack_key((timer), #timer, &__key);	\
 	} while (0)
 
+/* 构建定时器
+ * @param timer 定时器句柄
+ * @param fn 回调函数
+ * @param data 回调函数的参数
+ */
 #define setup_timer(timer, fn, data)					\
 	do {								\
 		static struct lock_class_key __key;			\

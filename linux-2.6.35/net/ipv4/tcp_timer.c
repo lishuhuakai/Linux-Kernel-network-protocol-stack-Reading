@@ -171,10 +171,10 @@ static int tcp_write_timeout(struct sock *sk)
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	int retry_until;
 	bool do_reset;
-
+    /* 如果处于SYN_SENT以及SYN_RECV状态 */
 	if ((1 << sk->sk_state) & (TCPF_SYN_SENT | TCPF_SYN_RECV)) {
 		if (icsk->icsk_retransmits)
-			dst_negative_advice(sk);
+			dst_negative_advice(sk); /* 更新缓存 */
 		retry_until = icsk->icsk_syn_retries ? : sysctl_tcp_syn_retries; /* 重试次数 */
 	} else {
 		if (retransmits_timed_out(sk, sysctl_tcp_retries1)) {
@@ -316,6 +316,7 @@ static void tcp_probe_timer(struct sock *sk)
 
 /*
  *	The TCP retransmit timer.
+ * TCP重传定时器
  */
 
 void tcp_retransmit_timer(struct sock *sk)
@@ -392,13 +393,14 @@ void tcp_retransmit_timer(struct sock *sk)
 	} else {
 		tcp_enter_loss(sk, 0);
 	}
-
+    /* 重传报文 */
 	if (tcp_retransmit_skb(sk, tcp_write_queue_head(sk)) > 0) {
 		/* Retransmission failed because of local congestion,
 		 * do not backoff.
 		 */
 		if (!icsk->icsk_retransmits)
 			icsk->icsk_retransmits = 1;
+        /* 重传失败,就复位定时器 */
 		inet_csk_reset_xmit_timer(sk, ICSK_TIME_RETRANS,
 					  min(icsk->icsk_rto, TCP_RESOURCE_PROBE_INTERVAL),
 					  TCP_RTO_MAX);
@@ -468,7 +470,7 @@ static void tcp_write_timer(unsigned long data)
     /* 如果处于close状态或者未定义定时器事件,则无需处理 */
 	if (sk->sk_state == TCP_CLOSE || !icsk->icsk_pending)
 		goto out;
-
+    /* 超时时间未到 */
 	if (time_after(icsk->icsk_timeout, jiffies)) {
 		sk_reset_timer(sk, &icsk->icsk_retransmit_timer, icsk->icsk_timeout);
 		goto out;
@@ -497,11 +499,10 @@ out_unlock:
 /*
  *	Timer for listening sockets
  */
-
 static void tcp_synack_timer(struct sock *sk)
 {
 	inet_csk_reqsk_queue_prune(sk, TCP_SYNQ_INTERVAL,
-				   TCP_TIMEOUT_INIT, TCP_RTO_MAX);
+				   TCP_TIMEOUT_INIT, TCP_RTO_MAX); /* 这里直接按照最大超时时间来处理 */
 }
 
 void tcp_syn_ack_timeout(struct sock *sk, struct request_sock *req)
@@ -543,7 +544,9 @@ static void tcp_keepalive_timer (unsigned long data)
 		tcp_synack_timer(sk);
 		goto out;
 	}
-    /* 如果处于FIN_WAIT2状态 */
+    /* 如果处于FIN_WAIT2状态,这里其实是FIN_WAIT_2定时器的处理逻辑
+     *
+     */
 	if (sk->sk_state == TCP_FIN_WAIT2 && sock_flag(sk, SOCK_DEAD)) {
 		if (tp->linger2 >= 0) {
 			const int tmo = tcp_fin_time(sk) - TCP_TIMEWAIT_LEN;
@@ -557,25 +560,30 @@ static void tcp_keepalive_timer (unsigned long data)
 		tcp_send_active_reset(sk, GFP_ATOMIC);
 		goto death;
 	}
-
+    /* 如果没有启动保活功能,或者tcp状态为close,不处理 */
 	if (!sock_flag(sk, SOCK_KEEPOPEN) || sk->sk_state == TCP_CLOSE)
 		goto out;
 
 	elapsed = keepalive_time_when(tp);
 
 	/* It is alive without keepalive 8) */
+    /* packets_out记录的是已经发出去的,但是还未被确认的报文个数
+     * tcp_send_head(sk) != NULL,说明有数据要发送
+     */
 	if (tp->packets_out || tcp_send_head(sk))
 		goto resched;
 
-	elapsed = keepalive_time_elapsed(tp);
+	elapsed = keepalive_time_elapsed(tp); /* 持续空闲时间 */
 
 	if (elapsed >= keepalive_time_when(tp)) {
+        /* 已经发送探测报文次数超过限制 */
 		if (icsk->icsk_probes_out >= keepalive_probes(tp)) {
+            /* 需要断开连接,发送rst报文 */
 			tcp_send_active_reset(sk, GFP_ATOMIC);
-			tcp_write_err(sk);
+			tcp_write_err(sk); /* 断开连接 */
 			goto out;
 		}
-		if (tcp_write_wakeup(sk) <= 0) {
+		if (tcp_write_wakeup(sk) <= 0) { /*  */
 			icsk->icsk_probes_out++;
 			elapsed = keepalive_intvl_when(tp);
 		} else {
@@ -593,6 +601,7 @@ static void tcp_keepalive_timer (unsigned long data)
 	sk_mem_reclaim(sk);
 
 resched:
+    /* 设置超时时间,回调函数应该也是此函数 */
 	inet_csk_reset_keepalive_timer (sk, elapsed);
 	goto out;
 

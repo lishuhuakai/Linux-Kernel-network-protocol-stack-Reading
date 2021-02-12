@@ -2762,7 +2762,9 @@ static int tcp_xmit_probe_skb(struct sock *sk, int urgent)
 	return tcp_transmit_skb(sk, skb, 0, GFP_ATOMIC);
 }
 
-/* Initiate keepalive or window probe from timer. */
+/* Initiate keepalive or window probe from timer.
+ * 发送保活段
+ */
 int tcp_write_wakeup(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);

@@ -101,7 +101,7 @@ struct inet_connection_sock { /* 用于抽象传输控制块 */
 	__u8			  icsk_pending;
 	__u8			  icsk_backoff;
 	__u8			  icsk_syn_retries;
-	__u8			  icsk_probes_out;
+	__u8			  icsk_probes_out; /* 发送保活段的次数 */
 	__u16			  icsk_ext_hdr_len;
 	struct {
 		__u8		  pending;	 /* ACK is pending			   */

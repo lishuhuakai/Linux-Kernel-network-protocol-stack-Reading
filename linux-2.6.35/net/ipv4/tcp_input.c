@@ -102,15 +102,19 @@ int sysctl_tcp_abc __read_mostly;
 #define FLAG_DATA_ACKED		0x04 /* This ACK acknowledged new data.		*/
                                 /* ack报文确认了新数据 */
 #define FLAG_RETRANS_DATA_ACKED	0x08 /* "" "" some of which was retransmitted.	*/
+                                       /* 表示此段已经重传过 */
 #define FLAG_SYN_ACKED		0x10 /* This ACK acknowledged SYN.*/
                                 /* ack报文确认了syn报文 */
 #define FLAG_DATA_SACKED	0x20 /* New SACK. */
+                                /* 是新的SACK */
 #define FLAG_ECE		0x40 /* ECE in this ACK				*/
 #define FLAG_DATA_LOST		0x80 /* SACK detected data lossage.		*/
 #define FLAG_SLOWPATH		0x100 /* Do not skip RFC checks for window update.*/
+                                 /* 在慢速路径中处理的 */
 #define FLAG_ONLY_ORIG_SACKED	0x200 /* SACKs only non-rexmit sent before RTO */
 #define FLAG_SND_UNA_ADVANCED	0x400 /* Snd_una was changed (!= FLAG_DATA_ACKED) */
 #define FLAG_DSACKING_ACK	0x800 /* SACK blocks contained D-SACK info */
+                                  /* SACK块中包含了D-SACK的信息 */
 #define FLAG_NONHEAD_RETRANS_ACKED	0x1000 /* Non-head rexmitted data was ACKed */
 #define FLAG_SACK_RENEGING	0x2000 /* snd_una advanced to a sacked seq */
 
@@ -2108,6 +2112,7 @@ int tcp_use_frto(struct sock *sk)
  * Do like tcp_enter_loss() would; when RTO expires the second time it
  * does:
  *  "Reduce ssthresh if it has not yet been made inside this window."
+ * 进入frto算法
  */
 void tcp_enter_frto(struct sock *sk)
 {
@@ -2119,7 +2124,7 @@ void tcp_enter_frto(struct sock *sk)
 	    tp->snd_una == tp->high_seq ||
 	    ((icsk->icsk_ca_state == TCP_CA_Loss || tp->frto_counter) &&
 	     !icsk->icsk_retransmits)) {
-		tp->prior_ssthresh = tcp_current_ssthresh(sk);
+		tp->prior_ssthresh = tcp_current_ssthresh(sk); /* 保存原来的慢启动阀值 */
 		/* Our state is too optimistic in ssthresh() call because cwnd
 		 * is not reduced until tcp_enter_frto_loss() when previous F-RTO
 		 * recovery has not yet completed. Pattern would be this: RTO,
@@ -3644,7 +3649,7 @@ static int tcp_process_frto(struct sock *sk, int flag)
 	if ((flag & FLAG_NONHEAD_RETRANS_ACKED) ||
 	    ((tp->frto_counter >= 2) && (flag & FLAG_RETRANS_DATA_ACKED)))
 		tp->undo_marker = 0;
-
+    /* 如果ack报文没有使得snd_una发生移动,说明收到了重复的ack */
 	if (!before(tp->snd_una, tp->frto_highmark)) {
 		tcp_enter_frto_loss(sk, (tp->frto_counter == 1 ? 2 : 3), flag);
 		return 1;
@@ -3757,7 +3762,7 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	}
     /* fackets_out = lost_out + sacked_out  */
 	prior_fackets = tp->fackets_out; /* 可以理解为乱序包的个数 */
-	prior_in_flight = tcp_packets_in_flight(tp);
+	prior_in_flight = tcp_packets_in_flight(tp); /* 正在传输中的段 */
 
 	if (!(flag & FLAG_SLOWPATH) && after(ack, prior_snd_una)) {
 		/* Window is constant, pure forward advance.
@@ -3776,7 +3781,7 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 			flag |= FLAG_DATA; /* 带上标记 */
 		else
 			NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPPUREACKS);
-
+        /* 可能会打上FLAG_WIN_UPDATE标记 */
 		flag |= tcp_ack_update_window(sk, skb, ack, ack_seq);
         /* 这里可能会打上FLAG_DSACKING_ACK标记 */
 		if (TCP_SKB_CB(skb)->sacked) /* 如果存在sack选项 */
@@ -3801,7 +3806,7 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	/* See if we can take anything off of the retransmit queue. */
 	flag |= tcp_clean_rtx_queue(sk, prior_fackets, prior_snd_una);
 
-	if (tp->frto_counter)
+	if (tp->frto_counter) /* 如果进入了frto */
 		frto_cwnd = tcp_process_frto(sk, flag);
 	/* Guarantee sacktag reordering detection against wrap-arounds */
 	if (before(tp->frto_highmark, tp->snd_una))

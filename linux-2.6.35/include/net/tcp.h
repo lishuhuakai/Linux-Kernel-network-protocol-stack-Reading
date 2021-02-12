@@ -780,8 +780,14 @@ static inline void tcp_enable_fack(struct tcp_sock *tp)
 	tp->rx_opt.sack_ok |= 2;
 }
 
+/* 获取停留在网络之中(已经发出去了),还没有被ack报文确认的段的个数
+ *
+ */
 static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
 {
+    /* sacked_out 被sack确认了的段的个数,可以理解为失序的段的个数
+     * lost_out 在网络中丢失了的段的一个估计值
+     */
 	return tp->sacked_out + tp->lost_out;
 }
 
@@ -806,6 +812,8 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
  */
 static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 {
+    // tp->packets_out - (tp->sacked_out + tp->lost_out) + tp->retrans_out
+    // tp->packets_out >= tcp_left_out(tp)
 	return tp->packets_out - tcp_left_out(tp) + tp->retrans_out;
 }
 

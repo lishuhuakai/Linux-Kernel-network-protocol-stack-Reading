@@ -486,7 +486,7 @@ static inline void syn_ack_recalc(struct request_sock *req, const int thresh,
 		  req->retrans >= rskq_defer_accept - 1;
 }
 
-/*
+/* 扫描半连接散列表,重新设置连接定时器
  * @param parent 进行监听的传输控制块
  * @param interval 建立连接定时器的超时时间
  * @param timeout 往返超时的初始值,每超时一次,加倍上次的超时时间
@@ -584,7 +584,7 @@ void inet_csk_reqsk_queue_prune(struct sock *parent,
 
 	lopt->clock_hand = i;
 
-	if (lopt->qlen)
+	if (lopt->qlen) /* 如果还存在数据,说明还有连接未建立起来 */
 		inet_csk_reset_keepalive_timer(parent, interval);
 }
 

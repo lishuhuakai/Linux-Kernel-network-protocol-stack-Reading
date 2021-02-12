@@ -1569,7 +1569,9 @@ static __sum16 tcp_v4_checksum_init(struct sk_buff *skb)
  * This is because we cannot sleep with the original spinlock
  * held.
  */
-/* tcp收包函数 */
+/* tcp收包函数
+ * @param skb 接收到的报文
+ */
 int tcp_v4_do_rcv(struct sock *sk, struct sk_buff *skb)
 {
 	struct sock *rsk;
@@ -1640,6 +1642,7 @@ csum_err:
 
 /*
  *	From tcp_input.c
+ * 处理接收到的tcp报文
  */
 int tcp_v4_rcv(struct sk_buff *skb)
 {
@@ -1681,7 +1684,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	TCP_SKB_CB(skb)->when	 = 0;
 	TCP_SKB_CB(skb)->flags	 = iph->tos;
 	TCP_SKB_CB(skb)->sacked	 = 0;
-
+    /* 根据源端口,目的端口对查找套接口 */
 	sk = __inet_lookup_skb(&tcp_hashinfo, skb, th->source, th->dest);
 	if (!sk)
 		goto no_tcp_socket;
@@ -1755,13 +1758,16 @@ do_time_wait:
 		inet_twsk_put(inet_twsk(sk));
 		goto discard_it;
 	}
-
+    /* 检测长度信息 */
 	if (skb->len < (th->doff << 2) || tcp_checksum_complete(skb)) {
 		TCP_INC_STATS_BH(net, TCP_MIB_INERRS);
 		inet_twsk_put(inet_twsk(sk));
 		goto discard_it;
 	}
 	switch (tcp_timewait_state_process(inet_twsk(sk), skb, th)) {
+    /* TCP_TW_SYN 说明在TIME_WAIT状态下接收到了连接请求,且可以接收该请求
+     *
+     */
 	case TCP_TW_SYN: {
 		struct sock *sk2 = inet_lookup_listener(dev_net(skb->dev),
 							&tcp_hashinfo,
@@ -1775,6 +1781,7 @@ do_time_wait:
 		}
 		/* Fall through to ACK */
 	}
+    /* 需要发送ack?? */
 	case TCP_TW_ACK:
 		tcp_v4_timewait_ack(sk, skb);
 		break;

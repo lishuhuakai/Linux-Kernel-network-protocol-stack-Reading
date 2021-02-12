@@ -78,7 +78,9 @@ void tcp_unregister_congestion_control(struct tcp_congestion_ops *ca)
 }
 EXPORT_SYMBOL_GPL(tcp_unregister_congestion_control);
 
-/* Assign choice of congestion control. */
+/* Assign choice of congestion control.
+ * 拥塞避免初始化
+ */
 void tcp_init_congestion_control(struct sock *sk)
 {
 	struct inet_connection_sock *icsk = inet_csk(sk);

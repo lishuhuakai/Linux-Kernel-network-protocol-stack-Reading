@@ -316,7 +316,8 @@ struct tcp_sock {
  */
  	u32	rcv_nxt;	/* What we want to receive next 	*/
 	u32	copied_seq;	/* Head of yet unread data		*/
-	u32	rcv_wup;	/* rcv_nxt on last window update sent	*/
+	u32	rcv_wup;	/* rcv_nxt on last window update sent
+                     * 最近一次发送窗口更新时的rcv_nxt */
  	u32	snd_nxt;	/* Next sequence we send		*/
                     /* 要发送的下一个序列值 */
 
@@ -329,8 +330,8 @@ struct tcp_sock {
 
 	/* Data for direct copy to user */
 	struct {
-		struct sk_buff_head	prequeue;
-		struct task_struct	*task;
+		struct sk_buff_head	prequeue; /* 用于缓存接收到的skb报文 */
+		struct task_struct	*task; /* 指向进程的指针 */
 		struct iovec		*iov;
 		int			memory;
 		int			len;
@@ -397,6 +398,7 @@ struct tcp_sock {
 	u32	write_seq;	/* Tail(+1) of data held in tcp send buffer */
 	u32	pushed_seq;	/* Last pushed seq, required to talk to windows */
 	u32	lost_out;	/* Lost packets			*/
+                    /* 丢失的数据的量 */
 	u32	sacked_out;	/* SACK'd packets			*/
     /* 启用sack时,通过sack的tcp选项标识已接收到段的数量,不启用sack时,标识
      * 接收到重复确认的次数 */
@@ -405,6 +407,7 @@ struct tcp_sock {
      * sack选项来计算丢失在网络上的段数,例如:
      * lost_out = fackets_out - sack_out
      * left_out = fackets_out
+     * 可以简单理解为乱序包的个数
      */
 	u32	tso_deferred;
 	u32	bytes_acked;	/* Appropriate Byte Counting - RFC3465 */
@@ -439,6 +442,7 @@ struct tcp_sock {
 				 * also used in SYN-SENT to remember stamp of
 				 * the first SYN. */
 	u32	undo_marker;	/* tracking retrans started here. */
+                        /* undo_marker一般记录的是重传时的snd.una */
 	int	undo_retrans;	/* number of undoable retransmissions. */
 	u32	total_retrans;	/* Total retransmits for entire connection */
 

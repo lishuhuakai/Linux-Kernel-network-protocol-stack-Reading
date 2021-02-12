@@ -64,6 +64,7 @@ struct inet_hashinfo;
 
 #define INET_TWDR_TWKILL_QUOTA 100
 
+/* 此结构主要用于管理处理close状态中的tcp_sock */
 struct inet_timewait_death_row {
 	/* Short-time timewait calendar */
 	int			twcal_hand;

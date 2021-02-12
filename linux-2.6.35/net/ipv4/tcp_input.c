@@ -100,9 +100,11 @@ int sysctl_tcp_abc __read_mostly;
 #define FLAG_WIN_UPDATE		0x02 /* Incoming ACK was a window update.	*/
                                  /* 接收的ack中带有窗口更新 */
 #define FLAG_DATA_ACKED		0x04 /* This ACK acknowledged new data.		*/
+                                /* ack报文确认了新数据 */
 #define FLAG_RETRANS_DATA_ACKED	0x08 /* "" "" some of which was retransmitted.	*/
-#define FLAG_SYN_ACKED		0x10 /* This ACK acknowledged SYN.		*/
-#define FLAG_DATA_SACKED	0x20 /* New SACK.				*/
+#define FLAG_SYN_ACKED		0x10 /* This ACK acknowledged SYN.*/
+                                /* ack报文确认了syn报文 */
+#define FLAG_DATA_SACKED	0x20 /* New SACK. */
 #define FLAG_ECE		0x40 /* ECE in this ACK				*/
 #define FLAG_DATA_LOST		0x80 /* SACK detected data lossage.		*/
 #define FLAG_SLOWPATH		0x100 /* Do not skip RFC checks for window update.*/
@@ -123,6 +125,7 @@ int sysctl_tcp_abc __read_mostly;
 
 /* Adapt the MSS value used to make delayed ack decision to the
  * real world.
+ * 动态调整MSS的值
  */
 static void tcp_measure_rcv_mss(struct sock *sk, const struct sk_buff *skb)
 {
@@ -192,7 +195,7 @@ void tcp_enter_quickack_mode(struct sock *sk)
 /* Send ACKs quickly, if "quick" count is not exhausted
  * and the session is not interactive.
  */
-
+/* 判断是否需要快速回复ack */
 static inline int tcp_in_quickack_mode(const struct sock *sk)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
@@ -331,7 +334,9 @@ static void tcp_grow_window(struct sock *sk, struct sk_buff *skb)
 	}
 }
 
-/* 3. Tuning rcvbuf, when connection enters established state. */
+/* 3. Tuning rcvbuf, when connection enters established state.
+ * 调整接收缓存,当一个连接进入established状态的时候
+ */
 
 static void tcp_fixup_rcvbuf(struct sock *sk)
 {
@@ -432,6 +437,7 @@ void tcp_initialize_rcv_mss(struct sock *sk)
  * <http://www.psc.edu/~jheffner/senior_thesis.ps>,
  * though this reference is out of date.  A new paper
  * is pending.
+ * 更新RTT的估计值
  */
 static void tcp_rcv_rtt_update(struct tcp_sock *tp, u32 sample, int win_dep)
 {
@@ -479,10 +485,20 @@ new_measure:
 	tp->rcv_rtt_est.time = tcp_time_stamp;
 }
 
+/* 更新rtt的值
+ *
+ */
 static inline void tcp_rcv_rtt_measure_ts(struct sock *sk,
 					  const struct sk_buff *skb)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
+    /* 关于时间戳选项:
+     * 0. 时间戳选项中有两个域,timestamp以及timestamp echo.
+     * 1. 本端填充timestamp,组建成报文A发给对端
+     * 2. 对端进行回复,将接收到的报文中的timestamp拷贝到timestamp_echo选项
+     *    自己的时间戳填入timestamp, 组建成报文B发给本端
+     * 3. 本端依靠现在的时间和timestamp_echo的差值,可以算出一个rtt
+     */
 	if (tp->rx_opt.rcv_tsecr &&
 	    (TCP_SKB_CB(skb)->end_seq -
 	     TCP_SKB_CB(skb)->seq >= inet_csk(sk)->icsk_ack.rcv_mss))
@@ -555,6 +571,7 @@ new_measure:
  * he can only send snd_cwnd unacked packets at any given time.  For
  * each ACK we send, he increments snd_cwnd and transmits more of his
  * queue.  -DaveM
+ * 从对端接收到了数据
  */
 static void tcp_event_data_recv(struct sock *sk, struct sk_buff *skb)
 {
@@ -562,7 +579,7 @@ static void tcp_event_data_recv(struct sock *sk, struct sk_buff *skb)
 	struct inet_connection_sock *icsk = inet_csk(sk);
 	u32 now;
 
-	inet_csk_schedule_ack(sk);
+	inet_csk_schedule_ack(sk); /* 准备确认数据 */
 
 	tcp_measure_rcv_mss(sk, skb);
 
@@ -853,6 +870,7 @@ void tcp_enter_cwr(struct sock *sk, const int set_ssthresh)
 /*
  * Packet counting of FACK is based on in-order assumptions, therefore TCP
  * disables it when reordering is detected
+ * 关闭fack机制
  */
 static void tcp_disable_fack(struct tcp_sock *tp)
 {
@@ -2330,6 +2348,9 @@ static int tcp_check_sack_reneging(struct sock *sk, int flag)
 	return 0;
 }
 
+/*
+ * 返回hole的大小
+ */
 static inline int tcp_fackets_out(struct tcp_sock *tp)
 {
 	return tcp_is_reno(tp) ? tp->sacked_out + 1 : tp->fackets_out;
@@ -2550,6 +2571,7 @@ static void tcp_timeout_skbs(struct sock *sk)
 
 /* Mark head of queue up as lost. With RFC3517 SACK, the packets is
  * is against sacked "cnt", otherwise it's against facked "cnt"
+ *
  */
 static void tcp_mark_head_lost(struct sock *sk, int packets)
 {
@@ -2561,31 +2583,33 @@ static void tcp_mark_head_lost(struct sock *sk, int packets)
 
 	if (packets == 0)
 		return;
-
+    /* 被标记为丢失的段不能超过发送出去的数据段数 */
 	WARN_ON(packets > tp->packets_out);
+    /* 如果已经有标识为丢失的段了 */
 	if (tp->lost_skb_hint) {
-		skb = tp->lost_skb_hint;
-		cnt = tp->lost_cnt_hint;
+		skb = tp->lost_skb_hint; /* 下一个要标志的段 */
+		cnt = tp->lost_cnt_hint; /* 已经标志了多少段 */
 	} else {
 		skb = tcp_write_queue_head(sk);
 		cnt = 0;
 	}
 
-	tcp_for_write_queue_from(skb, sk) {
-		if (skb == tcp_send_head(sk))
+	tcp_for_write_queue_from(skb, sk) { /* 遍历发送队列的包 */
+		if (skb == tcp_send_head(sk)) /* 遍历到snd_nxt,停止 */
 			break;
 		/* TODO: do this better */
 		/* this is not the most efficient way to do this... */
+        /* 更新丢失队列消息 */
 		tp->lost_skb_hint = skb;
 		tp->lost_cnt_hint = cnt;
-
+        /* 标志为LOST的段序号不能超过high_seq */
 		if (after(TCP_SKB_CB(skb)->end_seq, tp->high_seq))
 			break;
 
 		oldcnt = cnt;
 		if (tcp_is_fack(tp) || tcp_is_reno(tp) ||
 		    (TCP_SKB_CB(skb)->sacked & TCPCB_SACKED_ACKED))
-			cnt += tcp_skb_pcount(skb);
+			cnt += tcp_skb_pcount(skb); /* 此段已经被sack了 */
 
 		if (cnt > packets) {
 			if (tcp_is_sack(tp) || (oldcnt >= packets))
@@ -2597,7 +2621,7 @@ static void tcp_mark_head_lost(struct sock *sk, int packets)
 				break;
 			cnt = packets;
 		}
-
+        /* 标志一个段lost */
 		tcp_skb_mark_lost(tp, skb);
 	}
 	tcp_verify_left_out(tp);
@@ -2667,12 +2691,17 @@ static void tcp_cwnd_down(struct sock *sk, int flag)
 
 /* Nothing was retransmitted or returned timestamp is less
  * than timestamp of the first retransmission.
+ * 判断接收到的报文是否有延迟接收的现象
+ * 1. 不存在重传
+ * 2. 接收到的时间戳比第一次重传的时间戳要早
+ * 如果有,返回1
  */
 static inline int tcp_packet_delayed(struct tcp_sock *tp)
 {
 	return !tp->retrans_stamp ||
 		(tp->rx_opt.saw_tstamp && tp->rx_opt.rcv_tsecr &&
 		 before(tp->rx_opt.rcv_tsecr, tp->retrans_stamp));
+    /* 接收到的时间戳比重传的时间要早 */
 }
 
 /* Undo procedures. */
@@ -2730,12 +2759,20 @@ static void tcp_undo_cwr(struct sock *sk, const int undo)
 	tp->snd_cwnd_stamp = tcp_time_stamp;
 }
 
+/*
+ * 判断是否能进行拥塞撤销
+ */
 static inline int tcp_may_undo(struct tcp_sock *tp)
 {
+    /* 1.
+     * 2. 没有发送重传或者确定重传是我们的误操作,我们重传的段的ack只是延时到达
+     */
 	return tp->undo_marker && (!tp->undo_retrans || tcp_packet_delayed(tp));
 }
 
-/* People celebrate: "We love our President!" */
+/* People celebrate: "We love our President!"
+ * 从recovery状态进行撤销
+ */
 static int tcp_try_undo_recovery(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -2847,9 +2884,9 @@ static int tcp_try_undo_loss(struct sock *sk)
 	if (tcp_may_undo(tp)) {
 		struct sk_buff *skb;
 		tcp_for_write_queue(skb, sk) {
-			if (skb == tcp_send_head(sk))
+			if (skb == tcp_send_head(sk)) /* 遍历到snd.una,终止 */
 				break;
-			TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST;
+			TCP_SKB_CB(skb)->sacked &= ~TCPCB_LOST; /* 去掉LOST标记 */
 		}
 
 		tcp_clear_all_retrans_hints(tp);
@@ -2996,6 +3033,9 @@ void tcp_simple_retransmit(struct sock *sk)
  *
  * It does _not_ decide what to send, it is made in function
  * tcp_xmit_retransmit_queue().
+ * 拥塞状态机运行函数
+ * @param pkts_acked
+ * @param flag
  */
 static void tcp_fastretrans_alert(struct sock *sk, int pkts_acked, int flag)
 {
@@ -3037,7 +3077,9 @@ static void tcp_fastretrans_alert(struct sock *sk, int pkts_acked, int flag)
 	if (icsk->icsk_ca_state == TCP_CA_Open) {
 		WARN_ON(tp->retrans_out != 0);
 		tp->retrans_stamp = 0;
+
 	} else if (!before(tp->snd_una, tp->high_seq)) {
+        /* snd_una > high_seq -- high_seq已经被确认了 */
 		switch (icsk->icsk_ca_state) {
 		case TCP_CA_Loss:
 			icsk->icsk_retransmits = 0;
@@ -3054,7 +3096,7 @@ static void tcp_fastretrans_alert(struct sock *sk, int pkts_acked, int flag)
 			}
 			break;
 
-		case TCP_CA_Disorder:
+		case TCP_CA_Disorder: /* 进入到disorder状态 */
 			tcp_try_undo_dsack(sk);
 			if (!tp->undo_marker ||
 			    /* For SACK case do not Open to allow to undo
@@ -3220,6 +3262,10 @@ static inline void tcp_ack_update_rtt(struct sock *sk, const int flag,
 		tcp_ack_no_tstamp(sk, seq_rtt, flag);
 }
 
+/* 执行拥塞避免
+ * @param ack
+ * @param in_flight
+ */
 static void tcp_cong_avoid(struct sock *sk, u32 ack, u32 in_flight)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
@@ -3266,7 +3312,7 @@ static u32 tcp_tso_acked(struct sock *sk, struct sk_buff *skb)
 /* Remove acknowledged frames from the retransmission queue. If our packet
  * is before the ack sequence we can discard it as it's confirmed to have
  * arrived at the other end.
- * 从重传队列中移除一些报文
+ * 从重传队列中移除一些报文,其实就是那些已经确认了的报文
  */
 static int tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 			       u32 prior_snd_una)
@@ -3283,14 +3329,14 @@ static int tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 	s32 seq_rtt = -1;
 	s32 ca_seq_rtt = -1;
 	ktime_t last_ackt = net_invalid_timestamp();
-
+    /* 一直遍历到snd.nxt */
 	while ((skb = tcp_write_queue_head(sk)) && skb != tcp_send_head(sk)) {
 		struct tcp_skb_cb *scb = TCP_SKB_CB(skb);
-		u32 acked_pcount;
+		u32 acked_pcount; /* 已经确认的报文的个数 */
 		u8 sacked = scb->sacked;
 
 		/* Determine how many packets and what bytes were acked, tso and else */
-		if (after(scb->end_seq, tp->snd_una)) {
+		if (after(scb->end_seq, tp->snd_una)) { /* end_seq > snd_una */
 			if (tcp_skb_pcount(skb) == 1 ||
 			    !after(tp->snd_una, scb->seq))
 				break;
@@ -3307,7 +3353,7 @@ static int tcp_clean_rtx_queue(struct sock *sk, int prior_fackets,
 		if (sacked & TCPCB_RETRANS) {
 			if (sacked & TCPCB_SACKED_RETRANS)
 				tp->retrans_out -= acked_pcount;
-			flag |= FLAG_RETRANS_DATA_ACKED;
+			flag |= FLAG_RETRANS_DATA_ACKED; /* 重传的数据被确认了 */
 			ca_seq_rtt = -1;
 			seq_rtt = -1;
 			if ((flag & FLAG_DATA_ACKED) || (acked_pcount > 1))
@@ -3461,6 +3507,10 @@ static inline int tcp_ack_is_dubious(const struct sock *sk, const int flag)
 		inet_csk(sk)->icsk_ca_state != TCP_CA_Open);
 }
 
+/*
+ * 判断是否能扩大发送窗口
+ * 拥塞控制状态机如果处于Recover或者CWR状态,不能扩大窗口
+ */
 static inline int tcp_may_raise_cwnd(const struct sock *sk, const int flag)
 {
 	const struct tcp_sock *tp = tcp_sk(sk);
@@ -3665,6 +3715,8 @@ static int tcp_process_frto(struct sock *sk, int flag)
 
 /* This routine deals with incoming acks, but not outgoing ones.
  * 此函数主要用于处理带有ack标志的段
+ * 带有ack确认的报文的处理是一个很复杂的过程,因为其中包含了拥塞控制的内容
+ * 如果不实现拥塞控制,代码会简洁很多
  * @param skb 接收到的ack段
  * @param flag 标志信息
  */
@@ -3692,19 +3744,19 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 	if (after(ack, tp->snd_nxt))
 		goto invalid_ack;
 
-	if (after(ack, prior_snd_una)) /* 窗口可以前移 */
+	if (after(ack, prior_snd_una)) /* 报文已经收到,窗口可以前移 */
 		flag |= FLAG_SND_UNA_ADVANCED;
 
 	if (sysctl_tcp_abc) {
-		if (icsk->icsk_ca_state < TCP_CA_CWR)
-			tp->bytes_acked += ack - prior_snd_una;
+		if (icsk->icsk_ca_state < TCP_CA_CWR) /* disorder或者open状态 */
+			tp->bytes_acked += ack - prior_snd_una; /* 累加已经确认的数据量 */
 		else if (icsk->icsk_ca_state == TCP_CA_Loss)
 			/* we assume just one segment left network */
 			tp->bytes_acked += min(ack - prior_snd_una,
 					       tp->mss_cache);
 	}
-
-	prior_fackets = tp->fackets_out;
+    /* fackets_out = lost_out + sacked_out  */
+	prior_fackets = tp->fackets_out; /* 可以理解为乱序包的个数 */
 	prior_in_flight = tcp_packets_in_flight(tp);
 
 	if (!(flag & FLAG_SLOWPATH) && after(ack, prior_snd_una)) {
@@ -3726,7 +3778,7 @@ static int tcp_ack(struct sock *sk, struct sk_buff *skb, int flag)
 			NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPPUREACKS);
 
 		flag |= tcp_ack_update_window(sk, skb, ack, ack_seq);
-
+        /* 这里可能会打上FLAG_DSACKING_ACK标记 */
 		if (TCP_SKB_CB(skb)->sacked) /* 如果存在sack选项 */
 			flag |= tcp_sacktag_write_queue(sk, skb, prior_snd_una);
 
@@ -3921,6 +3973,9 @@ void tcp_parse_options(struct sk_buff *skb, struct tcp_options_received *opt_rx,
 	}
 }
 
+/* 解析时间戳
+ *
+ */
 static int tcp_parse_aligned_timestamp(struct tcp_sock *tp, struct tcphdr *th)
 {
 	__be32 *ptr = (__be32 *)(th + 1);
@@ -3931,7 +3986,7 @@ static int tcp_parse_aligned_timestamp(struct tcp_sock *tp, struct tcphdr *th)
 		++ptr;
 		tp->rx_opt.rcv_tsval = ntohl(*ptr);
 		++ptr;
-		tp->rx_opt.rcv_tsecr = ntohl(*ptr);
+		tp->rx_opt.rcv_tsecr = ntohl(*ptr); /* echo值 */
 		return 1;
 	}
 	return 0;
@@ -3995,6 +4050,7 @@ u8 *tcp_parse_md5sig_option(struct tcphdr *th)
 }
 #endif
 
+/* 记录选项中的时间戳 */
 static inline void tcp_store_ts_recent(struct tcp_sock *tp)
 {
 	tp->rx_opt.ts_recent = tp->rx_opt.rcv_tsval;
@@ -4087,7 +4143,9 @@ static inline int tcp_sequence(struct tcp_sock *tp, u32 seq, u32 end_seq)
 		!after(seq, tp->rcv_nxt + tcp_receive_window(tp));
 }
 
-/* When we get a reset we do this. */
+/* When we get a reset we do this.
+ * 如果我们接收到了一个reset报文,就会跑到下面这个函数
+ */
 static void tcp_reset(struct sock *sk)
 {
 	/* We want the right error as BSD sees it (and indeed as we do). */
@@ -4123,6 +4181,7 @@ static void tcp_reset(struct sock *sk)
  *	close and we go into CLOSING (and later onto TIME-WAIT)
  *
  *	If we are in FINWAIT-2, a received FIN moves us to TIME-WAIT.
+ * 处理FIN位
  */
 static void tcp_fin(struct sk_buff *skb, struct sock *sk, struct tcphdr *th)
 {
@@ -4130,12 +4189,12 @@ static void tcp_fin(struct sk_buff *skb, struct sock *sk, struct tcphdr *th)
 
 	inet_csk_schedule_ack(sk);
 
-	sk->sk_shutdown |= RCV_SHUTDOWN;
+	sk->sk_shutdown |= RCV_SHUTDOWN; /* 对端关闭 */
 	sock_set_flag(sk, SOCK_DONE);
 
 	switch (sk->sk_state) {
 	case TCP_SYN_RECV:
-	case TCP_ESTABLISHED:
+	case TCP_ESTABLISHED: /* 进入到close_wait状态 */
 		/* Move to CLOSE_WAIT */
 		tcp_set_state(sk, TCP_CLOSE_WAIT);
 		inet_csk(sk)->icsk_ack.pingpong = 1;
@@ -4157,12 +4216,12 @@ static void tcp_fin(struct sk_buff *skb, struct sock *sk, struct tcphdr *th)
 		 * enter the CLOSING state.
 		 */
 		tcp_send_ack(sk);
-		tcp_set_state(sk, TCP_CLOSING);
+		tcp_set_state(sk, TCP_CLOSING); /* 进入到closing状态 */
 		break;
 	case TCP_FIN_WAIT2:
 		/* Received a FIN -- send ACK and enter TIME_WAIT. */
 		tcp_send_ack(sk);
-		tcp_time_wait(sk, TCP_TIME_WAIT, 0);
+		tcp_time_wait(sk, TCP_TIME_WAIT, 0); /* 进入到TIME_WAIT状态 */
 		break;
 	default:
 		/* Only TCP_LISTEN and TCP_CLOSE are left, in these
@@ -4974,12 +5033,16 @@ static inline void tcp_data_snd_check(struct sock *sk)
 
 /*
  * Check if sending an ack is needed.
+ * 检查是否需要发送一个ack
+ * @param ofo_possible 是否失序 out of order
  */
 static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
 
-	    /* More than one full frame received... */
+	    /* More than one full frame received...
+        * 我们接收到了不止一个满帧
+	    */
 	if (((tp->rcv_nxt - tp->rcv_wup) > inet_csk(sk)->icsk_ack.rcv_mss &&
 	     /* ... and right edge of window advances far enough.
 	      * (tcp_recvmsg() will send ACK otherwise). Or...
@@ -4993,6 +5056,7 @@ static void __tcp_ack_snd_check(struct sock *sk, int ofo_possible)
 		tcp_send_ack(sk);
 	} else {
 		/* Else, send delayed ack. */
+        /* ack可以延迟发送 */
 		tcp_send_delayed_ack(sk);
 	}
 }
@@ -5270,6 +5334,7 @@ discard:
  *	- A zero window was announced from us - zero window probing
  *        is only handled properly in the slow path.
  *	- Out of order segments arrived.
+ *     接收到了失序的段
  *	- Urgent data is expected.
  *	- There is no buffer space left
  *	- Unexpected TCP flags/window values/header lengths are received
@@ -5285,6 +5350,9 @@ discard:
  *	the rest is checked inline. Fast processing is turned on in
  *	tcp_data_queue when everything is OK.
  */
+ /* establish状态的接收函数
+  *
+  */
 int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 			struct tcphdr *th, unsigned len)
 {
@@ -5318,7 +5386,7 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 	 */
 
 	if ((tcp_flag_word(th) & TCP_HP_BITS) == tp->pred_flags &&
-	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt &&
+	    TCP_SKB_CB(skb)->seq == tp->rcv_nxt && /* 报文按序到达 */
 	    !after(TCP_SKB_CB(skb)->ack_seq, tp->snd_nxt)) {
 		int tcp_header_len = tp->tcp_header_len;
 
@@ -5379,6 +5447,7 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 					eaten = 1;
 				}
 #endif
+                /* 恰好是本进程持有 */
 				if (tp->ucopy.task == current &&
 				    sock_owned_by_user(sk) && !copied_early) {
 					__set_current_state(TASK_RUNNING);
@@ -5430,6 +5499,7 @@ int tcp_rcv_established(struct sock *sk, struct sk_buff *skb,
 				__skb_pull(skb, tcp_header_len);
 				__skb_queue_tail(&sk->sk_receive_queue, skb);
 				skb_set_owner_r(skb, sk);
+                /* 移动rcv_nxt数值 */
 				tp->rcv_nxt = TCP_SKB_CB(skb)->end_seq;
 			}
 
@@ -5494,7 +5564,11 @@ discard:
 	__kfree_skb(skb);
 	return 0;
 }
-/* 处理第二次握手中接收到的syn+ack报文 */
+/* 处理第二次握手中接收到的syn+ack报文
+ * @param skb 接收到的报文
+ * @param th tcp头部
+ * @param len
+ */
 static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 					 struct tcphdr *th, unsigned len)
 {
@@ -5524,6 +5598,7 @@ static int tcp_rcv_synsent_state_process(struct sock *sk, struct sk_buff *skb,
 		if (tp->rx_opt.saw_tstamp && tp->rx_opt.rcv_tsecr &&
 		    !between(tp->rx_opt.rcv_tsecr, tp->retrans_stamp,
 			     tcp_time_stamp)) {
+			/* 时间戳存在问题,可能是伪造的报文 */
 			NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_PAWSACTIVEREJECTED);
 			goto reset_and_undo;
 		}
@@ -5843,12 +5918,12 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		return -res;
 
 	/* step 5: check the ACK field */
-	if (th->ack) {
+	if (th->ack) { /* 如果报文带有ack标记 */
 		int acceptable = tcp_ack(sk, skb, FLAG_SLOWPATH) > 0;
 
 		switch (sk->sk_state) {
 		case TCP_SYN_RECV:
-			if (acceptable) {
+			if (acceptable) { /* 可以接受这个报文 */
 				tp->copied_seq = tp->rcv_nxt;
 				smp_mb();
 				tcp_set_state(sk, TCP_ESTABLISHED);
@@ -5901,9 +5976,9 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			break;
 
 		case TCP_FIN_WAIT1:
-			if (tp->snd_una == tp->write_seq) {
-				tcp_set_state(sk, TCP_FIN_WAIT2);
-				sk->sk_shutdown |= SEND_SHUTDOWN;
+			if (tp->snd_una == tp->write_seq) { /* FIN */
+				tcp_set_state(sk, TCP_FIN_WAIT2); /* 进入FIN_WAIT2状态   */
+				sk->sk_shutdown |= SEND_SHUTDOWN; /* 表示对端也关闭了连接 */
 				dst_confirm(__sk_dst_get(sk));
 
 				if (!sock_flag(sk, SOCK_DEAD))
@@ -5940,14 +6015,14 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 			break;
 
 		case TCP_CLOSING:
-			if (tp->snd_una == tp->write_seq) {
-				tcp_time_wait(sk, TCP_TIME_WAIT, 0);
+			if (tp->snd_una == tp->write_seq) { /* 收到了对端对于本端所有报文的确认 */
+				tcp_time_wait(sk, TCP_TIME_WAIT, 0); /* 进入TIME_WAIT状态 */
 				goto discard;
 			}
 			break;
 
 		case TCP_LAST_ACK:
-			if (tp->snd_una == tp->write_seq) {
+			if (tp->snd_una == tp->write_seq) { /* 收到了最终的确认,连接关闭 */
 				tcp_update_metrics(sk);
 				tcp_done(sk);
 				goto discard;
@@ -5965,6 +6040,9 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 	case TCP_CLOSE_WAIT:
 	case TCP_CLOSING:
 	case TCP_LAST_ACK:
+        /* TCP_SKB_CB(skb)->seq < tp->rcv_nxt
+         * 接收到了已经确认过的段,直接丢弃
+         */
 		if (!before(TCP_SKB_CB(skb)->seq, tp->rcv_nxt))
 			break;
 	case TCP_FIN_WAIT1:
@@ -5973,11 +6051,13 @@ int tcp_rcv_state_process(struct sock *sk, struct sk_buff *skb,
 		 * RFC 1122 says we MUST send a reset.
 		 * BSD 4.4 also does reset.
 		 */
+		 /* 接收方已经关闭了 */
 		if (sk->sk_shutdown & RCV_SHUTDOWN) {
+            /* 如果再次携带了数据的话 */
 			if (TCP_SKB_CB(skb)->end_seq != TCP_SKB_CB(skb)->seq &&
 			    after(TCP_SKB_CB(skb)->end_seq - th->fin, tp->rcv_nxt)) {
 				NET_INC_STATS_BH(sock_net(sk), LINUX_MIB_TCPABORTONDATA);
-				tcp_reset(sk);
+				tcp_reset(sk); /* 直接发送rst过去 */
 				return 1;
 			}
 		}

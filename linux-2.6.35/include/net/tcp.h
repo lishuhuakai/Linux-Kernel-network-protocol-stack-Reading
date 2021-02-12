@@ -757,16 +757,19 @@ static inline void tcp_ca_event(struct sock *sk, const enum tcp_ca_event event)
  * tcp_is_reno - No SACK
  * tcp_is_fack - FACK enabled, implies SACK enabled
  */
+
+/* 是否启用了sack机制 */
 static inline int tcp_is_sack(const struct tcp_sock *tp)
 {
 	return tp->rx_opt.sack_ok;
 }
 
+/* 如果没有启动sack机制 */
 static inline int tcp_is_reno(const struct tcp_sock *tp)
 {
 	return !tcp_is_sack(tp);
 }
-
+/* 是否启动了fack机制 */
 static inline int tcp_is_fack(const struct tcp_sock *tp)
 {
 	return tp->rx_opt.sack_ok & 2;
@@ -786,6 +789,7 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
  * of our knowledge.  In many cases it is conservative, but where
  * detailed information is available from the receiver (via SACK
  * blocks etc.) we can make more aggressive calculations.
+ * 本函数用于计算还有多少未处理的报文。在多数情况下是保守的。
  *
  * Use this for decisions involving congestion control, use just
  * tp->packets_out to determine if the send queue is empty or not.
@@ -796,6 +800,9 @@ static inline unsigned int tcp_left_out(const struct tcp_sock *tp)
  *	"Packets left network, but not honestly ACKed yet" PLUS
  *	"Packets fast retransmitted"
  * 获取正在传输中的报文的个数
+ *  packets_out -- 发送队列中报文的个数
+ *  left_out -- 停留在网络中，还没有被ack确认的报文的个数
+ *  retrans_out -- 重传的报文的个数
  */
 static inline unsigned int tcp_packets_in_flight(const struct tcp_sock *tp)
 {
@@ -918,6 +925,7 @@ static inline void tcp_prequeue_init(struct tcp_sock *tp)
  * see, why it failed. 8)8)				  --ANK
  *
  * NOTE: is this not too big to inline?
+ * 将报文放入队列中
  */
 static inline int tcp_prequeue(struct sock *sk, struct sk_buff *skb)
 {
@@ -1042,6 +1050,9 @@ static inline u32 keepalive_time_elapsed(const struct tcp_sock *tp)
 			  tcp_time_stamp - tp->rcv_tstamp);
 }
 
+/* 计算FIN的超时时间
+ *
+ */
 static inline int tcp_fin_time(const struct sock *sk)
 {
 	int fin_timeout = tcp_sk(sk)->linger2 ? : sysctl_tcp_fin_timeout;
@@ -1053,9 +1064,13 @@ static inline int tcp_fin_time(const struct sock *sk)
 	return fin_timeout;
 }
 
+/*
+ * 检查通过返回0,否则返回1
+ */
 static inline int tcp_paws_check(const struct tcp_options_received *rx_opt,
 				 int paws_win)
 {
+    /* ts_recent < rcv_tsval */
 	if ((s32)(rx_opt->ts_recent - rx_opt->rcv_tsval) <= paws_win)
 		return 1;
 	if (unlikely(get_seconds() >= rx_opt->ts_recent_stamp + TCP_PAWS_24DAYS))
@@ -1064,6 +1079,12 @@ static inline int tcp_paws_check(const struct tcp_options_received *rx_opt,
 	return 0;
 }
 
+/* PAWS（Protection Against Wrapped Sequences）功能基于TCP的Timestamps选项实现，
+ * 用于拒绝接收到的过期的重复报文。PAWS假设每个报文都携带有TSopt选项数据，其中的时间戳
+ * TSval保持单调递增，所有，当接收到一个报文其TSval值小于之前在此连接中接收到的时间戳
+ *（ts_recent），即认定此报文为过期报文，将其丢弃。
+ *
+ */
 static inline int tcp_paws_reject(const struct tcp_options_received *rx_opt,
 				  int rst)
 {

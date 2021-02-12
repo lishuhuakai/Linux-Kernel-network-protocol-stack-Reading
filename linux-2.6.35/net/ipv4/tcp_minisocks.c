@@ -98,6 +98,7 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 
 	tmp_opt.saw_tstamp = 0;
 	if (th->doff > (sizeof(*th) >> 2) && tcptw->tw_ts_recent_stamp) {
+        /* tcp报文中存在选项 */
 		tcp_parse_options(skb, &tmp_opt, &hash_location, 0);
 
 		if (tmp_opt.saw_tstamp) {
@@ -107,19 +108,20 @@ tcp_timewait_state_process(struct inet_timewait_sock *tw, struct sk_buff *skb,
 		}
 	}
 
-	if (tw->tw_substate == TCP_FIN_WAIT2) {
+	if (tw->tw_substate == TCP_FIN_WAIT2) { /* 处于FIN_WAIT2状态 */
 		/* Just repeat all the checks of tcp_rcv_state_process() */
 
 		/* Out of window, send ACK */
 		if (paws_reject ||
+            /* 报文的序列号不完全在接受窗口之内 */
 		    !tcp_in_window(TCP_SKB_CB(skb)->seq, TCP_SKB_CB(skb)->end_seq,
 				   tcptw->tw_rcv_nxt,
 				   tcptw->tw_rcv_nxt + tcptw->tw_rcv_wnd))
-			return TCP_TW_ACK;
+			return TCP_TW_ACK; /* 对端还在发送新数据,应该发送ack */
 
 		if (th->rst)
 			goto kill;
-
+        /* 判断是否检测到了过期的syn段 */
 		if (th->syn && !before(TCP_SKB_CB(skb)->seq, tcptw->tw_rcv_nxt))
 			goto kill_with_rst;
 
@@ -141,7 +143,7 @@ kill_with_rst:
 			inet_twsk_put(tw);
 			return TCP_TW_RST;
 		}
-
+        /* 到这里,表明确实接收到了FIN */
 		/* FIN arrived, enter true time-wait state. */
 		tw->tw_substate	  = TCP_TIME_WAIT;
 		tcptw->tw_rcv_nxt = TCP_SKB_CB(skb)->end_seq;
@@ -265,6 +267,7 @@ kill:
 
 /*
  * Move a socket to time-wait or dead fin-wait-2 state.
+ * 将一个socket转入time_wait状态
  */
 void tcp_time_wait(struct sock *sk, int state, int timeo)
 {
@@ -277,14 +280,14 @@ void tcp_time_wait(struct sock *sk, int state, int timeo)
 		recycle_ok = icsk->icsk_af_ops->remember_stamp(sk);
 
 	if (tcp_death_row.tw_count < tcp_death_row.sysctl_max_tw_buckets)
-		tw = inet_twsk_alloc(sk, state);
+		tw = inet_twsk_alloc(sk, state); /* 内存分配 */
 
 	if (tw != NULL) {
 		struct tcp_timewait_sock *tcptw = tcp_twsk((struct sock *)tw);
 		const int rto = (icsk->icsk_rto << 2) - (icsk->icsk_rto >> 1);
 
-		tw->tw_rcv_wscale	= tp->rx_opt.rcv_wscale;
-		tcptw->tw_rcv_nxt	= tp->rcv_nxt;
+		tw->tw_rcv_wscale	= tp->rx_opt.rcv_wscale; /* 窗口扩大因子 */
+		tcptw->tw_rcv_nxt	= tp->rcv_nxt; /* 期望的接收到的下一个数据的序号 */
 		tcptw->tw_snd_nxt	= tp->snd_nxt;
 		tcptw->tw_rcv_wnd	= tcp_receive_window(tp);
 		tcptw->tw_ts_recent	= tp->rx_opt.ts_recent;
@@ -338,7 +341,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo)
 			if (state == TCP_TIME_WAIT)
 				timeo = TCP_TIMEWAIT_LEN;
 		}
-
+        /* 进入timewait状态,启动定时器 */
 		inet_twsk_schedule(tw, &tcp_death_row, timeo,
 				   TCP_TIMEWAIT_LEN);
 		inet_twsk_put(tw);

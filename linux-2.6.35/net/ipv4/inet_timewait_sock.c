@@ -121,6 +121,8 @@ EXPORT_SYMBOL_GPL(inet_twsk_put);
  * Enter the time wait state. This is called with locally disabled BH.
  * Essentially we whip up a timewait bucket, copy the relevant info into it
  * from the SK, and mess with hash chains and list linkage.
+ * 进入time_wait状态,加入hash表
+ * @param tw已经替代tcp传输控制块的timewait控制块
  */
 void __inet_twsk_hashdance(struct inet_timewait_sock *tw, struct sock *sk,
 			   struct inet_hashinfo *hashinfo)
@@ -336,6 +338,13 @@ void inet_twsk_deschedule(struct inet_timewait_sock *tw,
 }
 EXPORT_SYMBOL(inet_twsk_deschedule);
 
+
+/*
+ * @param tw 已经替代TCP传输控制块的timewait控制块
+ * @param twdr 管理相关的数据的容器,通常传入全局变量tcp_death_row
+ * @param timewait_len 超时时间上限
+ * @param timeo 设定定时器的超时时间
+ */
 void inet_twsk_schedule(struct inet_timewait_sock *tw,
 		       struct inet_timewait_death_row *twdr,
 		       const int timeo, const int timewait_len)

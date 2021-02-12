@@ -1783,6 +1783,9 @@ recv_urg:
 	goto out;
 }
 
+/* 设置tcp连接当前的状态
+ *
+ */
 void tcp_set_state(struct sock *sk, int state)
 {
 	int oldstate = sk->sk_state;
@@ -1841,6 +1844,9 @@ static const unsigned char new_state[16] = {
   /* TCP_CLOSING	*/ TCP_CLOSING,
 };
 
+/* 关闭连接
+ *
+ */
 static int tcp_close_state(struct sock *sk)
 {
 	int next = (int)new_state[sk->sk_state];
@@ -1854,6 +1860,7 @@ static int tcp_close_state(struct sock *sk)
 /*
  *	Shutdown the sending side of a connection. Much like close except
  *	that we don't receive shut down or sock_set_flag(sk, SOCK_DEAD).
+ * 关闭发送端的连接
  */
 
 void tcp_shutdown(struct sock *sk, int how)
@@ -1875,6 +1882,9 @@ void tcp_shutdown(struct sock *sk, int how)
 	}
 }
 
+/* 关闭tcp连接
+ * @param timeout 超时时间
+ */
 void tcp_close(struct sock *sk, long timeout)
 {
 	struct sk_buff *skb;
@@ -1882,7 +1892,7 @@ void tcp_close(struct sock *sk, long timeout)
 	int state;
 
 	lock_sock(sk);
-	sk->sk_shutdown = SHUTDOWN_MASK;
+	sk->sk_shutdown = SHUTDOWN_MASK; /* 两端都进行关闭 */
 
 	if (sk->sk_state == TCP_LISTEN) {
 		tcp_set_state(sk, TCP_CLOSE);
@@ -1897,6 +1907,7 @@ void tcp_close(struct sock *sk, long timeout)
 	 *  descriptor close, not protocol-sourced closes, because the
 	 *  reader process may not have drained the data yet!
 	 */
+	/* 直接调用close,表示已经接收的数据也不会处理了,这里直接释放掉 */
 	while ((skb = __skb_dequeue(&sk->sk_receive_queue)) != NULL) {
 		u32 len = TCP_SKB_CB(skb)->end_seq - TCP_SKB_CB(skb)->seq -
 			  tcp_hdr(skb)->fin;
@@ -3167,6 +3178,9 @@ int tcp_cookie_generator(u32 *bakery)
 }
 EXPORT_SYMBOL(tcp_cookie_generator);
 
+/* 结束tcp连接
+ *
+ */
 void tcp_done(struct sock *sk)
 {
 	if (sk->sk_state == TCP_SYN_SENT || sk->sk_state == TCP_SYN_RECV)

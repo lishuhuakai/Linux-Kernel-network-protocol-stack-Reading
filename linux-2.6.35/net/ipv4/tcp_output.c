@@ -1844,9 +1844,11 @@ void tcp_push_one(struct sock *sk, unsigned int mss_now)
 
 /* This function returns the amount that we can raise the
  * usable window based on the following constraints
+ * 此函数返回可提高的窗口值,在下面条件的限制下
  *
  * 1. The window can never be shrunk once it is offered (RFC 793)
  * 2. We limit memory per socket
+ * 1. 窗口一旦提供就不能缩小
  *
  * RFC 1122:
  * "the suggested [SWS] avoidance algorithm for the receiver is to keep
@@ -2306,11 +2308,12 @@ begin_fwd:
 
 /* Send a fin.  The caller locks the socket for us.  This cannot be
  * allowed to fail queueing a FIN frame under any circumstances.
+ * 向对端发送FIN报文
  */
 void tcp_send_fin(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
-	struct sk_buff *skb = tcp_write_queue_tail(sk);
+	struct sk_buff *skb = tcp_write_queue_tail(sk); /* 获取发送队列尾部的报文 */
 	int mss_now;
 
 	/* Optimization, tack on the FIN if we have a queue of
@@ -2320,10 +2323,10 @@ void tcp_send_fin(struct sock *sk)
 	mss_now = tcp_current_mss(sk);
 
 	if (tcp_send_head(sk) != NULL) {
-		TCP_SKB_CB(skb)->flags |= TCPCB_FLAG_FIN;
-		TCP_SKB_CB(skb)->end_seq++;
+		TCP_SKB_CB(skb)->flags |= TCPCB_FLAG_FIN; /* 打上FIN标记 */
+		TCP_SKB_CB(skb)->end_seq++; /* 增加序列值 */
 		tp->write_seq++;
-	} else {
+	} else { /* 如果找不到,就要重新构建一个skb报文 */
 		/* Socket is locked, keep trying until memory is available. */
 		for (;;) {
 			skb = alloc_skb_fclone(MAX_TCP_HEADER,
@@ -2595,7 +2598,9 @@ static void tcp_connect_init(struct sock *sk)
 	tcp_clear_retrans(tp);
 }
 
-/* Build a SYN and send it off. */
+/* Build a SYN and send it off.
+ * 构建一个syn报文,并且发送出去
+ */
 int tcp_connect(struct sock *sk)
 {
 	struct tcp_sock *tp = tcp_sk(sk);
@@ -2640,6 +2645,7 @@ int tcp_connect(struct sock *sk)
 /* Send out a delayed ack, the caller does the policy checking
  * to see if we should even be here.  See tcp_input.c:tcp_ack_snd_check()
  * for details.
+ * 延时发送ack
  */
 void tcp_send_delayed_ack(struct sock *sk)
 {

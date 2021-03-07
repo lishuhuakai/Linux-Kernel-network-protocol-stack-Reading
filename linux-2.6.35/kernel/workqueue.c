@@ -44,12 +44,12 @@ struct cpu_workqueue_struct {
 
 	spinlock_t lock;
 
-	struct list_head worklist;
-	wait_queue_head_t more_work;
-	struct work_struct *current_work;
+	struct list_head worklist; /* 双向链表对象,用来将驱动程序提交的工作节点形成链表 */
+	wait_queue_head_t more_work; /* 等待队列头部,工作队列的工作线程在没有工作节点需要处理的时候,会进入该等待队列 */
+	struct work_struct *current_work; /* 记录当前工作线程正在处理的工作节点 */
 
-	struct workqueue_struct *wq;
-	struct task_struct *thread;
+	struct workqueue_struct *wq; /* 工作队列管理结构 */
+	struct task_struct *thread; /* 工作线程 */
 } ____cacheline_aligned;
 
 /*
@@ -57,10 +57,10 @@ struct cpu_workqueue_struct {
  * per-CPU workqueues:
  */
 struct workqueue_struct {
-	struct cpu_workqueue_struct *cpu_wq;
+	struct cpu_workqueue_struct *cpu_wq; /* 指向cpu工作队列管理结构的per-CPU类型的指针 */
 	struct list_head list;
 	const char *name;
-	int singlethread;
+	int singlethread; /* 工作队列中工作线程的数目 */
 	int freezeable;		/* Freeze threads during suspend */
 	int rt;
 #ifdef CONFIG_LOCKDEP
@@ -257,6 +257,7 @@ static void insert_work(struct cpu_workqueue_struct *cwq,
 	 */
 	smp_wmb();
 	list_add_tail(&work->entry, head);
+    /* 这里非常重要的一个函数是wakeup,用于唤醒等待在等待队列上的工作线程 */
 	wake_up(&cwq->more_work);
 }
 
@@ -281,6 +282,7 @@ static void __queue_work(struct cpu_workqueue_struct *cwq,
  * We queue the work to the CPU on which it was submitted, but if the CPU dies
  * it can be processed by another CPU.
  */
+/* 驱动程序往工作队列中提交工作节点 */
 int queue_work(struct workqueue_struct *wq, struct work_struct *work)
 {
 	int ret;
@@ -307,7 +309,7 @@ int
 queue_work_on(int cpu, struct workqueue_struct *wq, struct work_struct *work)
 {
 	int ret = 0;
-
+    /* WORK_STRUCT_PENDING置1意味着此前该work已经被提交,但是还没有处理 */
 	if (!test_and_set_bit(WORK_STRUCT_PENDING, work_data_bits(work))) {
 		BUG_ON(!list_empty(&work->entry));
 		__queue_work(wq_per_cpu(wq, cpu), work);
@@ -334,9 +336,13 @@ static void delayed_work_timer_fn(unsigned long __data)
  *
  * Returns 0 if @work was already on a queue, non-zero otherwise.
  */
+/*
+ * @param delay 延迟时间
+ */
 int queue_delayed_work(struct workqueue_struct *wq,
 			struct delayed_work *dwork, unsigned long delay)
 {
+    /* delay等于0,表示不需要延时 */
 	if (delay == 0)
 		return queue_work(wq, &dwork->work);
 
@@ -431,6 +437,9 @@ static void run_workqueue(struct cpu_workqueue_struct *cwq)
 	spin_unlock_irq(&cwq->lock);
 }
 
+/* 工作线程执行的函数
+ *
+ */
 static int worker_thread(void *__cwq)
 {
 	struct cpu_workqueue_struct *cwq = __cwq;
@@ -440,6 +449,9 @@ static int worker_thread(void *__cwq)
 		set_freezable();
 
 	for (;;) {
+        /* 以TASK_INTERRUPTIBLE状态睡眠在等待队列上,一直要到驱动程序向cwq->worklist上提交了
+         * 一个新的节点才会唤醒worker_thread
+         */
 		prepare_to_wait(&cwq->more_work, &wait, TASK_INTERRUPTIBLE);
 		if (!freezing(current) &&
 		    !kthread_should_stop() &&
@@ -945,6 +957,9 @@ init_cpu_workqueue(struct workqueue_struct *wq, int cpu)
 	return cwq;
 }
 
+/* 生成工作线程
+ *
+ */
 static int create_workqueue_thread(struct cpu_workqueue_struct *cwq, int cpu)
 {
 	struct sched_param param = { .sched_priority = MAX_RT_PRIO-1 };
@@ -952,6 +967,7 @@ static int create_workqueue_thread(struct cpu_workqueue_struct *cwq, int cpu)
 	const char *fmt = is_wq_single_threaded(wq) ? "%s" : "%s/%d";
 	struct task_struct *p;
 
+    /* 这里执行的对应函数为worker_thread */
 	p = kthread_create(worker_thread, cwq, fmt, wq->name, cpu);
 	/*
 	 * Nobody can add the work_struct to this cwq,
@@ -972,6 +988,7 @@ static int create_workqueue_thread(struct cpu_workqueue_struct *cwq, int cpu)
 	return 0;
 }
 
+/* 将新进程投入到系统的运行队列之中 */
 static void start_workqueue_thread(struct cpu_workqueue_struct *cwq, int cpu)
 {
 	struct task_struct *p = cwq->thread;
@@ -1011,7 +1028,7 @@ struct workqueue_struct *__create_workqueue_key(const char *name,
 	wq->rt = rt;
 	INIT_LIST_HEAD(&wq->list);
 
-	if (singlethread) {
+	if (singlethread) { /* singlethread表示单线程?? */
 		cwq = init_cpu_workqueue(wq, singlethread_cpu);
 		err = create_workqueue_thread(cwq, singlethread_cpu);
 		start_workqueue_thread(cwq, -1);

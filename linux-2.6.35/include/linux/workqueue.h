@@ -21,7 +21,7 @@ typedef void (*work_func_t)(struct work_struct *work);
  * one
  */
 #define work_data_bits(work) ((unsigned long *)(&(work)->data))
-
+/* 工作节点 */
 struct work_struct {
 	atomic_long_t data;
 #define WORK_STRUCT_PENDING 0		/* T if work item pending execution */

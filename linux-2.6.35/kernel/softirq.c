@@ -340,6 +340,9 @@ void raise_softirq(unsigned int nr)
 	local_irq_restore(flags);
 }
 
+/* open_softirq主要用于安装执行函数
+ *
+ */
 void open_softirq(int nr, void (*action)(struct softirq_action *))
 {
 	softirq_vec[nr].action = action;
@@ -359,12 +362,19 @@ static DEFINE_PER_CPU(struct tasklet_head, tasklet_hi_vec);
 
 void __tasklet_schedule(struct tasklet_struct *t)
 {
-	unsigned long flags;
+    /* tasklet_vec是一个per-CPU型的变量,用来将系统中所有通过tasklet_schedule函数
+     * 提交的tasklet对象构建成链表,如果是多处理器系统,那么每一个处理器都将用自己的
+     * tasklet_vec链表管理提交到其上的tasklet.
+     */
+    unsigned long flags;
 
 	local_irq_save(flags);
 	t->next = NULL;
 	*__get_cpu_var(tasklet_vec).tail = t;
 	__get_cpu_var(tasklet_vec).tail = &(t->next);
+    /* raise_softirq_irqoff(TASKLET_SOFTIRQ)调用告诉SOFTIRQ部分当前处理器有一个
+     * tasklet_softirq正等待处理,1表示有,
+     */
 	raise_softirq_irqoff(TASKLET_SOFTIRQ);
 	local_irq_restore(flags);
 }
@@ -396,6 +406,9 @@ void __tasklet_hi_schedule_first(struct tasklet_struct *t)
 
 EXPORT_SYMBOL(__tasklet_hi_schedule_first);
 
+/* tasklet对应的软中断处理函数
+ *
+ */
 static void tasklet_action(struct softirq_action *a)
 {
 	struct tasklet_struct *list;
@@ -403,8 +416,9 @@ static void tasklet_action(struct softirq_action *a)
 	local_irq_disable();
 	list = __get_cpu_var(tasklet_vec).head;
 	__get_cpu_var(tasklet_vec).head = NULL;
+    /* 获取tasklet链表 */
 	__get_cpu_var(tasklet_vec).tail = &__get_cpu_var(tasklet_vec).head;
-	local_irq_enable();
+	local_irq_enable(); /* 打开本cpu的中断 */
 
 	while (list) {
 		struct tasklet_struct *t = list;

@@ -450,15 +450,17 @@ extern void __send_remote_softirq(struct call_single_data *cp, int cpu,
 struct tasklet_struct
 {
 	struct tasklet_struct *next;
-	unsigned long state;
-	atomic_t count;
-	void (*func)(unsigned long);
-	unsigned long data;
+	unsigned long state; /* 记录每一个tasklet在系统中的状态 */
+	atomic_t count; /* count.counter=0表示当前的tasklet是enabled,可以被调度执行,否则不行 */
+	void (*func)(unsigned long); /* 延迟函数 */
+	unsigned long data; /* 传递给func的参数 */
 };
 
+/* 声明并初始化一个静态的tasklet对象 */
 #define DECLARE_TASKLET(name, func, data) \
 struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(0), func, data }
 
+/* 声明并初始化一个处于disabled状态的tasklet */
 #define DECLARE_TASKLET_DISABLED(name, func, data) \
 struct tasklet_struct name = { NULL, 0, ATOMIC_INIT(1), func, data }
 
@@ -477,7 +479,7 @@ static inline int tasklet_trylock(struct tasklet_struct *t)
 
 static inline void tasklet_unlock(struct tasklet_struct *t)
 {
-	smp_mb__before_clear_bit(); 
+	smp_mb__before_clear_bit();
 	clear_bit(TASKLET_STATE_RUN, &(t)->state);
 }
 
@@ -493,8 +495,12 @@ static inline void tasklet_unlock_wait(struct tasklet_struct *t)
 
 extern void __tasklet_schedule(struct tasklet_struct *t);
 
+/* 一般驱动程序会调用这个函数来向系统提交这个tasklet
+ * 这里所谓的提交,实际上就是将一个tasklet对象加入到tasklet_vec管理的链表之中
+ */
 static inline void tasklet_schedule(struct tasklet_struct *t)
 {
+    /* 对于一个尚未提交过的tasklet对象来说,t->state应该为0 */
 	if (!test_and_set_bit(TASKLET_STATE_SCHED, &t->state))
 		__tasklet_schedule(t);
 }
@@ -605,7 +611,7 @@ void tasklet_hrtimer_cancel(struct tasklet_hrtimer *ttimer)
  * if more than one irq occurred.
  */
 
-#if defined(CONFIG_GENERIC_HARDIRQS) && !defined(CONFIG_GENERIC_IRQ_PROBE) 
+#if defined(CONFIG_GENERIC_HARDIRQS) && !defined(CONFIG_GENERIC_IRQ_PROBE)
 static inline unsigned long probe_irq_on(void)
 {
 	return 0;

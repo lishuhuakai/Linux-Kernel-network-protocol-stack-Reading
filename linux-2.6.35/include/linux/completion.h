@@ -24,7 +24,7 @@
  */
 struct completion {
 	unsigned int done;
-	wait_queue_head_t wait;
+	wait_queue_head_t wait; /* 用于管理当前等待在该completion上的所有进程 */
 };
 
 #define COMPLETION_INITIALIZER(work) \

@@ -29,12 +29,13 @@ typedef struct __wait_queue wait_queue_t;
 typedef int (*wait_queue_func_t)(wait_queue_t *wait, unsigned mode, int flags, void *key);
 int default_wake_function(wait_queue_t *wait, unsigned mode, int flags, void *key);
 
+/* 等待队列的节点 */
 struct __wait_queue {
-	unsigned int flags;
+	unsigned int flags;  /* 唤醒等待队列上的进程的时候,该标志会影响唤醒操作的行为模式 */
 #define WQ_FLAG_EXCLUSIVE	0x01
-	void *private;
-	wait_queue_func_t func;
-	struct list_head task_list;
+	void *private; /* 等待队列的私有数据 */
+	wait_queue_func_t func;  /* 一般用于存放进程的task_struct */
+	struct list_head task_list; /* 用于将各独立的等待队列节点链起来形成链表 */
 };
 
 struct wait_bit_key {
@@ -47,10 +48,12 @@ struct wait_bit_queue {
 	wait_queue_t wait;
 };
 
+/* 等待队列头结点 */
 struct __wait_queue_head {
-	spinlock_t lock;
+	spinlock_t lock; /* 自旋锁,用于做等待队列被并发访问时的互斥机制 */
 	struct list_head task_list;
 };
+
 typedef struct __wait_queue_head wait_queue_head_t;
 
 struct task_struct;
@@ -58,7 +61,7 @@ struct task_struct;
 /*
  * Macros for declaration and initialisaton of the datatypes
  */
-
+/* 初始化等待队列节点 */
 #define __WAITQUEUE_INITIALIZER(name, tsk) {				\
 	.private	= tsk,						\
 	.func		= default_wake_function,			\
@@ -66,7 +69,7 @@ struct task_struct;
 
 #define DECLARE_WAITQUEUE(name, tsk)					\
 	wait_queue_t name = __WAITQUEUE_INITIALIZER(name, tsk)
-
+/* 初始化等待队列头结点 */
 #define __WAIT_QUEUE_HEAD_INITIALIZER(name) {				\
 	.lock		= __SPIN_LOCK_UNLOCKED(name.lock),		\
 	.task_list	= { &(name).task_list, &(name).task_list } }
@@ -140,6 +143,7 @@ static inline void __add_wait_queue_tail(wait_queue_head_t *head,
 	list_add_tail(&new->task_list, &head->task_list);
 }
 
+/* 将等待队列节点添加到等待队列的末尾,并且打上WQ_FLAG_EXCLUSIVE标记 */
 static inline void __add_wait_queue_tail_exclusive(wait_queue_head_t *q,
 					      wait_queue_t *wait)
 {
@@ -661,7 +665,7 @@ static inline int wait_on_bit_lock(void *word, int bit,
 		return 0;
 	return out_of_line_wait_on_bit_lock(word, bit, action, mode);
 }
-	
+
 #endif /* __KERNEL__ */
 
 #endif

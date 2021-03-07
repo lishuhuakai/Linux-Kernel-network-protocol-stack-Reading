@@ -372,7 +372,7 @@ irqreturn_t handle_IRQ_event(unsigned int irq, struct irqaction *action)
 
 	do {
 		trace_irq_handler_entry(irq, action);
-		ret = action->handler(irq, action->dev_id);
+		ret = action->handler(irq, action->dev_id); /* 这里调用handler函数 */
 		trace_irq_handler_exit(irq, action, ret);
 
 		switch (ret) {

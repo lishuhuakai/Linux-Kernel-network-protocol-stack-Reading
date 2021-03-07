@@ -27,7 +27,7 @@ extern struct ctl_table epoll_table[]; /* for sysctl */
 
 struct poll_table_struct;
 
-/* 
+/*
  * structures and helpers for f_op->poll implementations
  */
 typedef void (*poll_queue_proc)(struct file *, wait_queue_head_t *, struct poll_table_struct *);
@@ -37,9 +37,14 @@ typedef struct poll_table_struct {
 	unsigned long key;
 } poll_table;
 
+/* 这个函数一般由驱动程序调用
+ * @param filp 驱动对应的文件结构
+ * @param wait_address 驱动程序自己维护的等待队列
+ * @param p 调用poll函数传递下来的poll_table结构,可以由poll_table结构获得poll_wqueues结构
+ */
 static inline void poll_wait(struct file * filp, wait_queue_head_t * wait_address, poll_table *p)
 {
-	if (p && wait_address)
+	if (p && wait_address) /* 一般是__pollwait函数 */
 		p->qproc(filp, wait_address, p);
 }
 
@@ -59,6 +64,7 @@ struct poll_table_entry {
 /*
  * Structures and helpers for sys_poll/sys_poll
  */
+/* poll等待队列 */
 struct poll_wqueues {
 	poll_table pt;
 	struct poll_table_page *table;

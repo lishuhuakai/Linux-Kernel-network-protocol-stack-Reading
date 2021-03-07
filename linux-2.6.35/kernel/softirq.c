@@ -71,7 +71,7 @@ void wakeup_softirqd(void)
 {
 	/* Interrupts are disabled: no need to stop preemption */
 	struct task_struct *tsk = __get_cpu_var(ksoftirqd);
-
+    /* 获取ksoftirqd的TCB,然后开始调度 */
 	if (tsk && tsk->state != TASK_RUNNING)
 		wake_up_process(tsk);
 }
@@ -294,6 +294,7 @@ void irq_enter(void)
 /*
  * Exit an interrupt context. Process softirqs if needed and possible:
  */
+/* 这里主要处理所谓的软中断 */
 void irq_exit(void)
 {
 	account_system_vtime(current);
@@ -706,6 +707,9 @@ void __init softirq_init(void)
 	open_softirq(HI_SOFTIRQ, tasklet_hi_action);
 }
 
+/* 内核线程, ksoftirqd
+ * 执行软中断
+ */
 static int run_ksoftirqd(void * __bind_cpu)
 {
 	set_current_state(TASK_INTERRUPTIBLE);
@@ -819,6 +823,7 @@ static int __cpuinit cpu_callback(struct notifier_block *nfb,
 	switch (action) {
 	case CPU_UP_PREPARE:
 	case CPU_UP_PREPARE_FROZEN:
+        /* ksoftirqd */
 		p = kthread_create(run_ksoftirqd, hcpu, "ksoftirqd/%d", hotcpu);
 		if (IS_ERR(p)) {
 			printk("ksoftirqd for %i failed\n", hotcpu);

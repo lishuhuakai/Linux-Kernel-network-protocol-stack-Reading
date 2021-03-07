@@ -29,9 +29,9 @@
 #endif
 
 struct pollfd {
-	int fd;
-	short events;
-	short revents;
+	int fd; /* 文件描述符 */
+	short events; /* 等待的事件 */
+	short revents; /* 驱动程序中实际发生的事件 */
 };
 
 #endif	/* __ASM_GENERIC_POLL_H */

@@ -64,6 +64,11 @@ EXPORT_SYMBOL(remove_wait_queue);
  * stops them from bleeding out - it would still allow subsequent
  * loads to move into the critical region).
  */
+/* 完成睡眠前的准备工作
+ * 1. 清除__wait节点的WQ_FLAG_EXCLUSIVE标记
+ * 2. 将__wait节点加入到等待队列wq之中
+ * 3. 将当前进程的状态设置为state
+ */
 void
 prepare_to_wait(wait_queue_head_t *q, wait_queue_t *wait, int state)
 {

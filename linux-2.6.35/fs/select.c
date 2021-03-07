@@ -10,7 +10,7 @@
  *     parameter to reflect time remaining.
  *
  *  24 January 2000
- *     Changed sys_poll()/do_poll() to use PAGE_SIZE chunk-based allocation 
+ *     Changed sys_poll()/do_poll() to use PAGE_SIZE chunk-based allocation
  *     of fds to overcome nfds < 16390 descriptors limit (Tigran Aivazian).
  */
 
@@ -179,6 +179,7 @@ static struct poll_table_entry *poll_get_entry(struct poll_wqueues *p)
 static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
 	struct poll_wqueues *pwq = wait->private;
+    /* 特别注意这里的polling_task,记录的是调用poll函数的进程 */
 	DECLARE_WAITQUEUE(dummy_wait, pwq->polling_task);
 
 	/*
@@ -199,9 +200,13 @@ static int __pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 	 * pass in @sync.  @sync is scheduled to be removed and once
 	 * that happens, wake_up_process() can be used directly.
 	 */
+    /* 这里实际会唤醒调用poll函数的进程 */
 	return default_wake_function(&dummy_wait, mode, sync, key);
 }
 
+/* 唤醒进程
+ *
+ */
 static int pollwake(wait_queue_t *wait, unsigned mode, int sync, void *key)
 {
 	struct poll_table_entry *entry;
@@ -224,8 +229,10 @@ static void __pollwait(struct file *filp, wait_queue_head_t *wait_address,
 	entry->filp = filp;
 	entry->wait_address = wait_address;
 	entry->key = p->key;
+    /* 唤醒函数为pollwake */
 	init_waitqueue_func_entry(&entry->wait, pollwake);
 	entry->wait.private = pwq;
+    /* 加入等待队列 */
 	add_wait_queue(wait_address, &entry->wait);
 }
 
@@ -544,7 +551,7 @@ int core_sys_select(int n, fd_set __user *inp, fd_set __user *outp,
 	/*
 	 * We need 6 bitmaps (in/out/ex for both incoming and outgoing),
 	 * since we used fdset we need to allocate memory in units of
-	 * long-words. 
+	 * long-words.
 	 */
 	size = FDS_BYTES(n);
 	bits = stack_fds;
@@ -723,6 +730,9 @@ struct poll_list {
  * pwait poll_table will be used by the fd-provided poll handler for waiting,
  * if non-NULL.
  */
+/* 执行每一个文件描述符的poll函数
+ *
+ */
 static inline unsigned int do_pollfd(struct pollfd *pollfd, poll_table *pwait)
 {
 	unsigned int mask;
@@ -734,7 +744,7 @@ static inline unsigned int do_pollfd(struct pollfd *pollfd, poll_table *pwait)
 		int fput_needed;
 		struct file * file;
 
-		file = fget_light(fd, &fput_needed);
+		file = fget_light(fd, &fput_needed); /* 找到对应的文件 */
 		mask = POLLNVAL;
 		if (file != NULL) {
 			mask = DEFAULT_POLLMASK;
@@ -754,6 +764,9 @@ static inline unsigned int do_pollfd(struct pollfd *pollfd, poll_table *pwait)
 	return mask;
 }
 
+/* 执行真正的poll操作
+ *
+ */
 static int do_poll(unsigned int nfds,  struct poll_list *list,
 		   struct poll_wqueues *wait, struct timespec *end_time)
 {
@@ -779,7 +792,7 @@ static int do_poll(unsigned int nfds,  struct poll_list *list,
 
 			pfd = walk->entries;
 			pfd_end = pfd + walk->len;
-			for (; pfd != pfd_end; pfd++) {
+			for (; pfd != pfd_end; pfd++) { /* 遍历每一个poll描述符 */
 				/*
 				 * Fish for events. If we found one, record it
 				 * and kill the poll_table, so we don't
@@ -864,7 +877,7 @@ int do_sys_poll(struct pollfd __user *ufds, unsigned int nfds,
 			goto out_fds;
 		}
 	}
-
+    /* 这里初始化poll节点 */
 	poll_initwait(&table);
 	fdcount = do_poll(nfds, head, &table, end_time);
 	poll_freewait(&table);

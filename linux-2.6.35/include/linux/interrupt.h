@@ -106,11 +106,11 @@ typedef irqreturn_t (*irq_handler_t)(int, void *);
  * @thread_flags:	flags related to @thread
  */
 struct irqaction {
-	irq_handler_t handler;
+	irq_handler_t handler; /* 设备特定的中断服务例程 */
 	unsigned long flags;
 	const char *name;
 	void *dev_id;
-	struct irqaction *next;
+	struct irqaction *next; /* 指向下一个irqaction */
 	int irq;
 	struct proc_dir_entry *dir;
 	irq_handler_t thread_fn;
@@ -126,6 +126,12 @@ request_threaded_irq(unsigned int irq, irq_handler_t handler,
 		     irq_handler_t thread_fn,
 		     unsigned long flags, const char *name, void *dev);
 
+
+/* 驱动程序安装一个设备中断服务例程
+ * @param irq 中断号
+ * @param handler 服务例程
+ * @param flags 标志
+ */
 static inline int __must_check
 request_irq(unsigned int irq, irq_handler_t handler, unsigned long flags,
 	    const char *name, void *dev)

@@ -108,6 +108,9 @@ struct msi_desc;
  * @release:		release function solely used by UML
  * @typename:		obsoleted by name, kept as migration helper
  */
+/* PIC的抽象
+ * 大部分是函数指针,用来指向具体平台实现的PIC控制函数
+ */
 struct irq_chip {
 	const char	*name;
 	unsigned int	(*startup)(unsigned int irq);
@@ -173,13 +176,13 @@ struct irq_2_iommu;
  * @name:		flow handler name for /proc/interrupts output
  */
 struct irq_desc {
-	unsigned int		irq;
+	unsigned int		irq; /* 软件中断号 */
 	struct timer_rand_state *timer_rand_state;
-	unsigned int            *kstat_irqs;
+	unsigned int            *kstat_irqs; /* 一个per-CPU型成员,用于系统的中断统计计数 */
 #ifdef CONFIG_INTR_REMAP
 	struct irq_2_iommu      *irq_2_iommu;
 #endif
-	irq_flow_handler_t	handle_irq;
+	irq_flow_handler_t	handle_irq; /* 函数指针 */
 	struct irq_chip		*chip;
 	struct msi_desc		*msi_desc;
 	void			*handler_data;
@@ -318,6 +321,9 @@ static inline void generic_handle_irq_desc(unsigned int irq, struct irq_desc *de
 #endif
 }
 
+/* 通用的中断处理函数
+ * @param irq 中断号
+ */
 static inline void generic_handle_irq(unsigned int irq)
 {
 	generic_handle_irq_desc(irq, irq_to_desc(irq));

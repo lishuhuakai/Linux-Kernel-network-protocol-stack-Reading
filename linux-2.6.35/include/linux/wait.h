@@ -175,7 +175,7 @@ wait_queue_head_t *bit_waitqueue(void *, int);
 #define wake_up_nr(x, nr)		__wake_up(x, TASK_NORMAL, nr, NULL)
 #define wake_up_all(x)			__wake_up(x, TASK_NORMAL, 0, NULL)
 #define wake_up_locked(x)		__wake_up_locked((x), TASK_NORMAL)
-
+/* 唤醒一个等待队列上睡眠的进程 */
 #define wake_up_interruptible(x)	__wake_up(x, TASK_INTERRUPTIBLE, 1, NULL)
 #define wake_up_interruptible_nr(x, nr)	__wake_up(x, TASK_INTERRUPTIBLE, nr, NULL)
 #define wake_up_interruptible_all(x)	__wake_up(x, TASK_INTERRUPTIBLE, 0, NULL)
@@ -296,6 +296,10 @@ do {									\
  *
  * The function will return -ERESTARTSYS if it was interrupted by a
  * signal and 0 if @condition evaluated to true.
+ */
+/* wait_event_interruptible用于将当前调用它的进程睡眠等待在一个event上,直到进程被唤醒
+ * 并且需要的condition条件为真
+ * @param wq 等待队列
  */
 #define wait_event_interruptible(wq, condition)				\
 ({									\

@@ -3797,14 +3797,18 @@ EXPORT_SYMBOL(default_wake_function);
  * started to run but is not in state TASK_RUNNING. try_to_wake_up() returns
  * zero in this (rare) case, and we handle it by continuing to scan the queue.
  */
+/* 唤醒在等待队列上等待的进程
+ * @param nr_exclusive 排他性唤醒的个数
+ * @param wake_flags 唤醒标志
+ */
 static void __wake_up_common(wait_queue_head_t *q, unsigned int mode,
 			int nr_exclusive, int wake_flags, void *key)
 {
 	wait_queue_t *curr, *next;
-
+    /* 遍历等待队列上所有的等待节点 */
 	list_for_each_entry_safe(curr, next, &q->task_list, task_list) {
 		unsigned flags = curr->flags;
-
+        /* 这里的func一般是default_wake_function */
 		if (curr->func(curr, mode, wake_flags, key) &&
 				(flags & WQ_FLAG_EXCLUSIVE) && !--nr_exclusive)
 			break;
@@ -3902,6 +3906,7 @@ EXPORT_SYMBOL_GPL(__wake_up_sync);	/* For internal use only */
  * It may be assumed that this function implies a write memory barrier before
  * changing the task state if and only if any tasks are woken up.
  */
+/* 唤醒等待在该completion上的进程 */
 void complete(struct completion *x)
 {
 	unsigned long flags;

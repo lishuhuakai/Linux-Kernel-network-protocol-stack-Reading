@@ -23,7 +23,7 @@
  * INIT_COMPLETION().
  */
 struct completion {
-	unsigned int done;
+	unsigned int done; /* 记录完成者的数量 */
 	wait_queue_head_t wait; /* 用于管理当前等待在该completion上的所有进程 */
 };
 

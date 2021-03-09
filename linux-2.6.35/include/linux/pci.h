@@ -537,10 +537,12 @@ struct pci_error_handlers {
 /* ---------------------------------------------------------------- */
 
 struct module;
+/* pci_driver结构用于描述pci */
 struct pci_driver {
 	struct list_head node;
-	char *name;
+	char *name; /* 驱动名称 */
 	const struct pci_device_id *id_table;	/* must be non-NULL for probe to be called */
+    /* 当有驱动被添加至内核时,会调用此接口进行设备的初始化 */
 	int  (*probe)  (struct pci_dev *dev, const struct pci_device_id *id);	/* New device inserted */
 	void (*remove) (struct pci_dev *dev);	/* Device removed (NULL if not a hot-plug capable driver) */
 	int  (*suspend) (struct pci_dev *dev, pm_message_t state);	/* Device suspended */

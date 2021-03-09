@@ -769,7 +769,7 @@ struct net_device_ops {
  *	FIXME: cleanup struct net_device such that network protocol info
  *	moves out.
  */
-
+/* 网络设备的抽象 */
 struct net_device {
 
 	/*
@@ -782,7 +782,7 @@ struct net_device {
 	struct pm_qos_request_list *pm_qos_req;
 
 	/* device name hash chain */
-	struct hlist_node	name_hlist;
+	struct hlist_node	name_hlist; /* 通过名称来索引net_device */
 	/* snmp alias */
 	char 			*ifalias;
 
@@ -793,6 +793,7 @@ struct net_device {
 	unsigned long		mem_end;	/* shared mem end	*/
 	unsigned long		mem_start;	/* shared mem start	*/
 	unsigned long		base_addr;	/* device I/O address	*/
+    /* 设备中断号 */
 	unsigned int		irq;		/* device IRQ number	*/
 
 	/*
@@ -864,7 +865,7 @@ struct net_device {
 				 NETIF_F_FRAGLIST)
 
 	/* Interface index. Unique device identifier	*/
-	int			ifindex;
+	int			ifindex; /* 网络设备的索引号 */
 	int			iflink;
 
 	struct net_device_stats	stats;
@@ -1094,6 +1095,7 @@ struct net *dev_net(const struct net_device *dev)
 #endif
 }
 
+/* 设置网络设备所属的网络 */
 static inline
 void dev_net_set(struct net_device *dev, struct net *net)
 {

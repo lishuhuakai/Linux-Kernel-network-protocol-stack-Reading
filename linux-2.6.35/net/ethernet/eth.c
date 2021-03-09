@@ -363,7 +363,7 @@ EXPORT_SYMBOL(ether_setup);
  * size (sizeof_priv).  A 32-byte (not bit) alignment is enforced for
  * this private data area.
  */
-
+/* 构建一个以太网设备 */
 struct net_device *alloc_etherdev_mq(int sizeof_priv, unsigned int queue_count)
 {
 	return alloc_netdev_mq(sizeof_priv, "eth%d", ether_setup, queue_count);

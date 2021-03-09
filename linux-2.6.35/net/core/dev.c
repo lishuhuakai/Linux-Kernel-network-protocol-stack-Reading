@@ -2086,7 +2086,7 @@ static inline int __dev_xmit_skb(struct sk_buff *skb, struct Qdisc *q,
 		if (!(dev->priv_flags & IFF_XMIT_DST_RELEASE))
 			skb_dst_force(skb);
 		__qdisc_update_bstats(q, skb->len);
-		
+
 		if (sch_direct_xmit(skb, q, dev, txq, root_lock))
 			__qdisc_run(q);
 		else
@@ -5014,7 +5014,7 @@ int register_netdevice(struct net_device *dev)
 #endif
 	/* Init, if this function is available */
 	if (dev->netdev_ops->ndo_init) {
-		ret = dev->netdev_ops->ndo_init(dev);
+		ret = dev->netdev_ops->ndo_init(dev); /* 调用初始化函数 */
 		if (ret) {
 			if (ret > 0)
 				ret = -EIO;
@@ -5026,7 +5026,7 @@ int register_netdevice(struct net_device *dev)
 	if (ret)
 		goto err_uninit;
 
-	dev->ifindex = dev_new_index(net);
+	dev->ifindex = dev_new_index(net); /* 分配一个ifindex */
 	if (dev->iflink == -1)
 		dev->iflink = dev->ifindex;
 
@@ -5073,7 +5073,7 @@ int register_netdevice(struct net_device *dev)
 	list_netdevice(dev);
 
 	/* Notify protocols, that a new device appeared. */
-	ret = call_netdevice_notifiers(NETDEV_REGISTER, dev);
+	ret = call_netdevice_notifiers(NETDEV_REGISTER, dev); /* 通知其他关注者 */
 	ret = notifier_to_errno(ret);
 	if (ret) {
 		rollback_registered(dev);
@@ -5085,7 +5085,7 @@ int register_netdevice(struct net_device *dev)
 	 */
 	if (!dev->rtnl_link_ops ||
 	    dev->rtnl_link_state == RTNL_LINK_INITIALIZED)
-		rtmsg_ifinfo(RTM_NEWLINK, dev, ~0U);
+		rtmsg_ifinfo(RTM_NEWLINK, dev, ~0U); /* 发送netlink消息 */
 
 out:
 	return ret;
@@ -5148,6 +5148,9 @@ EXPORT_SYMBOL_GPL(init_dummy_netdev);
  *	This is a wrapper around register_netdevice that takes the rtnl semaphore
  *	and expands the device name if you passed a format string to
  *	alloc_netdev.
+ */
+/* 注册网络设备
+ * @param dev 待注册的网络设备
  */
 int register_netdev(struct net_device *dev)
 {
@@ -5363,6 +5366,10 @@ static void netdev_init_queues(struct net_device *dev)
  *	and performs basic initialization.  Also allocates subquue structs
  *	for each queue on the device at the end of the netdevice.
  */
+/* 分配网络设备的内存
+ * @param sizeof_priv 私有数据大小
+ * @param setup 安装函数
+ */
 struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 		void (*setup)(struct net_device *), unsigned int queue_count)
 {
@@ -5447,7 +5454,7 @@ struct net_device *alloc_netdev_mq(int sizeof_priv, const char *name,
 	INIT_LIST_HEAD(&dev->unreg_list);
 	INIT_LIST_HEAD(&dev->link_watch_list);
 	dev->priv_flags = IFF_XMIT_DST_RELEASE;
-	setup(dev);
+	setup(dev); /* 调用setup函数来初始化 */
 	strcpy(dev->name, name);
 	return dev;
 
@@ -5915,7 +5922,7 @@ static struct pernet_operations __net_initdata default_device_ops = {
  *	Initialize the DEV module. At boot time this walks the device list and
  *	unhooks any devices that fail to initialise (normally hardware not
  *	present) and leaves us with a valid list of present and active devices.
- *  
+ *
  * 初始化DEV模块。 在启动时，它会遍历设备列表
  * 取消挂起任何无法初始化的设备（通常不是硬件）
  * 并为我们提供有效的现有和有效设备列表。

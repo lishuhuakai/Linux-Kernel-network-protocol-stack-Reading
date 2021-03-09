@@ -2165,18 +2165,20 @@ static irqreturn_t e100_intr(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-/* 这里也是非常重要的函数，主要用于轮询操作，也就是收包 */
+/* 这里也是非常重要的函数，主要用于轮询操作，也就是收包
+ * NAPI
+ */
 static int e100_poll(struct napi_struct *napi, int budget)
 {
 	struct nic *nic = container_of(napi, struct nic, napi);
 	unsigned int work_done = 0;
-	// rx用于收包
+	// rx用于收包, 这里会调用netif_receive_skb
 	e100_rx_clean(nic, &work_done, budget);
 	e100_tx_clean(nic);
 
 	/* If budget not fully consumed, exit the polling mode */
 	if (work_done < budget) {
-		napi_complete(napi);
+		napi_complete(napi); /* 将设备从cpu的轮询结构中移除 */
 		e100_enable_irq(nic); // 开启中断
 	}
 

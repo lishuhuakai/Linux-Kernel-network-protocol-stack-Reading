@@ -1170,7 +1170,7 @@ static int __dev_open(struct net_device *dev)
 		/*
 		 *	Set the flags.
 		 */
-		dev->flags |= IFF_UP;
+		dev->flags |= IFF_UP; /* 打上标记 */
 
 		/*
 		 *	Enable NET_DMA
@@ -1203,6 +1203,7 @@ static int __dev_open(struct net_device *dev)
  *	Calling this function on an active interface is a nop. On a failure
  *	a negative errno code is returned.
  */
+/* 启用设备 */
 int dev_open(struct net_device *dev)
 {
 	int ret;
@@ -2258,6 +2259,7 @@ int weight_p __read_mostly = 64;            /* old backlog weight */
 static inline void ____napi_schedule(struct softnet_data *sd,
 				     struct napi_struct *napi)
 {
+    /* 将napi加入轮询队列 */
 	list_add_tail(&napi->poll_list, &sd->poll_list);
 	__raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
@@ -2463,7 +2465,7 @@ static int enqueue_to_backlog(struct sk_buff *skb, int cpu,
 	if (skb_queue_len(&sd->input_pkt_queue) <= netdev_max_backlog) {
 		if (skb_queue_len(&sd->input_pkt_queue)) {
 enqueue:
-			__skb_queue_tail(&sd->input_pkt_queue, skb);
+			__skb_queue_tail(&sd->input_pkt_queue, skb); /* 直接将报文放入缓冲队列 */
 			input_queue_tail_incr_save(sd, qtail);
 			rps_unlock(sd);
 			local_irq_restore(flags);
@@ -2475,6 +2477,8 @@ enqueue:
 		 */
 		if (!__test_and_set_bit(NAPI_STATE_SCHED, &sd->backlog.state)) {
 			if (!rps_ipi_queued(sd))
+                /* 这里有一些trick,所有的非NAPI驱动都共用一个napi_struct,也就是sd->backlog
+                 * 这样做的好处在于,将NAPI和非NAPI统一了起来,可以共用一套逻辑,避免多套逻辑 */
 				____napi_schedule(sd, &sd->backlog);
 		}
 		goto enqueue;
@@ -2503,7 +2507,7 @@ enqueue:
  *	NET_RX_DROP     (packet was dropped)
  *
  */
-
+/* 需要注意,此函数一般由驱动调用 */
 int netif_rx(struct sk_buff *skb)
 {
 	int ret;
@@ -3499,6 +3503,9 @@ void netif_napi_del(struct napi_struct *napi)
 }
 EXPORT_SYMBOL(netif_napi_del);
 
+/* 内核收包函数
+ *
+ */
 static void net_rx_action(struct softirq_action *h)
 {
 	struct softnet_data *sd = &__get_cpu_var(softnet_data);
@@ -3508,7 +3515,7 @@ static void net_rx_action(struct softirq_action *h)
 
 	local_irq_disable();
 
-	while (!list_empty(&sd->poll_list)) {
+	while (!list_empty(&sd->poll_list)) { /* 遍历cpu的轮询列表 */
 		struct napi_struct *n;
 		int work, weight;
 
@@ -3540,7 +3547,7 @@ static void net_rx_action(struct softirq_action *h)
 		 */
 		work = 0;
 		if (test_bit(NAPI_STATE_SCHED, &n->state)) {
-			work = n->poll(n, weight);
+			work = n->poll(n, weight); /* 开始调用驱动的poll函数,对于e100,对应函数为e100_poll */
 			trace_napi_poll(n);
 		}
 
@@ -5994,7 +6001,7 @@ static int __init net_dev_init(void)
 
 	if (register_pernet_device(&default_device_ops))
 		goto out;
-
+    /* 需要特别注意下面的两个软中断,分别用来接收和发送数据 */
 	open_softirq(NET_TX_SOFTIRQ, net_tx_action);
 	open_softirq(NET_RX_SOFTIRQ, net_rx_action);
 

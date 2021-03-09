@@ -1393,10 +1393,10 @@ static inline int unregister_gifconf(unsigned int family)
  * 接收到的数据报被放置在每个cpu都存在的queue中
  */
 struct softnet_data {
-	struct Qdisc		*output_queue;
+	struct Qdisc		*output_queue; /* 数据报输出软中断中输出包的队列 */
 	struct Qdisc		**output_queue_tailp;
 	struct list_head	poll_list; /* 网络设备轮询队列,处于报文接收状态的网络设备会被链接在该队列上 */
-	struct sk_buff		*completion_queue;
+	struct sk_buff		*completion_queue; /* 完成队列,完成发送数据报之后的释放队列 */
 	struct sk_buff_head	process_queue;
 
 	/* stats */
@@ -1416,8 +1416,10 @@ struct softnet_data {
 	unsigned int		input_queue_tail;
 #endif
 	unsigned		dropped;
-	struct sk_buff_head	input_pkt_queue;
-	struct napi_struct	backlog;
+	struct sk_buff_head	input_pkt_queue; /* 非NAPI的输入报文缓冲队列 */
+	struct napi_struct	backlog; /* 专门为NAPI搭建的结构体,这个napi_struct非常奇特
+	                               * 所有的非NAPI都使用这个虚拟的backlog设备,使得都可以调用到
+	                               * process_backlog函数来向上层传递数据 */
 };
 
 static inline void input_queue_head_incr(struct softnet_data *sd)

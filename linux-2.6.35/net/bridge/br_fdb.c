@@ -31,6 +31,7 @@ static int fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 
 static u32 fdb_salt __read_mostly;
 
+/* CAM的初始化 */
 int __init br_fdb_init(void)
 {
 	br_fdb_cache = kmem_cache_create("bridge_fdb_cache",
@@ -315,6 +316,9 @@ static inline struct net_bridge_fdb_entry *fdb_find(struct hlist_head *head,
 	return NULL;
 }
 
+/* 构建一个fdb表项
+ *
+ */
 static struct net_bridge_fdb_entry *fdb_create(struct hlist_head *head,
 					       struct net_bridge_port *source,
 					       const unsigned char *addr,
@@ -363,6 +367,10 @@ static int fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 	return 0;
 }
 
+/*  构建端口-MAC映射关系
+ * @param source 端口
+ * @param addr mac地址
+ */
 int br_fdb_insert(struct net_bridge *br, struct net_bridge_port *source,
 		  const unsigned char *addr)
 {

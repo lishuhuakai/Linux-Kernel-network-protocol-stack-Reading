@@ -56,10 +56,11 @@ struct br_ip
 	__be16		proto;
 };
 
+/* 网桥端口-mac映射表项 */
 struct net_bridge_fdb_entry
 {
-	struct hlist_node		hlist;
-	struct net_bridge_port		*dst;
+	struct hlist_node		hlist; /* 用于cam表连接的链表指针 */
+	struct net_bridge_port		*dst; /* 桥的端口 */
 
 	struct rcu_head			rcu;
 	unsigned long			ageing_timer;
@@ -103,11 +104,12 @@ struct net_bridge_mdb_htable
 	u32				ver;
 };
 
+/* 网桥端口数据 */
 struct net_bridge_port
 {
-	struct net_bridge		*br;
-	struct net_device		*dev;
-	struct list_head		list;
+	struct net_bridge		*br; /* 当前端口所属的网桥设备 */
+	struct net_device		*dev; /* 链接到这个端口的物理设备 */
+	struct list_head		list; /* 同一桥内的端口连接 */
 
 	/* STP */
 	u8				priority;
@@ -121,7 +123,7 @@ struct net_bridge_port
 	bridge_id			designated_bridge;
 	u32				path_cost;
 	u32				designated_cost;
-
+    /* 端口定时器,也就是stp控制超时的一些定时器列表 */
 	struct timer_list		forward_delay_timer;
 	struct timer_list		hold_timer;
 	struct timer_list		message_age_timer;
@@ -152,14 +154,16 @@ struct br_cpu_netstats {
 	unsigned long	tx_bytes;
 };
 
+/* 网桥的定义 */
 struct net_bridge
 {
-	spinlock_t			lock;
-	struct list_head		port_list;
-	struct net_device		*dev;
+	spinlock_t			lock; /* 自旋锁 */
+	struct list_head		port_list; /* 网桥所有端口的链表,每个元素都是net_bridge_port结构 */
+	struct net_device		*dev; /* 网桥会建立一个虚拟设备来进行管理,该设备的mac是动态指定的,通常是桥组中的一个物理端口的mac地址 */
 
 	struct br_cpu_netstats __percpu *stats;
 	spinlock_t			hash_lock;
+    /* 保存forwarding database的一个hash链表(这个也就是地址学习的东东,所以通过hash能 快速定位),这里每个元素都是一个net_bridge_fsb_entry结构  */
 	struct hlist_head		hash[BR_HASH_SIZE];
 	unsigned long			feature_mask;
 #ifdef CONFIG_BRIDGE_NETFILTER
@@ -182,7 +186,7 @@ struct net_bridge
 
 	u8				group_addr[ETH_ALEN];
 	u16				root_port;
-
+    /* stp使用的协议 */
 	enum {
 		BR_NO_STP, 		/* no spanning tree */
 		BR_KERNEL_STP,		/* old STP in kernel */
@@ -220,7 +224,7 @@ struct net_bridge
 	struct timer_list		multicast_querier_timer;
 	struct timer_list		multicast_query_timer;
 #endif
-
+    /* stp要用的一些定时器列表 */
 	struct timer_list		hello_timer;
 	struct timer_list		tcn_timer;
 	struct timer_list		topology_change_timer;

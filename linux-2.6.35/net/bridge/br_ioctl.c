@@ -83,6 +83,11 @@ static int get_fdb_entries(struct net_bridge *br, void __user *userbuf,
 }
 
 /* called with RTNL */
+/* 在网桥中添加或者删除实际的端口
+ * @param br 待操作的网桥
+ * @param ifindex 实际端口的ifindex
+ * @param isadd 是否添加
+ */
 static int add_del_if(struct net_bridge *br, int ifindex, int isadd)
 {
 	struct net_device *dev;

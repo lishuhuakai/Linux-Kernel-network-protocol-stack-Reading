@@ -2648,6 +2648,7 @@ static inline struct sk_buff *handle_bridge(struct sk_buff *skb,
 {
 	struct net_bridge_port *port;
 
+    /* 如果数据包是环回包,或者数据包的产生设备不属于任何网桥,则不进行网桥处理 */
 	if (skb->pkt_type == PACKET_LOOPBACK ||
 	    (port = rcu_dereference(skb->dev->br_port)) == NULL)
 		return skb;
@@ -2656,7 +2657,7 @@ static inline struct sk_buff *handle_bridge(struct sk_buff *skb,
 		*ret = deliver_skb(skb, *pt_prev, orig_dev);
 		*pt_prev = NULL;
 	}
-
+    /* 调用网桥处理接口,该接口在网桥初始化的时候被指定为br_handle_frame */
 	return br_handle_frame_hook(port, skb);
 }
 #else

@@ -32,16 +32,17 @@ static struct pernet_operations br_net_ops = {
 	.exit	= br_net_exit,
 };
 
+/* 网桥的初始化 */
 static int __init br_init(void)
 {
 	int err;
-
+    /* stp的注册 */
 	err = stp_proto_register(&br_stp_proto);
 	if (err < 0) {
 		pr_err("bridge: can't register sap for STP\n");
 		return err;
 	}
-
+    /* CAM表的初始化 */
 	err = br_fdb_init();
 	if (err)
 		goto err_out;
@@ -49,7 +50,7 @@ static int __init br_init(void)
 	err = register_pernet_subsys(&br_net_ops);
 	if (err)
 		goto err_out1;
-
+    /* 网桥的netfilter钩子函数的初始化 */
 	err = br_netfilter_init();
 	if (err)
 		goto err_out2;
@@ -61,7 +62,7 @@ static int __init br_init(void)
 	err = br_netlink_init();
 	if (err)
 		goto err_out4;
-
+    /* 设置网桥设备的do_ioctl函数,也就是提供给用户空间ioctl接口 */
 	brioctl_set(br_ioctl_deviceless_stub);
 	br_handle_frame_hook = br_handle_frame;
 

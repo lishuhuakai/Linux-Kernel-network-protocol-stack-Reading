@@ -21,12 +21,15 @@
 /* Bridge group multicast address 802.1d (pg 51). */
 const u8 br_group_address[ETH_ALEN] = { 0x01, 0x80, 0xc2, 0x00, 0x00, 0x00 };
 
+/* 网桥向上传递报文
+ *
+ */
 static int br_pass_frame_up(struct sk_buff *skb)
 {
 	struct net_device *indev, *brdev = BR_INPUT_SKB_CB(skb)->brdev;
 	struct net_bridge *br = netdev_priv(brdev);
 	struct br_cpu_netstats *brstats = this_cpu_ptr(br->stats);
-
+    /* 数据统计 */
 	brstats->rx_packets++;
 	brstats->rx_bytes += skb->len;
 
@@ -46,12 +49,13 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	struct net_bridge_fdb_entry *dst;
 	struct net_bridge_mdb_entry *mdst;
 	struct sk_buff *skb2;
-
+    /* 如果网桥处于DISABLE状态,直接drop */
 	if (!p || p->state == BR_STATE_DISABLED)
 		goto drop;
 
 	/* insert into forwarding database after filtering to avoid spoofing */
-	br = p->br;
+	br = p->br; /* 选择端口所属的网桥 */
+    /* 更新端口-mac映射表 */
 	br_fdb_update(br, p, eth_hdr(skb)->h_source);
 
 	if (is_multicast_ether_addr(dest) &&
@@ -71,7 +75,7 @@ int br_handle_frame_finish(struct sk_buff *skb)
 
 	dst = NULL;
 
-	if (is_multicast_ether_addr(dest)) {
+	if (is_multicast_ether_addr(dest)) { /* 多播地址 */
 		mdst = br_mdb_get(br, skb);
 		if (mdst || BR_INPUT_SKB_CB_MROUTERS_ONLY(skb)) {
 			if ((mdst && !hlist_unhashed(&mdst->mglist)) ||
@@ -93,13 +97,13 @@ int br_handle_frame_finish(struct sk_buff *skb)
 
 	if (skb) {
 		if (dst)
-			br_forward(dst->dst, skb, skb2);
+			br_forward(dst->dst, skb, skb2); /* 找到了映射关系,只需要往一个口发即可 */
 		else
-			br_flood_forward(br, skb, skb2);
+			br_flood_forward(br, skb, skb2); /* 多播或者端口-MAC表中无记录,需要洪泛 */
 	}
 
 	if (skb2)
-		return br_pass_frame_up(skb2);
+		return br_pass_frame_up(skb2); /* 如果skb2非空,则向上传递报文 */
 
 out:
 	return 0;
@@ -137,6 +141,7 @@ static inline int is_link_local(const unsigned char *dest)
  */
 struct sk_buff *br_handle_frame(struct net_bridge_port *p, struct sk_buff *skb)
 {
+    /* 获取数据包mac */
 	const unsigned char *dest = eth_hdr(skb)->h_dest;
 	int (*rhook)(struct sk_buff *skb);
 
@@ -146,7 +151,7 @@ struct sk_buff *br_handle_frame(struct net_bridge_port *p, struct sk_buff *skb)
 	skb = skb_share_check(skb, GFP_ATOMIC);
 	if (!skb)
 		return NULL;
-
+    /* 如果目的地址是01:80:c2:00:00:0X，则是发往STP的多播地址，此时可能需要进行STP处理 */
 	if (unlikely(is_link_local(dest))) {
 		/* Pause frames shouldn't be passed up by driver anyway */
 		if (skb->protocol == htons(ETH_P_PAUSE))

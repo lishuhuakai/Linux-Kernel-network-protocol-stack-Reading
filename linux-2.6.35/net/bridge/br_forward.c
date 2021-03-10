@@ -50,7 +50,7 @@ int br_dev_queue_push_xmit(struct sk_buff *skb)
 			kfree_skb(skb);
 		else {
 			skb_push(skb, ETH_HLEN);
-			dev_queue_xmit(skb);
+			dev_queue_xmit(skb); /* 进入驱动 */
 		}
 	}
 
@@ -71,6 +71,10 @@ static void __br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 		br_forward_finish);
 }
 
+/* 往指定端口发送报文
+ * @param to 指定的网桥端口
+ * @param skb 待发送的报文
+ */
 static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 {
 	struct net_device *indev;
@@ -81,7 +85,7 @@ static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 	}
 
 	indev = skb->dev;
-	skb->dev = to->dev;
+	skb->dev = to->dev; /* 这里将报文中的dev替换为转发端口的dev */
 	skb_forward_csum(skb);
 
 	NF_HOOK(NFPROTO_BRIDGE, NF_BR_FORWARD, skb, indev, skb->dev,
@@ -163,7 +167,7 @@ static void br_flood(struct net_bridge *br, struct sk_buff *skb,
 	struct net_bridge_port *prev;
 
 	prev = NULL;
-
+    /* 遍历网桥的每一个接口 */
 	list_for_each_entry_rcu(p, &br->port_list, list) {
 		prev = maybe_deliver(prev, p, skb, __packet_hook);
 		if (IS_ERR(prev))

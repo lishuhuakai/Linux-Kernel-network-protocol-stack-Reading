@@ -248,6 +248,10 @@ static int find_portno(struct net_bridge *br)
 }
 
 /* called with RTNL but without bridge lock */
+/* 构建一个网桥端口
+ * @param br 网桥
+ * @param dev 端口设备
+ */
 static struct net_bridge_port *new_nbp(struct net_bridge *br,
 				       struct net_device *dev)
 {
@@ -281,6 +285,9 @@ static struct device_type br_type = {
 	.name	= "bridge",
 };
 
+/* 添加网桥设备
+ * @param name 网桥的名称
+ */
 int br_add_bridge(struct net *net, const char *name)
 {
 	struct net_device *dev;
@@ -298,7 +305,7 @@ int br_add_bridge(struct net *net, const char *name)
 	}
 
 	SET_NETDEV_DEVTYPE(dev, &br_type);
-
+    /* 注册网桥设备 */
 	ret = register_netdevice(dev);
 	if (ret)
 		goto out_free;
@@ -385,20 +392,22 @@ done:
 }
 
 /* called with RTNL */
+/* 往网桥中添加实际的端口 */
 int br_add_if(struct net_bridge *br, struct net_device *dev)
 {
 	struct net_bridge_port *p;
 	int err = 0;
 
 	/* Don't allow bridging non-ethernet like devices */
+    /* 环路端口和非以太网设备不添加 */
 	if ((dev->flags & IFF_LOOPBACK) ||
 	    dev->type != ARPHRD_ETHER || dev->addr_len != ETH_ALEN)
 		return -EINVAL;
-
+    /* 不添加网桥 */
 	/* No bridging of bridges */
 	if (dev->netdev_ops->ndo_start_xmit == br_dev_xmit)
 		return -ELOOP;
-
+    /* 如果加入端口设备已经属于其他网桥,不添加 */
 	/* Device is already being bridged */
 	if (dev->br_port != NULL)
 		return -EBUSY;
@@ -410,7 +419,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	p = new_nbp(br, dev);
 	if (IS_ERR(p))
 		return PTR_ERR(p);
-
+    /* 设置为混杂模式 */
 	err = dev_set_promiscuity(dev, 1);
 	if (err)
 		goto put_back;
@@ -419,7 +428,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 				   SYSFS_BRIDGE_PORT_ATTR);
 	if (err)
 		goto err0;
-
+    /* 将端口mac插入到端口-MAC映射表中 */
 	err = br_fdb_insert(br, p, dev->dev_addr);
 	if (err)
 		goto err1;
@@ -427,7 +436,7 @@ int br_add_if(struct net_bridge *br, struct net_device *dev)
 	err = br_sysfs_addif(p);
 	if (err)
 		goto err2;
-
+    /* 添加到网桥端口记录表中 */
 	rcu_assign_pointer(dev->br_port, p);
 	dev_disable_lro(dev);
 

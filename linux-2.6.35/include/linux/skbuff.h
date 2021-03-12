@@ -328,7 +328,7 @@ struct sk_buff {
 	 */
 	char			cb[48] __aligned(8);
 
-	unsigned long		_skb_refdst;
+	unsigned long		_skb_refdst; /* 这里实际是一个指针 */
 #ifdef CONFIG_XFRM
 	struct	sec_path	*sp;
 #endif
@@ -744,6 +744,7 @@ static inline int skb_shared(const struct sk_buff *skb)
  *
  *	NULL is returned on a memory allocation failure.
  */
+/* 检测数据报是否为一个共享数据包,如果是,则复制一份副本 */
 static inline struct sk_buff *skb_share_check(struct sk_buff *skb,
 					      gfp_t pri)
 {

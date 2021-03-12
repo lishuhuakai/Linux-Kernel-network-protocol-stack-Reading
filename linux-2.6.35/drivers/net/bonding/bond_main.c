@@ -102,7 +102,7 @@ static char *primary_reselect;
 static char *lacp_rate;
 static char *ad_select;
 static char *xmit_hash_policy;
-static int arp_interval = BOND_LINK_ARP_INTERV;
+static int arp_interval = BOND_LINK_ARP_INTERV; /* arp监控时延 */
 static char *arp_ip_target[BOND_MAX_ARP_TARGETS];
 static char *arp_validate;
 static char *fail_over_mac;
@@ -163,9 +163,9 @@ static const char * const version =
 
 int bond_net_id __read_mostly;
 
-static __be32 arp_target[BOND_MAX_ARP_TARGETS];
+static __be32 arp_target[BOND_MAX_ARP_TARGETS]; /* 待发送arp的ip列表 */
 static int arp_ip_count;
-static int bond_mode	= BOND_MODE_ROUNDROBIN;
+static int bond_mode	= BOND_MODE_ROUNDROBIN;  /* 聚合口运行的模式 */
 static int xmit_hashtype = BOND_XMIT_POLICY_LAYER2;
 static int lacp_fast;
 static int disable_netpoll = 1;
@@ -1399,7 +1399,11 @@ static void bond_setup_by_slave(struct net_device *bond_dev,
 	bond->setup_by_slave = 1;
 }
 
-/* enslave device <slave> to bond device <master> */
+/* enslave device <slave> to bond device <master>
+ * 将设备加入bond
+ * @param bond_dev 虚拟的聚合口设备
+ * @param slave_dev 真实的网卡
+ */
 int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
@@ -1418,12 +1422,14 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 	}
 
 	/* bond must be initialized by bond_open() before enslaving */
+    /* 聚合口必须up之后才能加入设备 */
 	if (!(bond_dev->flags & IFF_UP)) {
 		pr_warning("%s: master_dev is not up in bond_enslave\n",
 			   bond_dev->name);
 	}
 
 	/* already enslaved */
+    /* 设备已经加入了聚合组,不允许再次操作 */
 	if (slave_dev->flags & IFF_SLAVE) {
 		pr_debug("Error, Device was already enslaved\n");
 		return -EBUSY;
@@ -1508,7 +1514,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 		res = -EINVAL;
 		goto err_undo_flags;
 	}
-
+    /* 物理网卡应当支持设置mac地址 */
 	if (slave_ops->ndo_set_mac_address == NULL) {
 		if (bond->slave_cnt == 0) {
 			pr_warning("%s: Warning: The first slave device specified does not support setting the MAC address. Setting fail_over_mac to active.",
@@ -1521,7 +1527,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 			goto err_undo_flags;
 		}
 	}
-
+    /* 分配一个slave结构 */
 	new_slave = kzalloc(sizeof(struct slave), GFP_KERNEL);
 	if (!new_slave) {
 		res = -ENOMEM;
@@ -1531,6 +1537,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 	/* save slave's original flags before calling
 	 * netdev_set_master and dev_open
 	 */
+	/* 记录下原来的标记信息 */
 	new_slave->original_flags = slave_dev->flags;
 
 	/*
@@ -1538,6 +1545,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 	 * that need it, and for restoring it upon release, and then
 	 * set it to the master's address
 	 */
+    /* 记录下mac地址 */
 	memcpy(new_slave->perm_hwaddr, slave_dev->dev_addr, ETH_ALEN);
 
 	if (!bond->params.fail_over_mac) {
@@ -1547,6 +1555,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 		 */
 		memcpy(addr.sa_data, bond_dev->dev_addr, bond_dev->addr_len);
 		addr.sa_family = slave_dev->type;
+        /* 将slave_dev新的mac地址设置为虚拟网卡的MAC地址 */
 		res = dev_set_mac_address(slave_dev, &addr);
 		if (res) {
 			pr_debug("Error %d calling set_mac_address\n", res);
@@ -1568,7 +1577,9 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 
 	new_slave->dev = slave_dev;
 	slave_dev->priv_flags |= IFF_BONDING;
-
+    /* 如果工作模式在BOND_MODE_TLB或者BOND_MODE_ALB,对slave调用
+     * bond_alb_init_slave
+     */
 	if (bond_is_lb(bond)) {
 		/* bond_alb_init_slave() must be called before all other stages since
 		 * it might fail and we do not want to have to undo everything
@@ -1604,7 +1615,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 			dev_mc_add(slave_dev, ha->addr);
 		netif_addr_unlock_bh(bond_dev);
 	}
-
+    /* lacp协议 */
 	if (bond->params.mode == BOND_MODE_8023AD) {
 		/* add lacpdu mc addr to mc list */
 		u8 lacpdu_multicast[ETH_ALEN] = MULTICAST_LACPDU_ADDR;
@@ -1688,7 +1699,7 @@ int bond_enslave(struct net_device *bond_dev, struct net_device *slave_dev)
 	}
 
 	write_lock_bh(&bond->curr_slave_lock);
-
+    /* 根据运行模式的不同,执行相应的操作 */
 	switch (bond->params.mode) {
 	case BOND_MODE_ACTIVEBACKUP:
 		bond_set_slave_inactive_flags(new_slave);
@@ -2150,7 +2161,7 @@ static int bond_ioctl_change_active(struct net_device *bond_dev, struct net_devi
 	read_lock(&bond->curr_slave_lock);
 	old_active = bond->curr_active_slave;
 	read_unlock(&bond->curr_slave_lock);
-
+    /* 找到对应的bonding结构 */
 	new_active = bond_get_slave_by_dev(bond, slave_dev);
 
 	/*
@@ -3683,7 +3694,9 @@ static int bond_xmit_hash_policy_l2(struct sk_buff *skb, int count)
 }
 
 /*-------------------------- Device entry points ----------------------------*/
-
+/* 打开对应的聚合设备
+ * @param bond_dev 待操作的设备
+ */
 static int bond_open(struct net_device *bond_dev)
 {
 	struct bonding *bond = netdev_priv(bond_dev);
@@ -3702,11 +3715,14 @@ static int bond_open(struct net_device *bond_dev)
 		INIT_DELAYED_WORK(&bond->alb_work, bond_alb_monitor);
 		queue_delayed_work(bond->wq, &bond->alb_work, 0);
 	}
-
+    /* 如果使用MII链路状态监控 */
 	if (bond->params.miimon) {  /* link check interval, in milliseconds. */
+        /* 立即调用bond_mii_monitor函数 */
 		INIT_DELAYED_WORK(&bond->mii_work, bond_mii_monitor);
+        /* 设置超时处理函数为bond_mii_monitor */
 		queue_delayed_work(bond->wq, &bond->mii_work, 0);
 	}
+
 
 	if (bond->params.arp_interval) {  /* arp interval, in milliseconds. */
 		if (bond->params.mode == BOND_MODE_ACTIVEBACKUP)
@@ -3720,8 +3736,9 @@ static int bond_open(struct net_device *bond_dev)
 		if (bond->params.arp_validate)
 			bond_register_arp(bond);
 	}
-
+    /* 采用lacp协议 */
 	if (bond->params.mode == BOND_MODE_8023AD) {
+        /* 触发状态机 */
 		INIT_DELAYED_WORK(&bond->ad_work, bond_3ad_state_machine_handler);
 		queue_delayed_work(bond->wq, &bond->ad_work, 0);
 		/* register to receive LACPDUs */
@@ -3834,6 +3851,7 @@ static struct net_device_stats *bond_get_stats(struct net_device *bond_dev)
 	return stats;
 }
 
+/* ioctl函数 */
 static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd)
 {
 	struct net_device *slave_dev = NULL;
@@ -3922,6 +3940,7 @@ static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd
 		switch (cmd) {
 		case BOND_ENSLAVE_OLD:
 		case SIOCBONDENSLAVE:
+            /* 将设备加入bond */
 			res = bond_enslave(bond_dev, slave_dev);
 			break;
 		case BOND_RELEASE_OLD:
@@ -3930,10 +3949,12 @@ static int bond_do_ioctl(struct net_device *bond_dev, struct ifreq *ifr, int cmd
 			break;
 		case BOND_SETHWADDR_OLD:
 		case SIOCBONDSETHWADDR:
+            /* 设置mac地址 */
 			res = bond_sethwaddr(bond_dev, slave_dev);
 			break;
 		case BOND_CHANGE_ACTIVE_OLD:
 		case SIOCBONDCHANGEACTIVE:
+            /* 切换当前活动的物理网卡 */
 			res = bond_ioctl_change_active(bond_dev, slave_dev);
 			break;
 		default:
@@ -4412,10 +4433,11 @@ static void bond_set_xmit_hash_policy(struct bonding *bond)
 	}
 }
 
+/* 驱动设备的发送函数 */
 static netdev_tx_t bond_start_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	const struct bonding *bond = netdev_priv(dev);
-
+    /* 根据不同的模式,选择不同的方式来发送数据 */
 	switch (bond->params.mode) {
 	case BOND_MODE_ROUNDROBIN:
 		return bond_xmit_roundrobin(skb, dev);
@@ -4654,6 +4676,7 @@ int bond_parse_parm(const char *buf, const struct bond_parm_tbl *tbl)
 	return -1;
 }
 
+/* 填充默认的bonding参数 */
 static int bond_check_params(struct bond_params *params)
 {
 	int arp_validate_value, fail_over_mac_value, primary_reselect_value;
@@ -4968,6 +4991,7 @@ static void bond_set_lockdep_class(struct net_device *dev)
 
 /*
  * Called from registration process
+ * 聚合口的初始化
  */
 static int bond_init(struct net_device *bond_dev)
 {
@@ -5016,6 +5040,10 @@ static struct rtnl_link_ops bond_link_ops __read_mostly = {
  * Caller must NOT hold rtnl_lock; we need to release it here before we
  * set up our sysfs entries.
  */
+/* 创建bonding对应的设备实例
+ * @param net bonding所属的network
+ * @param name 设备名称
+ */
 int bond_create(struct net *net, const char *name)
 {
 	struct net_device *bond_dev;
@@ -5039,7 +5067,7 @@ int bond_create(struct net *net, const char *name)
 		if (res < 0)
 			goto out;
 	}
-
+    /* 注册网络设备 */
 	res = register_netdevice(bond_dev);
 
 out:
@@ -5057,7 +5085,7 @@ static int __net_init bond_net_init(struct net *net)
 	INIT_LIST_HEAD(&bn->dev_list);
 
 	bond_create_proc_dir(bn);
-	
+
 	return 0;
 }
 
@@ -5075,6 +5103,7 @@ static struct pernet_operations bond_net_ops = {
 	.size = sizeof(struct bond_net),
 };
 
+/* 聚合模块初始化 */
 static int __init bonding_init(void)
 {
 	int i;

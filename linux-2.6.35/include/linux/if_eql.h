@@ -7,7 +7,7 @@
  *
  *	This software may be used and distributed according to the terms
  *	of the GNU General Public License, incorporated herein by reference.
- * 
+ *
  * The author may be reached as simon@ncm.com, or C/O
  *    NCM
  *    Attn: Simon Janes
@@ -38,9 +38,10 @@
 #include <linux/timer.h>
 #include <linux/spinlock.h>
 
+/* 每一个被管辖的物理网卡对应一个该数据结构的实例 */
 typedef struct slave {
 	struct list_head	list;
-	struct net_device	*dev;
+	struct net_device	*dev; /* 指向被绑定的物理网卡 */
 	long			priority;
 	long			priority_bps;
 	long			priority_Bps;
@@ -59,7 +60,7 @@ typedef struct equalizer {
 	int			min_slaves;
 	int			max_slaves;
 	struct timer_list	timer;
-} equalizer_t;  
+} equalizer_t;
 
 #endif /* __KERNEL__ */
 

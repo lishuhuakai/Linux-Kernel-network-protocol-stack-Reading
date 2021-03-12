@@ -36,7 +36,7 @@ struct sock;
 /* ip层私有控制块 */
 struct inet_skb_parm {
 	struct ip_options	opt;		/* Compiled IP options		*/
-	unsigned char		flags;
+	unsigned char		flags; /* 处理ip数据报时的一些标志 */
 
 #define IPSKB_FORWARDED		1
 #define IPSKB_XFRM_TUNNEL_SIZE	2

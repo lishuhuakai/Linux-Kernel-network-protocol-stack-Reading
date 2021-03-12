@@ -64,6 +64,9 @@
 #define BOND_CHECK_MII_STATUS	(SIOCGMIIPHY)
 
 #define BOND_MODE_ROUNDROBIN	0
+/* activebackup -- 一个网卡处于活跃状态,另外一个处于备份状态,所有流量都在主链路上处理
+ * 当活跃网卡down掉的时候,启用备份网卡
+ */
 #define BOND_MODE_ACTIVEBACKUP	1
 #define BOND_MODE_XOR		2
 #define BOND_MODE_BROADCAST	3

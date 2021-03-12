@@ -317,6 +317,7 @@ static inline int dst_output(struct sk_buff *skb)
 /* Input packet from network to transport.  */
 static inline int dst_input(struct sk_buff *skb)
 {
+    /* ip_local_deliver -- ip_forward */
 	return skb_dst(skb)->input(skb);
 }
 

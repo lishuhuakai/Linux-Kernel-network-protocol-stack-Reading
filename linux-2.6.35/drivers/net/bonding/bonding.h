@@ -113,16 +113,16 @@
 #define bond_for_each_slave(bond, pos, cnt)	\
 		bond_for_each_slave_from(bond, pos, cnt, (bond)->first_slave)
 
-
+/* 加载bonding模块时的传入参数 */
 struct bond_params {
-	int mode;
+	int mode; /* bonding模块的工作模式 */
 	int xmit_policy;
-	int miimon;
+	int miimon; /* 使用MII链路状态监控时的时间间隔 */
 	int num_grat_arp;
 	int num_unsol_na;
-	int arp_interval;
+	int arp_interval; /* 使用arp链路状态监控时的时间间隔 */
 	int arp_validate;
-	int use_carrier;
+	int use_carrier; /* 使用MII链路检测时是否使用更新的carrier调用 */
 	int fail_over_mac;
 	int updelay;
 	int downdelay;
@@ -130,7 +130,7 @@ struct bond_params {
 	int ad_select;
 	char primary[IFNAMSIZ];
 	int primary_reselect;
-	__be32 arp_targets[BOND_MAX_ARP_TARGETS];
+	__be32 arp_targets[BOND_MAX_ARP_TARGETS]; /* 在ARP链路状态监控中,将向这些ip地址发送arp请求 */
 };
 
 struct bond_parm_tbl {
@@ -149,11 +149,12 @@ struct vlan_entry {
 #endif
 };
 
+/* 每一个被管辖的物理网卡对应一个该数据结构的实例 */
 struct slave {
 	struct net_device *dev; /* first - useful for panic debug */
-	struct slave *next;
+	struct slave *next; /* 链表 */
 	struct slave *prev;
-	int    delay;
+	int    delay; /* 用于保存MII链路状态监控和ARP链路状态监控的时延值 */
 	unsigned long jiffies;
 	unsigned long last_arp_rx;
 	s8     link;    /* one of BOND_LINK_XXXX */
@@ -162,9 +163,9 @@ struct slave {
 	u32    original_flags;
 	u32    original_mtu;
 	u32    link_failure_count;
-	u8     perm_hwaddr[ETH_ALEN];
-	u16    speed;
-	u8     duplex;
+	u8     perm_hwaddr[ETH_ALEN]; /* 被绑定网卡的原来的mac地址 */
+	u16    speed; /* 速率 */
+	u8     duplex; /* 全双工? */
 	struct ad_slave_info ad_info; /* HUGE - better to dynamically alloc */
 	struct tlb_slave_info tlb_info;
 };
@@ -183,9 +184,10 @@ struct slave {
  * 3) When we lock with bond->curr_slave_lock, we must lock with bond->lock
  *    beforehand.
  */
+/* 每一个虚拟网卡对应一个此结构的实例 */
 struct bonding {
 	struct   net_device *dev; /* first - useful for panic debug */
-	struct   slave *first_slave;
+	struct   slave *first_slave; /* 指向被绑定的第一个物理网卡对应的slave结构 */
 	struct   slave *curr_active_slave;
 	struct   slave *current_arp_slave;
 	struct   slave *primary_slave;

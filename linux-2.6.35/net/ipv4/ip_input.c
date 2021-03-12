@@ -273,6 +273,7 @@ int ip_local_deliver(struct sk_buff *skb)
 		       ip_local_deliver_finish);
 }
 
+/* 解析ip选项 */
 static inline int ip_rcv_options(struct sk_buff *skb)
 {
 	struct ip_options *opt;
@@ -294,7 +295,7 @@ static inline int ip_rcv_options(struct sk_buff *skb)
 	iph = ip_hdr(skb);
 	opt = &(IPCB(skb)->opt);
 	opt->optlen = iph->ihl*4 - sizeof(struct iphdr);
-
+    /* 解析ip选项 */
 	if (ip_options_compile(dev_net(dev), opt, skb)) {
 		IP_INC_STATS_BH(dev_net(dev), IPSTATS_MIB_INHDRERRORS);
 		goto drop;
@@ -324,7 +325,9 @@ drop:
 	return -1;
 }
 
-
+/* 如果还没有为该数据查找输入路由缓存,则调用ip_route_input为其查找输入路由缓存
+ * 接着处理IP数据报首部中的选项,最后根据输入路由缓存输入到本地或者转发
+ */
 static int ip_rcv_finish(struct sk_buff *skb)
 {
 	const struct iphdr *iph = ip_hdr(skb);

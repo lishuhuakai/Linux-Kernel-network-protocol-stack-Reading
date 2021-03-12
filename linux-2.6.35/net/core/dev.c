@@ -4045,7 +4045,7 @@ int netdev_set_master(struct net_device *slave, struct net_device *master)
 		dev_hold(master);
 	}
 
-	slave->master = master;
+	slave->master = master; /* 指向主设备 */
 
 	if (old) {
 		synchronize_net();

@@ -63,12 +63,18 @@
 
 #define BOND_CHECK_MII_STATUS	(SIOCGMIIPHY)
 
+/* roundrobin -- 从头到尾顺序地在每一个slave接口上发送数据报
+ * 提供负载均衡以及容错能力
+ */
 #define BOND_MODE_ROUNDROBIN	0
 /* activebackup -- 一个网卡处于活跃状态,另外一个处于备份状态,所有流量都在主链路上处理
  * 当活跃网卡down掉的时候,启用备份网卡
  */
 #define BOND_MODE_ACTIVEBACKUP	1
 #define BOND_MODE_XOR		2
+/* broadcast -- 在所有的slave接口上传送所有的报文,提供容错能力
+ *
+ */
 #define BOND_MODE_BROADCAST	3
 #define BOND_MODE_8023AD        4
 #define BOND_MODE_TLB           5

@@ -62,7 +62,7 @@ int br_handle_frame_finish(struct sk_buff *skb)
 	    br_multicast_rcv(br, p, skb))
 		goto drop;
 
-	if (p->state == BR_STATE_LEARNING)
+	if (p->state == BR_STATE_LEARNING) /* 如果处于learning状态,不会转发用户流量,但是会学mac */
 		goto drop;
 
 	BR_INPUT_SKB_CB(skb)->brdev = br->dev;

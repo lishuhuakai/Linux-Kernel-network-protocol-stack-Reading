@@ -31,6 +31,7 @@ static int br_is_designated_for_some_port(const struct net_bridge *br)
 	return 0;
 }
 
+/* hello定时器超时之后,继续发送配置bpdu报文 */
 static void br_hello_timer_expired(unsigned long arg)
 {
 	struct net_bridge *br = (struct net_bridge *)arg;
@@ -78,6 +79,9 @@ static void br_message_age_timer_expired(unsigned long arg)
 	spin_unlock(&br->lock);
 }
 
+/* forward_delay定时器超时之后
+ *
+ */
 static void br_forward_delay_timer_expired(unsigned long arg)
 {
 	struct net_bridge_port *p = (struct net_bridge_port *) arg;
@@ -86,11 +90,11 @@ static void br_forward_delay_timer_expired(unsigned long arg)
 	br_debug(br, "port %u(%s) forward delay timer\n",
 		 (unsigned) p->port_no, p->dev->name);
 	spin_lock(&br->lock);
-	if (p->state == BR_STATE_LISTENING) {
+	if (p->state == BR_STATE_LISTENING) { /* 超时之后,由listening状态切入learning状态 */
 		p->state = BR_STATE_LEARNING;
 		mod_timer(&p->forward_delay_timer,
 			  jiffies + br->forward_delay);
-	} else if (p->state == BR_STATE_LEARNING) {
+	} else if (p->state == BR_STATE_LEARNING) { /* 第二轮超时,进入forwarding状态 */
 		p->state = BR_STATE_FORWARDING;
 		if (br_is_designated_for_some_port(br))
 			br_topology_change_detection(br);
@@ -99,6 +103,7 @@ static void br_forward_delay_timer_expired(unsigned long arg)
 	spin_unlock(&br->lock);
 }
 
+/* tcn定时器超时之后,会继续重发 */
 static void br_tcn_timer_expired(unsigned long arg)
 {
 	struct net_bridge *br = (struct net_bridge *) arg;

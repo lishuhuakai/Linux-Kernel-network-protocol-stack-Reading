@@ -37,6 +37,7 @@
 #define AD_LACP_SLOW 0
 #define AD_LACP_FAST 1
 
+/* mac地址 */
 typedef struct mac_addr {
 	u8 mac_addr_value[ETH_ALEN];
 } mac_addr_t;
@@ -48,6 +49,7 @@ enum {
 };
 
 // rx machine states(43.4.11 in the 802.3ad standard)
+// 接收状态机
 typedef enum {
 	AD_RX_DUMMY,
 	AD_RX_INITIALIZE,     // rx Machine
@@ -59,15 +61,17 @@ typedef enum {
 } rx_states_t;
 
 // periodic machine states(43.4.12 in the 802.3ad standard)
+// periodic状态机
 typedef enum {
 	AD_PERIODIC_DUMMY,
 	AD_NO_PERIODIC,	       // periodic machine
-	AD_FAST_PERIODIC,      // periodic machine
-	AD_SLOW_PERIODIC,      // periodic machine
-	AD_PERIODIC_TX	   // periodic machine
+	AD_FAST_PERIODIC,      // periodic machine 快发送状态
+	AD_SLOW_PERIODIC,      // periodic machine 慢发送状态
+	AD_PERIODIC_TX	   // periodic machine 暂态
 } periodic_states_t;
 
 // mux machine states(43.4.13 in the 802.3ad standard)
+// mux状态机
 typedef enum {
 	AD_MUX_DUMMY,
 	AD_MUX_DETACHED,       // mux machine
@@ -77,6 +81,7 @@ typedef enum {
 } mux_states_t;
 
 // tx machine states(43.4.15 in the 802.3ad standard)
+// tx状态机
 typedef enum {
 	AD_TX_DUMMY,
 	AD_TRANSMIT	   // tx Machine
@@ -108,15 +113,15 @@ typedef enum {
 // Link Aggregation Control Protocol(LACP) data unit structure(43.4.2.2 in the 802.3ad standard)
 typedef struct lacpdu {
 	u8 subtype;		     // = LACP(= 0x01)
-	u8 version_number;
+	u8 version_number;   // 版本号
 	u8 tlv_type_actor_info;	      // = actor information(type/length/value)
 	u8 actor_information_length; // = 20
-	__be16 actor_system_priority;
-	struct mac_addr actor_system;
-	__be16 actor_key;
-	__be16 actor_port_priority;
-	__be16 actor_port;
-	u8 actor_state;
+	__be16 actor_system_priority; // 优先级(默认为0x800,即32768)
+	struct mac_addr actor_system;  // 交换机mac地址
+	__be16 actor_key; // 端口操作key
+	__be16 actor_port_priority; // 端口操作优先级
+	__be16 actor_port; // 端口号
+	u8 actor_state; // 端口状态
 	u8 reserved_3_1[3];	     // = 0
 	u8 tlv_type_partner_info;     // = partner information
 	u8 partner_information_length;	 // = 20
@@ -135,7 +140,7 @@ typedef struct lacpdu {
 	u8 terminator_length;	     // = 0
 	u8 reserved_50[50];	     // = 0
 } lacpdu_t;
-
+// lacpdu报文头部
 typedef struct lacpdu_header {
 	struct ethhdr hdr;
 	struct lacpdu lacpdu;
@@ -174,9 +179,10 @@ struct port;
 #endif
 
 // aggregator structure(43.4.5 in the 802.3ad standard)
+// 聚合口的定义
 typedef struct aggregator {
-	struct mac_addr aggregator_mac_address;
-	u16 aggregator_identifier;
+	struct mac_addr aggregator_mac_address; // 聚合口的mac地址
+	u16 aggregator_identifier; // 聚合标识
 	bool is_individual;
 	u16 actor_admin_aggregator_key;
 	u16 actor_oper_aggregator_key;
@@ -185,13 +191,14 @@ typedef struct aggregator {
 	u16 partner_oper_aggregator_key;
 	u16 receive_state;		// BOOLEAN
 	u16 transmit_state;		// BOOLEAN
-	struct port *lag_ports;
+	struct port *lag_ports; // 子端口
 	// ****** PRIVATE PARAMETERS ******
 	struct slave *slave;	    // pointer to the bond slave that this aggregator belongs to
 	u16 is_active;	    // BOOLEAN. Indicates if this aggregator is active
-	u16 num_of_ports;
+	u16 num_of_ports;   // 成员口的数目
 } aggregator_t;
 
+// 端口的参数信息
 struct port_params {
 	struct mac_addr system;
 	u16 system_priority;
@@ -202,27 +209,28 @@ struct port_params {
 };
 
 // port structure(43.4.6 in the 802.3ad standard)
+// 接口
 typedef struct port {
 	u16 actor_port_number;
 	u16 actor_port_priority;
-	struct mac_addr actor_system;	       // This parameter is added here although it is not specified in the standard, just for simplification
+	struct mac_addr actor_system; // This parameter is added here although it is not specified in the standard, just for simplification
 	u16 actor_system_priority;	 // This parameter is added here although it is not specified in the standard, just for simplification
 	u16 actor_port_aggregator_identifier;
-	bool ntt;
+	bool ntt;  // 表示是否要立即发送lacpdu报文
 	u16 actor_admin_port_key;
 	u16 actor_oper_port_key;
 	u8 actor_admin_port_state;
 	u8 actor_oper_port_state;
 
 	struct port_params partner_admin;
-	struct port_params partner_oper;
+	struct port_params partner_oper; // 对端的信息
 
 	bool is_enabled;
 
 	// ****** PRIVATE PARAMETERS ******
 	u16 sm_vars;	      // all state machines variables for this port
 	rx_states_t sm_rx_state;	// state machine rx state
-	u16 sm_rx_timer_counter;    // state machine rx timer counter
+	u16 sm_rx_timer_counter;    // state machine rx timer counter -- current_while定时器
 	periodic_states_t sm_periodic_state;// state machine periodic state
 	u16 sm_periodic_timer_counter;	// state machine periodic timer counter
 	mux_states_t sm_mux_state;	// state machine mux state
@@ -233,6 +241,7 @@ typedef struct port {
 	struct aggregator *aggregator;	   // pointer to an aggregator that this port related to
 	struct port *next_port_in_aggregator; // Next port on the linked list of the parent aggregator
 	u32 transaction_id;	    // continuous number for identification of Marker PDU's;
+	// 待发送的lacpdu报文
 	struct lacpdu lacpdu;	       // the lacpdu that will be sent for this port
 } port_t;
 
@@ -251,7 +260,7 @@ struct ad_system {
 #define SLAVE_AD_INFO(slave) ((slave)->ad_info)
 
 struct ad_bond_info {
-	struct ad_system system;	    /* 802.3ad system structure */
+	struct ad_system system;	 /* 802.3ad system structure */
 	u32 agg_select_timer;	    // Timer to select aggregator after all adapter's hand shakes
 	u32 agg_select_mode;	    // Mode of selection of active aggregator(bandwidth/count)
 	int lacp_fast;		/* whether fast periodic tx should be

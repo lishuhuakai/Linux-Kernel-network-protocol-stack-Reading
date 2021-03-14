@@ -50,26 +50,27 @@
 #define AD_AGGREGATE_WAIT_TIME     2
 
 // Port state definitions(43.4.2.2 in the 802.3ad standard)
-#define AD_STATE_LACP_ACTIVITY   0x1
-#define AD_STATE_LACP_TIMEOUT    0x2
-#define AD_STATE_AGGREGATION     0x4
-#define AD_STATE_SYNCHRONIZATION 0x8
-#define AD_STATE_COLLECTING      0x10
-#define AD_STATE_DISTRIBUTING    0x20
-#define AD_STATE_DEFAULTED       0x40
-#define AD_STATE_EXPIRED         0x80
+#define AD_STATE_LACP_ACTIVITY   0x1 // 协议规定,主动发送lacp协议的报文的端口该bit位置1,被动或者不发送lacp报文的端口置0
+#define AD_STATE_LACP_TIMEOUT    0x2 // 置该bit表示短超时,否则是长超时
+#define AD_STATE_AGGREGATION     0x4 // 表明此链路是可聚合的,否则此链路是不可聚合的
+#define AD_STATE_SYNCHRONIZATION 0x8 // 表示链路是否处于同步状态(即聚合是否完成)
+#define AD_STATE_COLLECTING      0x10 // 表示当前链路收包enable,否则false
+#define AD_STATE_DISTRIBUTING    0x20 // 表示当前链路发包enable,否则false
+#define AD_STATE_DEFAULTED       0x40 // 表示actor使用的partner信息来自管理员的默认配置,否则表示actor使用的partner信息来自接收到的lacpdu
+#define AD_STATE_EXPIRED         0x80 // 表示发送端的接收状态机处于超时状态
 
 // Port Variables definitions used by the State Machines(43.4.7 in the 802.3ad standard)
-#define AD_PORT_BEGIN           0x1
-#define AD_PORT_LACP_ENABLED    0x2
+// 端口事件
+#define AD_PORT_BEGIN           0x1 // BEGIN
+#define AD_PORT_LACP_ENABLED    0x2 // LACP_ENABLED 启用lacp
 #define AD_PORT_ACTOR_CHURN     0x4
 #define AD_PORT_PARTNER_CHURN   0x8
 #define AD_PORT_READY           0x10
 #define AD_PORT_READY_N         0x20
 #define AD_PORT_MATCHED         0x40
 #define AD_PORT_STANDBY         0x80
-#define AD_PORT_SELECTED        0x100
-#define AD_PORT_MOVED           0x200
+#define AD_PORT_SELECTED        0x100 // PORT_SELECTED 端口被选中
+#define AD_PORT_MOVED           0x200 // PORT_MOVED 端口移除
 
 // Port Key definitions
 // key is determined according to the link speed, duplex and
@@ -123,6 +124,7 @@ static void ad_marker_response_received(struct bond_marker *marker, struct port 
 
 /**
  * __get_bond_by_port - get the port's bonding struct
+ * 获得端口的bonding结构,聚合口的bonding
  * @port: the port we're looking at
  *
  * Return @port's bonding struct, or %NULL if it can't be found.
@@ -138,6 +140,7 @@ static inline struct bonding *__get_bond_by_port(struct port *port)
 
 /**
  * __get_first_port - get the first port in the bond
+ * 获取聚合口中第一个端口
  * @bond: the bond we're looking at
  *
  * Return the port of the first slave in @bond, or %NULL if it can't be found.
@@ -153,6 +156,7 @@ static inline struct port *__get_first_port(struct bonding *bond)
 
 /**
  * __get_next_port - get the next port in the bond
+ * 获取聚合口中的下一个端口
  * @port: the port we're looking at
  *
  * Return the port of the slave that is next in line of @port's slave in the
@@ -173,6 +177,7 @@ static inline struct port *__get_next_port(struct port *port)
 
 /**
  * __get_first_agg - get the first aggregator in the bond
+ * 
  * @bond: the bond we're looking at
  *
  * Return the aggregator of the first slave in @bond, or %NULL if it can't be
@@ -212,7 +217,7 @@ static inline struct aggregator *__get_next_agg(struct aggregator *aggregator)
 
 /*
  * __agg_has_partner
- *
+ * 聚合口是否存在对端??
  * Return nonzero if aggregator has a partner (denoted by a non-zero ether
  * address for the partner).  Return 0 if not.
  */
@@ -223,6 +228,7 @@ static inline int __agg_has_partner(struct aggregator *agg)
 
 /**
  * __disable_port - disable the port's slave
+ * 将某个口设置为非活跃状态
  * @port: the port we're looking at
  *
  */
@@ -233,6 +239,7 @@ static inline void __disable_port(struct port *port)
 
 /**
  * __enable_port - enable the port's slave, if it's up
+ * 将聚合口某一个成员口设置为活跃状态
  * @port: the port we're looking at
  *
  */
@@ -247,6 +254,7 @@ static inline void __enable_port(struct port *port)
 
 /**
  * __port_is_enabled - check if the port's slave is in active state
+ * 判断聚合口成员口是否处于活跃状态
  * @port: the port we're looking at
  *
  */
@@ -257,6 +265,7 @@ static inline int __port_is_enabled(struct port *port)
 
 /**
  * __get_agg_selection_mode - get the aggregator selection mode
+ * 聚合选择算法??
  * @port: the port we're looking at
  *
  * Get the aggregator selection mode. Can be %STABLE, %BANDWIDTH or %COUNT.
@@ -274,6 +283,7 @@ static inline u32 __get_agg_selection_mode(struct port *port)
 
 /**
  * __check_agg_selection_timer - check if the selection timer has expired
+ * 判断选择定时器是否超时
  * @port: the port we're looking at
  *
  */
@@ -290,6 +300,7 @@ static inline int __check_agg_selection_timer(struct port *port)
 
 /**
  * __get_rx_machine_lock - lock the port's RX machine
+ * rx状态机加锁
  * @port: the port we're looking at
  *
  */
@@ -300,6 +311,7 @@ static inline void __get_rx_machine_lock(struct port *port)
 
 /**
  * __release_rx_machine_lock - unlock the port's RX machine
+ * rx状态机解锁
  * @port: the port we're looking at
  *
  */
@@ -310,6 +322,7 @@ static inline void __release_rx_machine_lock(struct port *port)
 
 /**
  * __get_link_speed - get a port's speed
+ * 获得一个端口的速率
  * @port: the port we're looking at
  *
  * Return @port's speed in 802.3ad bitmask format. i.e. one of:
@@ -361,6 +374,7 @@ static u16 __get_link_speed(struct port *port)
 
 /**
  * __get_duplex - get a port's duplex
+ * 获得一个端口的全双工状态
  * @port: the port we're looking at
  *
  * Return @port's duplex in 802.3ad bitmask format. i.e.:
@@ -397,6 +411,7 @@ static u8 __get_duplex(struct port *port)
 
 /**
  * __initialize_port_locks - initialize a port's RX machine spinlock
+ * 初始化锁
  * @port: the port we're looking at
  *
  */
@@ -452,6 +467,7 @@ static u16 __ad_timer_to_ticks(u16 timer_type, u16 par)
 
 /**
  * __choose_matched - update a port's matched variable from a received lacpdu
+ * 从接收到的lacpdu报文来更新一个端口对应的值.
  * @lacpdu: the lacpdu we've received
  * @port: the port we're looking at
  *
@@ -476,6 +492,7 @@ static u16 __ad_timer_to_ticks(u16 timer_type, u16 par)
 static void __choose_matched(struct lacpdu *lacpdu, struct port *port)
 {
 	// check if all parameters are alike
+	// 判断所有的参数是否类似
 	if (((ntohs(lacpdu->partner_port) == port->actor_port_number) &&
 	     (ntohs(lacpdu->partner_port_priority) == port->actor_port_priority) &&
 	     !MAC_ADDRESS_COMPARE(&(lacpdu->partner_system), &(port->actor_system)) &&
@@ -486,20 +503,33 @@ static void __choose_matched(struct lacpdu *lacpdu, struct port *port)
 	    ((lacpdu->actor_state & AD_STATE_AGGREGATION) == 0)
 		) {
 		// update the state machine Matched variable
-		port->sm_vars |= AD_PORT_MATCHED;
+		port->sm_vars |= AD_PORT_MATCHED; // 配置匹配
 	} else {
-		port->sm_vars &= ~AD_PORT_MATCHED;
+		port->sm_vars &= ~AD_PORT_MATCHED; // 配置不匹配
 	}
 }
 
 /**
  * __record_pdu - record parameters from a received lacpdu
+ * 记录下从lacpdu中的参数信息
  * @lacpdu: the lacpdu we've received
  * @port: the port we're looking at
  *
  * Record the parameter values for the Actor carried in a received lacpdu as
  * the current partner operational parameter values and sets
  * actor_oper_port_state.defaulted to FALSE.
+ */
+/* recordPDU函数记录LACPDU中的信息到本端口的Partner信息。将报文中的Actor信息（Actor_Port, Actor_Port_Priority, 
+ * Actor_System, Actor_System_Priority, Actor_Key, Actor_State）作为当前的Partner运行信息(Partner_Oper_Port_Number,
+ * Partner_Oper_Port_Priority,Partner_Oper_System, Partner_Oper_System_Priority, Partner_Oper_Key, Partner_Oper_State), 
+ * 除了Synchronization字段， Partner_Oper_State. Synchronization的值计算需要判断报文中的Partner信息与本地的Actor信息是否一致,
+ * 即比较LACP报文里的以下字段(Partner_Port, Partner _Port_Priority, Partner _System, Partner _System_Priority, Partner _Key,
+ * Partner _State.LACP_Activity, Partner_State.LACP_Timeout, Partner_State.Synchronization, Partner_State.Aggregation), 
+ * 与本端口的(Actor_Port_Number, Actor_Port_Priority, Actor_System, Actor_System_Priority, Actor_Oper_Key, Actor_Oper_State.LACP_Activity, 
+ * Actor_Oper_State.LACP_Timeout, Actor_Oper_State..Synchronization, Actor_Oper_State.Aggregation)值比较，如果全部匹配且报文中的
+ * Actor_State.Synchronization为True且任何一方的LACP_Activity为True，则置Partner_Oper_State. Synchronization为TRUE, 否则置为False。
+ * 对方是独立链路时(即报文中Actor_State.Aggregation为False)时认为其两者信息一致. 记录这些信息后将Actor_oper_Port_State.Defaulted置为False， 
+ * 表示本端口所得的Partner信息来自协议报文，而不是管理配置的。
  */
 static void __record_pdu(struct lacpdu *lacpdu, struct port *port)
 {
@@ -510,25 +540,27 @@ static void __record_pdu(struct lacpdu *lacpdu, struct port *port)
 		// record the new parameter values for the partner operational
 		partner->port_number = ntohs(lacpdu->actor_port);
 		partner->port_priority = ntohs(lacpdu->actor_port_priority);
-		partner->system = lacpdu->actor_system;
+		partner->system = lacpdu->actor_system; // mac地址
 		partner->system_priority = ntohs(lacpdu->actor_system_priority);
 		partner->key = ntohs(lacpdu->actor_key);
 		partner->port_state = lacpdu->actor_state;
 
 		// set actor_oper_port_state.defaulted to FALSE
-		port->actor_oper_port_state &= ~AD_STATE_DEFAULTED;
+		port->actor_oper_port_state &= ~AD_STATE_DEFAULTED; // 没有使用默认的配置
 
 		// set the partner sync. to on if the partner is sync. and the port is matched
+		// 要求对端也处于同步状态
 		if ((port->sm_vars & AD_PORT_MATCHED) && (lacpdu->actor_state & AD_STATE_SYNCHRONIZATION)) {
-			partner->port_state |= AD_STATE_SYNCHRONIZATION;
+			partner->port_state |= AD_STATE_SYNCHRONIZATION; // 处于同步状态
 		} else {
-			partner->port_state &= ~AD_STATE_SYNCHRONIZATION;
+			partner->port_state &= ~AD_STATE_SYNCHRONIZATION; // 处于非同步状态
 		}
 	}
 }
 
 /**
  * __record_default - record default parameters
+ * 记录下默认的参数信息
  * @port: the port we're looking at
  *
  * This function records the default parameter values for the partner carried
@@ -549,6 +581,7 @@ static void __record_default(struct port *port)
 
 /**
  * __update_selected - update a port's Selected variable from a received lacpdu
+ * 根据接收到的lacpdu报文,更新一个端口的selected变量
  * @lacpdu: the lacpdu we've received
  * @port: the port we're looking at
  *
@@ -560,10 +593,18 @@ static void __record_default(struct port *port)
  * then selected is set to FALSE and actor_oper_port_state.synchronization is
  * set to out_of_sync. Otherwise, selected remains unchanged.
  */
+/* update_Selected函数判断接收的LACP报文里的以下字段(Actor_Port, Actor_Port_Priority, Actor_System, 
+ * Actor_System_Priority, Actor_Key, Actor_State.Aggregation), 如果与本端口的(Partner_Oper_Port_Number,
+ * Partner_Oper_Port_Priority,Partner_Oper_System, Partner_Oper_System_Priority, Partner_Oper_Key,
+ * Partner_Oper_State.Aggregation)值不一致，则认为对端信息发生了变化，就会设置本端口为UNSELECT状态。
+ * 否则，SELECT状态不变。Receive machine只能设置端口选择状态为UNSELECTED，
+ * 只有Selection Logic才可以设置端口选择状态为SELECTED和STANDBY.
+ *
+ */
 static void __update_selected(struct lacpdu *lacpdu, struct port *port)
 {
 	if (lacpdu && port) {
-		const struct port_params *partner = &port->partner_oper;
+		const struct port_params *partner = &port->partner_oper; // 从对端接收到的信息
 
 		// check if any parameter is different
 		if (ntohs(lacpdu->actor_port) != partner->port_number ||
@@ -573,13 +614,14 @@ static void __update_selected(struct lacpdu *lacpdu, struct port *port)
 		    ntohs(lacpdu->actor_key) != partner->key ||
 		    (lacpdu->actor_state & AD_STATE_AGGREGATION) != (partner->port_state & AD_STATE_AGGREGATION)) {
 			// update the state machine Selected variable
-			port->sm_vars &= ~AD_PORT_SELECTED;
+			port->sm_vars &= ~AD_PORT_SELECTED; // 接口没有被选中
 		}
 	}
 }
 
 /**
  * __update_default_selected - update a port's Selected variable from Partner
+ * 更新默认的
  * @port: the port we're looking at
  *
  * This function updates the value of the selected variable, using the partner
@@ -593,8 +635,8 @@ static void __update_selected(struct lacpdu *lacpdu, struct port *port)
 static void __update_default_selected(struct port *port)
 {
 	if (port) {
-		const struct port_params *admin = &port->partner_admin;
-		const struct port_params *oper = &port->partner_oper;
+		const struct port_params *admin = &port->partner_admin; // 系统配置的参数
+		const struct port_params *oper = &port->partner_oper;  // 对端的参数
 
 		// check if any parameter is different
 		if (admin->port_number != oper->port_number ||
@@ -605,13 +647,14 @@ static void __update_default_selected(struct port *port)
 		    (admin->port_state & AD_STATE_AGGREGATION)
 			!= (oper->port_state & AD_STATE_AGGREGATION)) {
 			// update the state machine Selected variable
-			port->sm_vars &= ~AD_PORT_SELECTED;
+			port->sm_vars &= ~AD_PORT_SELECTED; // 没有被选中
 		}
 	}
 }
 
 /**
  * __update_ntt - update a port's ntt variable from a received lacpdu
+ * 更新端口的ntt变量的值
  * @lacpdu: the lacpdu we've received
  * @port: the port we're looking at
  *
@@ -621,6 +664,14 @@ static void __update_default_selected(struct port *port)
  * values for the Actor. If one or more of the comparisons shows that the
  * value(s) received in the PDU differ from the current operational values,
  * then ntt is set to TRUE. Otherwise, ntt remains unchanged.
+ */
+/* updateNTT函数判断是否需要发送协议报文， 根据LACP报文里的以下字段(Partner_Port, Partner _Port_Priority,
+ * Partner _System, Partner _System_Priority, Partner _Key, Partner _State.LACP_Activity, 
+ * Partner_State.LACP_Timeout, Partner_State.Synchronization, Partner_State.Aggregation), 
+ * 如果与本端口的(Actor_Port_Number, Actor_Port_Priority, Actor_System, Actor_System_Priority, Actor_Oper_Key,
+ * Actor_Oper_State.LACP_Activity, Actor_Oper_State.LACP_Timeout, Actor_Oper_State..Synchronization, 
+ * Actor_Oper_State.Aggregation)值不一致，则认为对端所知信息已过时，需要重新告知对方，置NTT为TRUE。
+ * 否则NTT值不变。
  */
 static void __update_ntt(struct lacpdu *lacpdu, struct port *port)
 {
@@ -660,6 +711,7 @@ static void __attach_bond_to_agg(struct port *port)
 
 /**
  * __detach_bond_from_agg
+ * 将端口从聚合口中移除
  * @port: the port we're looking at
  *
  * Handle the detaching of the port's control parser/multiplexer from the
@@ -675,6 +727,7 @@ static void __detach_bond_from_agg(struct port *port)
 
 /**
  * __agg_ports_are_ready - check if all ports in an aggregator are ready
+ *  检查聚合口的成员口是否都已经准备好
  * @aggregator: the aggregator we're looking at
  *
  */
@@ -708,7 +761,7 @@ static void __set_agg_ports_ready(struct aggregator *aggregator, int val)
 
 	for (port=aggregator->lag_ports; port; port=port->next_port_in_aggregator) {
 		if (val) {
-			port->sm_vars |= AD_PORT_READY;
+			port->sm_vars |= AD_PORT_READY; /* 打上ready标记 */
 		} else {
 			port->sm_vars &= ~AD_PORT_READY;
 		}
@@ -717,6 +770,7 @@ static void __set_agg_ports_ready(struct aggregator *aggregator, int val)
 
 /**
  * __get_agg_bandwidth - get the total bandwidth of an aggregator
+ * 获取聚合口的总带宽
  * @aggregator: the aggregator we're looking at
  *
  */
@@ -752,6 +806,7 @@ static u32 __get_agg_bandwidth(struct aggregator *aggregator)
 
 /**
  * __get_active_agg - get the current active aggregator
+ * 活跃的聚合组
  * @aggregator: the aggregator we're looking at
  *
  */
@@ -771,13 +826,14 @@ static struct aggregator *__get_active_agg(struct aggregator *aggregator)
 
 /**
  * __update_lacpdu_from_port - update a port's lacpdu fields
+ * 更新一个接口的lacpdu值
  * @port: the port we're looking at
  *
  */
 static inline void __update_lacpdu_from_port(struct port *port)
 {
 	struct lacpdu *lacpdu = &port->lacpdu;
-	const struct port_params *partner = &port->partner_oper;
+	const struct port_params *partner = &port->partner_oper; // 从对端接收到的信息
 
 	/* update current actual Actor parameters */
 	/* lacpdu->subtype                   initialized
@@ -822,6 +878,7 @@ static inline void __update_lacpdu_from_port(struct port *port)
 
 /**
  * ad_lacpdu_send - send out a lacpdu packet on a given port
+ * 在指定的接口上发送lacpdu报文
  * @port: the port we're looking at
  *
  * Returns:   0 on success
@@ -855,7 +912,7 @@ static int ad_lacpdu_send(struct port *port)
 
 	lacpdu_header->lacpdu = port->lacpdu; // struct copy
 
-	dev_queue_xmit(skb);
+	dev_queue_xmit(skb); // 直接发送
 
 	return 0;
 }
@@ -904,8 +961,10 @@ static int ad_marker_send(struct port *port, struct bond_marker *marker)
 
 /**
  * ad_mux_machine - handle a port's mux state machine
+ * 处理mux状态机,状态机切换
  * @port: the port we're looking at
- *
+ * mux状态机负责决定端口在指定聚合组中是选中还是非选中,以及根据协议信息
+ * 打开或者关闭端口的收集和发送状态
  */
 static void ad_mux_machine(struct port *port)
 {
@@ -984,12 +1043,13 @@ static void ad_mux_machine(struct port *port)
 	}
 
 	// check if the state machine was changed
+	// 如果状态发生了更改
 	if (port->sm_mux_state != last_state) {
 		pr_debug("Mux Machine: Port=%d, Last State=%d, Curr State=%d\n",
 			 port->actor_port_number, last_state,
 			 port->sm_mux_state);
 		switch (port->sm_mux_state) {
-		case AD_MUX_DETACHED:
+		case AD_MUX_DETACHED: // 进入到了detached状态
 			__detach_bond_from_agg(port);
 			port->actor_oper_port_state &= ~AD_STATE_SYNCHRONIZATION;
 			ad_disable_collecting_distributing(port);
@@ -1000,7 +1060,7 @@ static void ad_mux_machine(struct port *port)
 		case AD_MUX_WAITING:
 			port->sm_mux_timer_counter = __ad_timer_to_ticks(AD_WAIT_WHILE_TIMER, 0);
 			break;
-		case AD_MUX_ATTACHED:
+		case AD_MUX_ATTACHED: // 进入ATTACHED状态
 			__attach_bond_to_agg(port);
 			port->actor_oper_port_state |= AD_STATE_SYNCHRONIZATION;
 			port->actor_oper_port_state &= ~AD_STATE_COLLECTING;
@@ -1022,7 +1082,8 @@ static void ad_mux_machine(struct port *port)
 
 /**
  * ad_rx_machine - handle a port's rx State Machine
- * @lacpdu: the lacpdu we've received
+ * 接收状态机
+ * @lacpdu: the lacpdu we've received 我们接收到的lacpdu报文
  * @port: the port we're looking at
  *
  * If lacpdu arrived, stop previous timer (if exists) and set the next state as
@@ -1045,6 +1106,7 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 		port->sm_rx_state = AD_RX_INITIALIZE;		    // next state
 	}
 	// check if port is not enabled
+	// 端口被禁用,进入RX_PORT_DISABLED状态
 	else if (!(port->sm_vars & AD_PORT_BEGIN) && !port->is_enabled && !(port->sm_vars & AD_PORT_MOVED)) {
 		port->sm_rx_state = AD_RX_PORT_DISABLED;	    // next state
 	}
@@ -1056,10 +1118,10 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 		// if timer is on, and if it is expired
 		if (port->sm_rx_timer_counter && !(--port->sm_rx_timer_counter)) {
 			switch (port->sm_rx_state) {
-			case AD_RX_EXPIRED:
+			case AD_RX_EXPIRED: // current_while_timer 超时
 				port->sm_rx_state = AD_RX_DEFAULTED;		// next state
 				break;
-			case AD_RX_CURRENT:
+			case AD_RX_CURRENT: // current_while_timer 超时 
 				port->sm_rx_state = AD_RX_EXPIRED;	    // next state
 				break;
 			default:    //to silence the compiler
@@ -1069,7 +1131,7 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 			// if no lacpdu arrived and no timer is on
 			switch (port->sm_rx_state) {
 			case AD_RX_PORT_DISABLED:
-				if (port->sm_vars & AD_PORT_MOVED) {
+				if (port->sm_vars & AD_PORT_MOVED) { // 端口加入
 					port->sm_rx_state = AD_RX_INITIALIZE;	    // next state
 				} else if (port->is_enabled && (port->sm_vars & AD_PORT_LACP_ENABLED)) {
 					port->sm_rx_state = AD_RX_EXPIRED;	// next state
@@ -1085,6 +1147,7 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 	}
 
 	// check if the State machine was changed or new lacpdu arrived
+	// 如果状态发生了切换
 	if ((port->sm_rx_state != last_state) || (lacpdu)) {
 		pr_debug("Rx Machine: Port=%d, Last State=%d, Curr State=%d\n",
 			 port->actor_port_number, last_state,
@@ -1096,10 +1159,12 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 			} else {
 				port->sm_vars |= AD_PORT_LACP_ENABLED;
 			}
-			port->sm_vars &= ~AD_PORT_SELECTED;
+			port->sm_vars &= ~AD_PORT_SELECTED; // 端口处于非selected状态
+			// 使用默认的配置项
 			__record_default(port);
 			port->actor_oper_port_state &= ~AD_STATE_EXPIRED;
 			port->sm_vars &= ~AD_PORT_MOVED;
+			// 无条件进入disable状态
 			port->sm_rx_state = AD_RX_PORT_DISABLED;	// next state
 
 			/*- Fall Through -*/
@@ -1107,18 +1172,19 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 		case AD_RX_PORT_DISABLED:
 			port->sm_vars &= ~AD_PORT_MATCHED;
 			break;
-		case AD_RX_LACP_DISABLED:
+		case AD_RX_LACP_DISABLED: // lacp被关闭
 			port->sm_vars &= ~AD_PORT_SELECTED;
 			__record_default(port);
 			port->partner_oper.port_state &= ~AD_STATE_AGGREGATION;
 			port->sm_vars |= AD_PORT_MATCHED;
+			// 去掉超时标记
 			port->actor_oper_port_state &= ~AD_STATE_EXPIRED;
 			break;
 		case AD_RX_EXPIRED:
 			//Reset of the Synchronization flag. (Standard 43.4.12)
 			//This reset cause to disable this port in the COLLECTING_DISTRIBUTING state of the
 			//mux machine in case of EXPIRED even if LINK_DOWN didn't arrive for the port.
-			port->partner_oper.port_state &= ~AD_STATE_SYNCHRONIZATION;
+			port->partner_oper.port_state &= ~AD_STATE_SYNCHRONIZATION; // 状态转换为不同步
 			port->sm_vars &= ~AD_PORT_MATCHED;
 			port->partner_oper.port_state |=
 				AD_STATE_LACP_ACTIVITY;
@@ -1144,6 +1210,7 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 			__update_selected(lacpdu, port);
 			__update_ntt(lacpdu, port);
 			__record_pdu(lacpdu, port);
+			// 设置current_while定时器
 			port->sm_rx_timer_counter = __ad_timer_to_ticks(AD_CURRENT_WHILE_TIMER, (u16)(port->actor_oper_port_state & AD_STATE_LACP_TIMEOUT));
 			port->actor_oper_port_state &= ~AD_STATE_EXPIRED;
 			// verify that if the aggregator is enabled, the port is enabled too.
@@ -1162,6 +1229,7 @@ static void ad_rx_machine(struct lacpdu *lacpdu, struct port *port)
 
 /**
  * ad_tx_machine - handle a port's tx state machine
+ * 处理端口的tx状态机
  * @port: the port we're looking at
  *
  */
@@ -1170,7 +1238,7 @@ static void ad_tx_machine(struct port *port)
 	// check if tx timer expired, to verify that we do not send more than 3 packets per second
 	if (port->sm_tx_timer_counter && !(--port->sm_tx_timer_counter)) {
 		// check if there is something to send
-		if (port->ntt && (port->sm_vars & AD_PORT_LACP_ENABLED)) {
+		if (port->ntt && (port->sm_vars & AD_PORT_LACP_ENABLED)) { // 需要立即发送报文
 			__update_lacpdu_from_port(port);
 
 			if (ad_lacpdu_send(port) >= 0) {
@@ -1183,12 +1251,15 @@ static void ad_tx_machine(struct port *port)
 			}
 		}
 		// restart tx timer(to verify that we will not exceed AD_MAX_TX_IN_SECOND
-		port->sm_tx_timer_counter=ad_ticks_per_sec/AD_MAX_TX_IN_SECOND;
+		port->sm_tx_timer_counter=ad_ticks_per_sec/AD_MAX_TX_IN_SECOND; // 重新设定定时器
 	}
 }
 
 /**
  * ad_periodic_machine - handle a port's periodic state machine
+ * Periodic Transmission machine状态机用来决定本端与对端需不需要定期发送LACPDU消息来判断是否继续维持一个聚合组
+ *（当对端与本端任意一个被配置为主动LACP,则会定时发送LACPDU消息，若两个都为被动LACP时，则不会传送LACPDU消息）。
+ * 根据LACP_Activity、LACP_Enable、port_enable几个值决定是否周期发送。
  * @port: the port we're looking at
  *
  * Turn ntt flag on priodically to perform periodic transmission of lacpdu's.
@@ -1204,19 +1275,20 @@ static void ad_periodic_machine(struct port *port)
 	if (((port->sm_vars & AD_PORT_BEGIN) || !(port->sm_vars & AD_PORT_LACP_ENABLED) || !port->is_enabled) ||
 	    (!(port->actor_oper_port_state & AD_STATE_LACP_ACTIVITY) && !(port->partner_oper.port_state & AD_STATE_LACP_ACTIVITY))
 	   ) {
+	    // 这里表示周期性发送是disabled,不需要周期性发送
 		port->sm_periodic_state = AD_NO_PERIODIC;	     // next state
 	}
 	// check if state machine should change state
 	else if (port->sm_periodic_timer_counter) {
 		// check if periodic state machine expired
-		if (!(--port->sm_periodic_timer_counter)) {
+		if (!(--port->sm_periodic_timer_counter)) { // periodic_timer超时
 			// if expired then do tx
 			port->sm_periodic_state = AD_PERIODIC_TX;    // next state
 		} else {
 			// If not expired, check if there is some new timeout parameter from the partner state
 			switch (port->sm_periodic_state) {
 			case AD_FAST_PERIODIC:
-				if (!(port->partner_oper.port_state & AD_STATE_LACP_TIMEOUT)) {
+				if (!(port->partner_oper.port_state & AD_STATE_LACP_TIMEOUT)) { // 长超时
 					port->sm_periodic_state = AD_SLOW_PERIODIC;  // next state
 				}
 				break;
@@ -1274,6 +1346,7 @@ static void ad_periodic_machine(struct port *port)
 
 /**
  * ad_port_selection_logic - select aggregation groups
+ * 端口选择逻辑
  * @port: the port we're looking at
  *
  * Select aggregation groups, and assign each port for it's aggregetor. The
@@ -1287,11 +1360,13 @@ static void ad_port_selection_logic(struct port *port)
 	int found = 0;
 
 	// if the port is already Selected, do nothing
+	// 端口已经被选中
 	if (port->sm_vars & AD_PORT_SELECTED) {
 		return;
 	}
 
 	// if the port is connected to other aggregator, detach it
+	// 如果端口连上了其他聚合口
 	if (port->aggregator) {
 		// detach the port from its former aggregator
 		temp_aggregator=port->aggregator;
@@ -1359,13 +1434,14 @@ static void ad_port_selection_logic(struct port *port)
 				 port->aggregator->aggregator_identifier);
 
 			// mark this port as selected
-			port->sm_vars |= AD_PORT_SELECTED;
+			port->sm_vars |= AD_PORT_SELECTED; // 端口被选中
 			found = 1;
 			break;
 		}
 	}
 
 	// the port couldn't find an aggregator - attach it to a new aggregator
+	// 如果找不到聚合组,就单独分配一个
 	if (!found) {
 		if (free_aggregator) {
 			// assign port a new aggregator
@@ -1733,6 +1809,7 @@ static void ad_initialize_port(struct port *port, int lacp_fast)
 
 /**
  * ad_enable_collecting_distributing - enable a port's transmit/receive
+ * 允许端口收包/发包
  * @port: the port we're looking at
  *
  * Enable @port if it's in an active aggregator
@@ -1749,6 +1826,7 @@ static void ad_enable_collecting_distributing(struct port *port)
 
 /**
  * ad_disable_collecting_distributing - disable a port's transmit/receive
+ * 不允许端口发包/收包
  * @port: the port we're looking at
  *
  */
@@ -1871,6 +1949,7 @@ static u16 aggregator_identifier;
  * @lacp_fast: boolean. whether fast periodic should be used
  *
  * Can be called only after the mac address of the bond is set.
+ * 初始化lacp的相关参数
  */
 void bond_3ad_initialize(struct bonding *bond, u16 tick_resolution, int lacp_fast)
 {
@@ -1895,6 +1974,7 @@ void bond_3ad_initialize(struct bonding *bond, u16 tick_resolution, int lacp_fas
 
 /**
  * bond_3ad_bind_slave - initialize a slave's port
+ * 端口加入聚合组
  * @slave: slave struct to work on
  *
  * Returns:   0 on success
@@ -1963,6 +2043,7 @@ int bond_3ad_bind_slave(struct slave *slave)
 
 /**
  * bond_3ad_unbind_slave - deinitialize a slave's port
+ * 将端口移出聚合组
  * @slave: slave struct to work on
  *
  * Search for the aggregator that is related to this port, remove the
@@ -1994,7 +2075,7 @@ void bond_3ad_unbind_slave(struct slave *slave)
 	/* Tell the partner that this port is not suitable for aggregation */
 	port->actor_oper_port_state &= ~AD_STATE_AGGREGATION;
 	__update_lacpdu_from_port(port);
-	ad_lacpdu_send(port);
+	ad_lacpdu_send(port); // 立刻发送报文,让端口退出
 
 	// check if this aggregator is occupied
 	if (aggregator->lag_ports) {
@@ -2145,6 +2226,7 @@ void bond_3ad_state_machine_handler(struct work_struct *work)
 	}
 
 	// for each port run the state machines
+	// 每一个端口都跑状态机
 	for (port = __get_first_port(bond); port; port = __get_next_port(port)) {
 		if (!port->slave) {
 			pr_warning("%s: Warning: Found an uninitialized port\n",
@@ -2159,7 +2241,7 @@ void bond_3ad_state_machine_handler(struct work_struct *work)
 		ad_tx_machine(port);
 
 		// turn off the BEGIN bit, since we already handled it
-		if (port->sm_vars & AD_PORT_BEGIN) {
+		if (port->sm_vars & AD_PORT_BEGIN) { // 去掉begin标记
 			port->sm_vars &= ~AD_PORT_BEGIN;
 		}
 	}
@@ -2172,6 +2254,7 @@ out:
 
 /**
  * bond_3ad_rx_indication - handle a received frame
+ *  处理接收到的帧
  * @lacpdu: received lacpdu
  * @slave: slave struct to work on
  * @length: length of the data received
@@ -2198,7 +2281,7 @@ static void bond_3ad_rx_indication(struct lacpdu *lacpdu, struct slave *slave, u
 		case AD_TYPE_LACPDU:
 			pr_debug("Received LACPDU on port %d\n",
 				 port->actor_port_number);
-			ad_rx_machine(lacpdu, port);
+			ad_rx_machine(lacpdu, port); // 触发接收状态机
 			break;
 
 		case AD_TYPE_MARKER:
@@ -2227,6 +2310,7 @@ static void bond_3ad_rx_indication(struct lacpdu *lacpdu, struct slave *slave, u
 
 /**
  * bond_3ad_adapter_speed_changed - handle a slave's speed change indication
+ * 处理速率发生了更改
  * @slave: slave struct to work on
  *
  * Handle reselection of aggregator (if needed) for this port.
@@ -2249,7 +2333,7 @@ void bond_3ad_adapter_speed_changed(struct slave *slave)
 	pr_debug("Port %d changed speed\n", port->actor_port_number);
 	// there is no need to reselect a new aggregator, just signal the
 	// state machines to reinitialize
-	port->sm_vars |= AD_PORT_BEGIN;
+	port->sm_vars |= AD_PORT_BEGIN; // 进入重新初始化状态
 }
 
 /**
@@ -2281,6 +2365,7 @@ void bond_3ad_adapter_duplex_changed(struct slave *slave)
 
 /**
  * bond_3ad_handle_link_change - handle a slave's link status change indication
+ * 触发器,接口的链路状态发生了更改
  * @slave: slave struct to work on
  * @status: whether the link is now up or down
  *
@@ -2348,6 +2433,7 @@ int bond_3ad_set_carrier(struct bonding *bond)
 
 /**
  * bond_3ad_get_active_agg_info - get information of the active aggregator
+ * 获取活跃的聚合组的相关信息
  * @bond: bonding struct to work on
  * @ad_info: ad_info struct to fill with the bond's info
  *
@@ -2361,7 +2447,7 @@ int bond_3ad_get_active_agg_info(struct bonding *bond, struct ad_info *ad_info)
 
 	for (port = __get_first_port(bond); port; port = __get_next_port(port)) {
 		if (port->aggregator && port->aggregator->is_active) {
-			aggregator = port->aggregator;
+			aggregator = port->aggregator; // 获得聚合组
 			break;
 		}
 	}
@@ -2378,6 +2464,10 @@ int bond_3ad_get_active_agg_info(struct bonding *bond, struct ad_info *ad_info)
 	return -1;
 }
 
+/* 发送报文
+ * @param skb 待发送的报文
+ * @param dev 待发送的设备,一般是聚合设备
+ */
 int bond_3ad_xmit_xor(struct sk_buff *skb, struct net_device *dev)
 {
 	struct slave *slave, *start_at;
@@ -2439,7 +2529,7 @@ int bond_3ad_xmit_xor(struct sk_buff *skb, struct net_device *dev)
 		struct aggregator *agg = SLAVE_AD_INFO(slave).port.aggregator;
 
 		if (agg) {
-			slave_agg_id = agg->aggregator_identifier;
+			slave_agg_id = agg->aggregator_identifier; // 标识
 		}
 
 		if (SLAVE_IS_OK(slave) && agg && (slave_agg_id == agg_id)) {
@@ -2457,6 +2547,7 @@ out:
 	return NETDEV_TX_OK;
 }
 
+/* 接收lacp报文 */
 int bond_3ad_lacpdu_recv(struct sk_buff *skb, struct net_device *dev, struct packet_type* ptype, struct net_device *orig_dev)
 {
 	struct bonding *bond = netdev_priv(dev);

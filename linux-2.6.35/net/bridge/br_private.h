@@ -34,6 +34,7 @@ typedef struct bridge_id bridge_id;
 typedef struct mac_addr mac_addr;
 typedef __u16 port_id;
 
+/* BID,也就是2字节的桥优先级加上6字节的ip地址 */
 struct bridge_id
 {
 	unsigned char	prio[2];
@@ -115,14 +116,14 @@ struct net_bridge_port
 	u8				priority;
 	u8				state;
 	u16				port_no;
-	unsigned char			topology_change_ack;
+	unsigned char			topology_change_ack; /* 拓扑变化确认标志 */
 	unsigned char			config_pending;
 	port_id				port_id;
-	port_id				designated_port;
-	bridge_id			designated_root;
-	bridge_id			designated_bridge;
-	u32				path_cost;
-	u32				designated_cost;
+	port_id				designated_port; /* 指定端口的id */
+	bridge_id			designated_root; /* 对端的根桥 */
+	bridge_id			designated_bridge; /*  指定桥的bid */
+	u32				path_cost; /* 路径开销 */
+	u32				designated_cost; /* 指定端口到根桥的开销 */
     /* 端口定时器,也就是stp控制超时的一些定时器列表 */
 	struct timer_list		forward_delay_timer;
 	struct timer_list		hold_timer;
@@ -173,19 +174,19 @@ struct net_bridge
 #define BR_SET_MAC_ADDR		0x00000001
 
 	/* STP */
-	bridge_id			designated_root;
-	bridge_id			bridge_id;
-	u32				root_path_cost;
+	bridge_id			designated_root; /* 网桥的根端口标记 */
+	bridge_id			bridge_id;  /* 端口自己的bridge id */
+	u32				root_path_cost; /* 记录到根桥的开销 */
 	unsigned long			max_age;
 	unsigned long			hello_time;
-	unsigned long			forward_delay;
+	unsigned long			forward_delay; /* 传输延时 */
 	unsigned long			bridge_max_age;
 	unsigned long			ageing_time;
 	unsigned long			bridge_hello_time;
 	unsigned long			bridge_forward_delay;
 
 	u8				group_addr[ETH_ALEN];
-	u16				root_port;
+	u16				root_port; /* 根端口 */
     /* stp使用的协议 */
 	enum {
 		BR_NO_STP, 		/* no spanning tree */
@@ -193,8 +194,8 @@ struct net_bridge
 		BR_USER_STP,		/* new RSTP in userspace */
 	} stp_enabled;
 
-	unsigned char			topology_change;
-	unsigned char			topology_change_detected;
+	unsigned char			topology_change; /* 拓扑变化标志 */
+	unsigned char			topology_change_detected; /* 是否检测到了拓扑发生更改 */
 
 #ifdef CONFIG_BRIDGE_IGMP_SNOOPING
 	unsigned char			multicast_router;
@@ -225,7 +226,7 @@ struct net_bridge
 	struct timer_list		multicast_query_timer;
 #endif
     /* stp要用的一些定时器列表 */
-	struct timer_list		hello_timer;
+	struct timer_list		hello_timer; /* 用于定时发送配置bpdu报文 */
 	struct timer_list		tcn_timer;
 	struct timer_list		topology_change_timer;
 	struct timer_list		gc_timer;
@@ -266,9 +267,12 @@ struct br_input_skb_cb {
 extern struct notifier_block br_device_notifier;
 extern const u8 br_group_address[ETH_ALEN];
 
-/* called under bridge lock */
+/* called under bridge lock
+ * 判断是否为根桥
+ */
 static inline int br_is_root_bridge(const struct net_bridge *br)
 {
+    /* 用自己的bid和BPDU包中的根id相比 */
 	return !memcmp(&br->bridge_id, &br->designated_root, 8);
 }
 

@@ -114,6 +114,7 @@ void br_send_config_bpdu(struct net_bridge_port *p, struct br_config_bpdu *bpdu)
 }
 
 /* called under bridge lock */
+/* 发送tcn报文 */
 void br_send_tcn_bpdu(struct net_bridge_port *p)
 {
 	unsigned char buf[4];
@@ -132,6 +133,7 @@ void br_send_tcn_bpdu(struct net_bridge_port *p)
  * Called from llc.
  *
  * NO locks, but rcu_read_lock (preempt_disabled)
+ * 处理接收到的报文
  */
 void br_stp_rcv(const struct stp_proto *proto, struct sk_buff *skb,
 		struct net_device *dev)
@@ -155,7 +157,7 @@ void br_stp_rcv(const struct stp_proto *proto, struct sk_buff *skb,
 	br = p->br;
 	spin_lock(&br->lock);
 
-	if (br->stp_enabled != BR_KERNEL_STP)
+	if (br->stp_enabled != BR_KERNEL_STP) /* 如果没有开启stp功能,直接返回 */
 		goto out;
 
 	if (!(br->dev->flags & IFF_UP))
@@ -169,17 +171,17 @@ void br_stp_rcv(const struct stp_proto *proto, struct sk_buff *skb,
 
 	buf = skb_pull(skb, 3);
 
-	if (buf[0] == BPDU_TYPE_CONFIG) {
+	if (buf[0] == BPDU_TYPE_CONFIG) { /* 配置bpdu报文 */
 		struct br_config_bpdu bpdu;
 
 		if (!pskb_may_pull(skb, 32))
 			goto out;
 
 		buf = skb->data;
-		bpdu.topology_change = (buf[1] & 0x01) ? 1 : 0;
-		bpdu.topology_change_ack = (buf[1] & 0x80) ? 1 : 0;
+		bpdu.topology_change = (buf[1] & 0x01) ? 1 : 0; /* 拓扑变化标志 */
+		bpdu.topology_change_ack = (buf[1] & 0x80) ? 1 : 0; /* 拓扑变化确认标志 */
 
-		bpdu.root.prio[0] = buf[2];
+		bpdu.root.prio[0] = buf[2]; /* 2字节的桥优先级以及6字节的mac地址 */
 		bpdu.root.prio[1] = buf[3];
 		bpdu.root.addr[0] = buf[4];
 		bpdu.root.addr[1] = buf[5];
@@ -191,8 +193,8 @@ void br_stp_rcv(const struct stp_proto *proto, struct sk_buff *skb,
 			(buf[10] << 24) |
 			(buf[11] << 16) |
 			(buf[12] << 8) |
-			buf[13];
-		bpdu.bridge_id.prio[0] = buf[14];
+			buf[13];               /* 发送该BPDU报文的端口累计到根桥的开销 */
+		bpdu.bridge_id.prio[0] = buf[14]; /* 2字节的桥优先级以及6字节的mac地址 */
 		bpdu.bridge_id.prio[1] = buf[15];
 		bpdu.bridge_id.addr[0] = buf[16];
 		bpdu.bridge_id.addr[1] = buf[17];
@@ -202,15 +204,15 @@ void br_stp_rcv(const struct stp_proto *proto, struct sk_buff *skb,
 		bpdu.bridge_id.addr[5] = buf[21];
 		bpdu.port_id = (buf[22] << 8) | buf[23];
 
-		bpdu.message_age = br_get_ticks(buf+24);
+		bpdu.message_age = br_get_ticks(buf+24); /* bpdu报文的生存时间 */
 		bpdu.max_age = br_get_ticks(buf+26);
-		bpdu.hello_time = br_get_ticks(buf+28);
-		bpdu.forward_delay = br_get_ticks(buf+30);
+		bpdu.hello_time = br_get_ticks(buf+28); /* 指示发送两个相邻BPDU的时间间隔 */
+		bpdu.forward_delay = br_get_ticks(buf+30); /* 转发时延 */
 
 		br_received_config_bpdu(p, &bpdu);
 	}
 
-	else if (buf[0] == BPDU_TYPE_TCN) {
+	else if (buf[0] == BPDU_TYPE_TCN) { /* 接收到了拓扑变化的消息 */
 		br_received_tcn_bpdu(p);
 	}
  out:

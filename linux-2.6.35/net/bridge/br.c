@@ -24,6 +24,8 @@
 
 int (*br_should_route_hook)(struct sk_buff *skb);
 
+/* 生成树协议的实现 */
+
 static const struct stp_proto br_stp_proto = {
 	.rcv	= br_stp_rcv,
 };

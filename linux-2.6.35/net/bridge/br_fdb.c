@@ -172,6 +172,7 @@ void br_fdb_flush(struct net_bridge *br)
 
 /* Flush all entries refering to a specific port.
  * if do_all is set also flush static entries
+ * 删掉接口上学到的fdb
  */
 void br_fdb_delete_by_port(struct net_bridge *br,
 			   const struct net_bridge_port *p,

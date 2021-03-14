@@ -81,6 +81,7 @@ struct llc_sap *llc_sap_find(unsigned char sap_value)
 
 /**
  *	llc_sap_open - open interface to the upper layers.
+ *  llc_sap_open将创建一个llc_sap结构,并加入到llc协议链表中
  *	@lsap: SAP number.
  *	@func: rcv func for datalink protos
  *

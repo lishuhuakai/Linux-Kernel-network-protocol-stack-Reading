@@ -30,9 +30,13 @@ static inline port_id br_make_port_id(__u8 priority, __u16 port_no)
 }
 
 /* called under bridge lock */
+/* 网口的初始化
+ * @param p 待初始化的网口
+ */
 void br_init_port(struct net_bridge_port *p)
 {
 	p->port_id = br_make_port_id(p->priority, p->port_no);
+    /* 刚开始的时候,默认此链路上的指定端口为自己 */
 	br_become_designated_port(p);
 	p->state = BR_STATE_BLOCKING;
 	p->topology_change_ack = 0;
@@ -59,6 +63,9 @@ void br_stp_enable_bridge(struct net_bridge *br)
 }
 
 /* NO locks held */
+/* 禁用stp
+ *
+ */
 void br_stp_disable_bridge(struct net_bridge *br)
 {
 	struct net_bridge_port *p;
@@ -89,6 +96,9 @@ void br_stp_enable_port(struct net_bridge_port *p)
 }
 
 /* called under bridge lock */
+/* 在接口p上禁用stp协议
+ * @param p 待操作的接口
+ */
 void br_stp_disable_port(struct net_bridge_port *p)
 {
 	struct net_bridge *br = p->br;
@@ -170,7 +180,11 @@ void br_stp_set_enabled(struct net_bridge *br, unsigned long val)
 	}
 }
 
-/* called under bridge lock */
+/* called under bridge lock
+ * 设置bridge的id,也就是bid
+ * @param br 待设置的网桥
+ * @param addr 待设置的地址
+ */
 void br_stp_change_bridge_id(struct net_bridge *br, const unsigned char *addr)
 {
 	/* should be aligned on 2 bytes for compare_ether_addr() */
@@ -227,6 +241,9 @@ void br_stp_recalculate_bridge_id(struct net_bridge *br)
 }
 
 /* called under bridge lock */
+/* 设置优先级
+ *
+ */
 void br_stp_set_bridge_priority(struct net_bridge *br, u16 newprio)
 {
 	struct net_bridge_port *p;
@@ -247,7 +264,7 @@ void br_stp_set_bridge_priority(struct net_bridge *br, u16 newprio)
 	br->bridge_id.prio[1] = newprio & 0xFF;
 	br_configuration_update(br);
 	br_port_state_selection(br);
-	if (br_is_root_bridge(br) && !wasroot)
+	if (br_is_root_bridge(br) && !wasroot) /* 变成了根桥 */
 		br_become_root_bridge(br);
 }
 
@@ -268,7 +285,9 @@ void br_stp_set_port_priority(struct net_bridge_port *p, u8 newprio)
 	}
 }
 
-/* called under bridge lock */
+/* called under bridge lock
+ * 设置路径开销
+ */
 void br_stp_set_path_cost(struct net_bridge_port *p, u32 path_cost)
 {
 	p->path_cost = path_cost;

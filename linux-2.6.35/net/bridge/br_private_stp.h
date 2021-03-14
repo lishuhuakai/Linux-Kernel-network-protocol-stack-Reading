@@ -16,21 +16,24 @@
 #define BPDU_TYPE_CONFIG 0
 #define BPDU_TYPE_TCN 0x80
 
+/* 记录从bpdu报文中提取出来的信息 */
 struct br_config_bpdu
 {
 	unsigned	topology_change:1;
 	unsigned	topology_change_ack:1;
-	bridge_id	root;
-	int		root_path_cost;
-	bridge_id	bridge_id;
-	port_id		port_id;
+	bridge_id	root;  /* 根桥 */
+	int		root_path_cost; /* 此端口到根桥的开销 */
+	bridge_id	bridge_id; /* 发送bpdu报文的桥id */
+	port_id		port_id; /* 发送bpdu报文的端口id */
 	int		message_age;
 	int		max_age;
 	int		hello_time;
 	int		forward_delay;
 };
 
-/* called under bridge lock */
+/* called under bridge lock
+ * 判断端口是否为指定端口
+ */
 static inline int br_is_designated_port(const struct net_bridge_port *p)
 {
 	return !memcmp(&p->designated_bridge, &p->br->bridge_id, 8) &&

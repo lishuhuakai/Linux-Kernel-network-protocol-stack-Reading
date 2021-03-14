@@ -29,6 +29,7 @@ static unsigned int sap_registered;
 static DEFINE_MUTEX(stp_proto_mutex);
 
 /* Called under rcu_read_lock from LLC */
+/* 处理接收到到的stp报文 */
 static int stp_pdu_rcv(struct sk_buff *skb, struct net_device *dev,
 		       struct packet_type *pt, struct net_device *orig_dev)
 {
@@ -67,6 +68,7 @@ int stp_proto_register(const struct stp_proto *proto)
 
 	mutex_lock(&stp_proto_mutex);
 	if (sap_registered++ == 0) {
+        /* 在LLC上注册数据处理函数, */
 		sap = llc_sap_open(LLC_SAP_BSPAN, stp_pdu_rcv);
 		if (!sap) {
 			err = -ENOMEM;

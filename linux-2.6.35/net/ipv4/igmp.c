@@ -184,13 +184,15 @@ static void igmp_start_timer(struct ip_mc_list *im, int max_delay)
 		atomic_inc(&im->refcnt);
 }
 
+/* 普通查询的报告 */
 static void igmp_gq_start_timer(struct in_device *in_dev)
 {
+    /* 由定时器触发 */
 	int tv = net_random() % in_dev->mr_maxdelay;
 
 	in_dev->mr_gq_running = 1;
 	if (!mod_timer(&in_dev->mr_gq_timer, jiffies+tv+2))
-		in_dev_hold(in_dev);
+		in_dev_hold(in_dev); 
 }
 
 static void igmp_ifc_start_timer(struct in_device *in_dev, int delay)
@@ -200,7 +202,7 @@ static void igmp_ifc_start_timer(struct in_device *in_dev, int delay)
 	if (!mod_timer(&in_dev->mr_ifc_timer, jiffies+tv+2))
 		in_dev_hold(in_dev);
 }
-
+/* 启动接口定时器 */
 static void igmp_mod_timer(struct ip_mc_list *im, int max_delay)
 {
 	spin_lock_bh(&im->lock);
@@ -226,6 +228,13 @@ static void igmp_mod_timer(struct ip_mc_list *im, int max_delay)
 #define IGMP_SIZE (sizeof(struct igmphdr)+sizeof(struct iphdr)+4)
 
 
+/* is_in用来判断指定组播组的特定组播源是否属于特定的组记录类型
+ * @param pmc 指定的组播组描述块
+ * @param psf 指定组播组的源地址描述块
+ * @param type 组记录类型
+ * @param gdeleted 用于判断是不是刚离开的组播组的标识
+ * @param sdeleted 用于判断是不是被阻止的组播源的标识
+ */
 static int is_in(struct ip_mc_list *pmc, struct ip_sf_list *psf, int type,
 	int gdeleted, int sdeleted)
 {
@@ -387,6 +396,14 @@ static struct sk_buff *add_grhead(struct sk_buff *skb, struct ip_mc_list *pmc,
 #define AVAILABLE(skb) ((skb) ? ((skb)->dev ? (skb)->dev->mtu - (skb)->len : \
 	skb_tailroom(skb)) : 0)
 
+	
+/* add_grec 用来组成或者发送各种类型的v3报告报文
+ * @param skb 存储V3报告的报文
+ * @param pmc 组播组信息
+ * @param type V3报告中组记录的类型
+ * @param gdeleted 是否有套接口离开的组播组的标志
+ * @param sdeleted 是否有源地址被阻止的标志
+ */
 static struct sk_buff *add_grec(struct sk_buff *skb, struct ip_mc_list *pmc,
 	int type, int gdeleted, int sdeleted)
 {
@@ -396,7 +413,7 @@ static struct sk_buff *add_grec(struct sk_buff *skb, struct ip_mc_list *pmc,
 	struct ip_sf_list *psf, *psf_next, *psf_prev, **psf_list;
 	int scount, stotal, first, isquery, truncate;
 
-	if (pmc->multiaddr == IGMP_ALL_HOSTS)
+	if (pmc->multiaddr == IGMP_ALL_HOSTS) /* 对于特殊的224.0.0.1组播组无需处理 */
 		return skb;
 
 	isquery = type == IGMPV3_MODE_IS_INCLUDE ||
@@ -414,6 +431,10 @@ static struct sk_buff *add_grec(struct sk_buff *skb, struct ip_mc_list *pmc,
 	pih = skb ? igmpv3_report_hdr(skb) : NULL;
 
 	/* EX and TO_EX get a fresh packet, if needed */
+	/* 对于IGMPV3_MODE_IS_EXCLUDE或者IGMPV3_CHANGE_TO_EXCLUDE类型的组记录
+     * 如果当前报告报文有效,同时当前报文已经容纳不下指定组播组,指定记录类型的组记录时
+     * 则将当前报文输出
+	 */
 	if (truncate) {
 		if (pih && pih->ngrec &&
 		    AVAILABLE(skb) < grec_size(pmc, type, gdeleted, sdeleted)) {
@@ -428,7 +449,7 @@ static struct sk_buff *add_grec(struct sk_buff *skb, struct ip_mc_list *pmc,
 		__be32 *psrc;
 
 		psf_next = psf->sf_next;
-
+        
 		if (!is_in(pmc, psf, type, gdeleted, sdeleted)) {
 			psf_prev = psf;
 			continue;
@@ -457,7 +478,7 @@ static struct sk_buff *add_grec(struct sk_buff *skb, struct ip_mc_list *pmc,
 		if (!skb)
 			return NULL;
 		psrc = (__be32 *)skb_put(skb, sizeof(__be32));
-		*psrc = psf->sf_inaddr;
+		*psrc = psf->sf_inaddr; /* 记录下所谓的ip地址 */
 		scount++; stotal++;
 		if ((type == IGMPV3_ALLOW_NEW_SOURCES ||
 		     type == IGMPV3_BLOCK_OLD_SOURCES) && psf->sf_crcount) {
@@ -496,6 +517,10 @@ empty_source:
 	return skb;
 }
 
+/* igmpv3_send_report用来发送v3当前状态记录类型报告
+ * @param in_dev 加入组播组网络接口的IP配置块
+ * @param pmc 要报告的指定组播组,如果为NULL则报告网络接口加入所有的组播组
+ */
 static int igmpv3_send_report(struct in_device *in_dev, struct ip_mc_list *pmc)
 {
 	struct sk_buff *skb = NULL;
@@ -511,7 +536,7 @@ static int igmpv3_send_report(struct in_device *in_dev, struct ip_mc_list *pmc)
 				type = IGMPV3_MODE_IS_EXCLUDE;
 			else
 				type = IGMPV3_MODE_IS_INCLUDE;
-			skb = add_grec(skb, pmc, type, 0, 0);
+			skb = add_grec(skb, pmc, type, 0, 0); /* 填充记录 */
 			spin_unlock_bh(&pmc->lock);
 		}
 		read_unlock(&in_dev->mc_list_lock);
@@ -822,23 +847,25 @@ static void igmp_heard_report(struct in_device *in_dev, __be32 group)
 	}
 	read_unlock(&in_dev->mc_list_lock);
 }
-
+/* 处理接收到的查询报文
+ * 
+ */
 static void igmp_heard_query(struct in_device *in_dev, struct sk_buff *skb,
 	int len)
 {
 	struct igmphdr 		*ih = igmp_hdr(skb);
 	struct igmpv3_query *ih3 = igmpv3_query_hdr(skb);
 	struct ip_mc_list	*im;
-	__be32			group = ih->group;
+	__be32			group = ih->group; /* 多播组 */
 	int			max_delay;
 	int			mark = 0;
 
 
-	if (len == 8) {
+	if (len == 8) { /* 长度为8的igmp报文是v1或v2 */
 		if (ih->code == 0) {
 			/* Alas, old v1 router presents here. */
 
-			max_delay = IGMP_Query_Response_Interval;
+			max_delay = IGMP_Query_Response_Interval; /* 10s */
 			in_dev->mr_v1_seen = jiffies +
 				IGMP_V1_Router_Present_Timeout;
 			group = 0;
@@ -860,7 +887,7 @@ static void igmp_heard_query(struct in_device *in_dev, struct sk_buff *skb,
 		if (!pskb_may_pull(skb, sizeof(struct igmpv3_query)))
 			return;
 
-		ih3 = igmpv3_query_hdr(skb);
+		ih3 = igmpv3_query_hdr(skb); /* 查询头部 */
 		if (ih3->nsrcs) {
 			if (!pskb_may_pull(skb, sizeof(struct igmpv3_query)
 					   + ntohs(ih3->nsrcs)*sizeof(__be32)))
@@ -881,7 +908,7 @@ static void igmp_heard_query(struct in_device *in_dev, struct sk_buff *skb,
 			return;
 		}
 		/* mark sources to include, if group & source-specific */
-		mark = ih3->nsrcs != 0;
+		mark = ih3->nsrcs != 0; /* 标记查询报文中是否存在源地址 */
 	}
 
 	/*
@@ -898,7 +925,7 @@ static void igmp_heard_query(struct in_device *in_dev, struct sk_buff *skb,
 	for (im=in_dev->mc_list; im!=NULL; im=im->next) {
 		int changed;
 
-		if (group && group != im->multiaddr)
+		if (group && group != im->multiaddr) /* 组需要进行匹配 */
 			continue;
 		if (im->multiaddr == IGMP_ALL_HOSTS)
 			continue;
@@ -916,6 +943,9 @@ static void igmp_heard_query(struct in_device *in_dev, struct sk_buff *skb,
 	read_unlock(&in_dev->mc_list_lock);
 }
 
+/* 处理接收到的igmp报文
+ *
+ */
 int igmp_rcv(struct sk_buff *skb)
 {
 	/* This basically follows the spec line by line -- see RFC1112 */
@@ -942,10 +972,10 @@ int igmp_rcv(struct sk_buff *skb)
 
 	ih = igmp_hdr(skb);
 	switch (ih->type) {
-	case IGMP_HOST_MEMBERSHIP_QUERY:
+	case IGMP_HOST_MEMBERSHIP_QUERY: /* 查询报文 */
 		igmp_heard_query(in_dev, skb, len);
 		break;
-	case IGMP_HOST_MEMBERSHIP_REPORT:
+	case IGMP_HOST_MEMBERSHIP_REPORT: /* 报告报文 */
 	case IGMPV2_HOST_MEMBERSHIP_REPORT:
 		/* Is it our report looped back? */
 		if (skb_rtable(skb)->fl.iif == 0)
@@ -958,7 +988,7 @@ int igmp_rcv(struct sk_buff *skb)
 	case IGMP_PIM:
 #ifdef CONFIG_IP_PIMSM_V1
 		in_dev_put(in_dev);
-		return pim_rcv_v1(skb);
+		return pim_rcv_v1(skb); /* 如果支持PIM报文 */
 #endif
 	case IGMPV3_HOST_MEMBERSHIP_REPORT:
 	case IGMP_DVMRP:
@@ -1084,6 +1114,9 @@ static void igmpv3_del_delrec(struct in_device *in_dev, __be32 multiaddr)
 	}
 }
 
+/* 清除有关v3的信息
+ *
+ */
 static void igmpv3_clear_delrec(struct in_device *in_dev)
 {
 	struct ip_mc_list *pmc, *nextpmc;
@@ -1141,7 +1174,7 @@ static void igmp_group_dropped(struct ip_mc_list *im)
 			goto done;
 		if (IGMP_V2_SEEN(in_dev)) {
 			if (reporter)
-				igmp_send_report(in_dev, im, IGMP_HOST_LEAVE_MESSAGE);
+				igmp_send_report(in_dev, im, IGMP_HOST_LEAVE_MESSAGE); /* 发送离开多播组的信息 */
 			goto done;
 		}
 		/* IGMPv3 */
@@ -1154,6 +1187,9 @@ done:
 	ip_mc_clear_src(im);
 }
 
+/* 将组播组的硬件地址等信息添加到网络设备上,并发送报告
+ *
+ */
 static void igmp_group_added(struct ip_mc_list *im)
 {
 	struct in_device *in_dev = im->interface;
@@ -1192,16 +1228,20 @@ static void igmp_group_added(struct ip_mc_list *im)
 /*
  *	A socket has joined a multicast group on device dev.
  */
-
+/* 将指定的网络设备加入到指定的组播组中.
+ *
+ */
 void ip_mc_inc_group(struct in_device *in_dev, __be32 addr)
 {
 	struct ip_mc_list *im;
 
 	ASSERT_RTNL();
-
+    /* 遍历网络接口已经加入的组播组列表,
+     * 检查该网络设备接口是否已经加入该组播组 */
 	for (im=in_dev->mc_list; im; im=im->next) {
 		if (im->multiaddr == addr) {
 			im->users++;
+			/* 更新源过滤模式 源列表 */
 			ip_mc_add_src(in_dev, &addr, MCAST_EXCLUDE, 0, NULL, 0);
 			goto out;
 		}
@@ -1242,7 +1282,7 @@ void ip_mc_inc_group(struct in_device *in_dev, __be32 addr)
 #endif
 	igmp_group_added(im);
 	if (!in_dev->dead)
-		ip_rt_multicast_event(in_dev);
+		ip_rt_multicast_event(in_dev); /* 刷新路由缓存 */
 out:
 	return;
 }
@@ -1272,7 +1312,10 @@ void ip_mc_rejoin_group(struct ip_mc_list *im)
 /*
  *	A socket has left a multicast group on device dev
  */
-
+/* 设备离开了多播组 
+ * @param in_dev 网络设备接口的ip控制块
+ * @param addr 待离开的组播组
+ */
 void ip_mc_dec_group(struct in_device *in_dev, __be32 addr)
 {
 	struct ip_mc_list *i, **ip;
@@ -1443,7 +1486,9 @@ static struct in_device *ip_mc_find_dev(struct net *net, struct ip_mreqn *imr)
 int sysctl_igmp_max_memberships __read_mostly = IP_MAX_MEMBERSHIPS;
 int sysctl_igmp_max_msf __read_mostly = IP_MAX_MSF;
 
-
+/* 从网络设备中删除单个用于过滤的组播源地址
+ *
+ */
 static int ip_mc_del1_src(struct ip_mc_list *pmc, int sfmode,
 	__be32 *psfsrc)
 {
@@ -1452,7 +1497,7 @@ static int ip_mc_del1_src(struct ip_mc_list *pmc, int sfmode,
 
 	psf_prev = NULL;
 	for (psf=pmc->sources; psf; psf=psf->sf_next) {
-		if (psf->sf_inaddr == *psfsrc)
+		if (psf->sf_inaddr == *psfsrc) /* 匹配到对应的项 */
 			break;
 		psf_prev = psf;
 	}
@@ -1462,9 +1507,10 @@ static int ip_mc_del1_src(struct ip_mc_list *pmc, int sfmode,
 	}
 	psf->sf_count[sfmode]--;
 	if (psf->sf_count[sfmode] == 0) {
-		ip_rt_multicast_event(pmc->interface);
+		ip_rt_multicast_event(pmc->interface); /* 刷新路由缓存 */
 	}
 	if (!psf->sf_count[MCAST_INCLUDE] && !psf->sf_count[MCAST_EXCLUDE]) {
+	/* 已经没有套接口使用该源地址作为组播源 */
 #ifdef CONFIG_IP_MULTICAST
 		struct in_device *in_dev = pmc->interface;
 #endif
@@ -1493,6 +1539,14 @@ static int ip_mc_del1_src(struct ip_mc_list *pmc, int sfmode,
 #define igmp_ifc_event(x)	do { } while (0)
 #endif
 
+/*
+ * @param in_dev 所在网络设备的ip配置块
+ * @param sfmode 组播组当前源过滤的模式
+ * @param pmca 待删除组播源所在的组播组
+ * @param sfcount 删除组播源地址的个数
+ * @param psfsrc 待删除的组播源地址
+ * @param delta
+ */
 static int ip_mc_del_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 			 int sfcount, __be32 *psfsrc, int delta)
 {
@@ -1524,7 +1578,7 @@ static int ip_mc_del_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 		pmc->sfcount[sfmode]--;
 	}
 	err = 0;
-	for (i=0; i<sfcount; i++) {
+	for (i=0; i<sfcount; i++) { /* 开始删除组播源地址 */
 		int rv = ip_mc_del1_src(pmc, sfmode, &psfsrc[i]);
 
 		changerec |= rv > 0;
@@ -1539,7 +1593,7 @@ static int ip_mc_del_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 #endif
 
 		/* filter mode change */
-		pmc->sfmode = MCAST_INCLUDE;
+		pmc->sfmode = MCAST_INCLUDE; 
 #ifdef CONFIG_IP_MULTICAST
 		pmc->crcount = in_dev->mr_qrv ? in_dev->mr_qrv :
 			IGMP_Unsolicited_Report_Count;
@@ -1665,6 +1719,14 @@ static int sf_setstate(struct ip_mc_list *pmc)
 
 /*
  * Add multicast source filter list to the interface list
+ * 更新组播源过滤列表和源过滤模式
+ * 到指定网络设备接口和组播组的组记录中
+ * @param in_dev 网络设备ip配置块
+ * @param pmca 网络设备接口加入的组播地址
+ * @param sfmode 组播源过滤模式,EXCLUDE和INCLUDE
+ * @param sfcount 组播源列表中源地址数
+ * @param psfsrc 用于更新的组播源列表
+ * @param delta 是否更新ip_mc_list结构中的sfcount标志,0表示更新
  */
 static int ip_mc_add_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 			 int sfcount, __be32 *psfsrc, int delta)
@@ -1676,6 +1738,7 @@ static int ip_mc_add_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 	if (!in_dev)
 		return -ENODEV;
 	read_lock(&in_dev->mc_list_lock);
+	/**/
 	for (pmc=in_dev->mc_list; pmc; pmc=pmc->next) {
 		if (*pmca == pmc->multiaddr)
 			break;
@@ -1695,12 +1758,12 @@ static int ip_mc_add_src(struct in_device *in_dev, __be32 *pmca, int sfmode,
 	if (!delta)
 		pmc->sfcount[sfmode]++;
 	err = 0;
-	for (i=0; i<sfcount; i++) {
+	for (i=0; i<sfcount; i++) { /* 逐个将源地址更新到该组播源过滤列表 */
 		err = ip_mc_add1_src(pmc, sfmode, &psfsrc[i], delta);
 		if (err)
 			break;
 	}
-	if (err) {
+	if (err) { /* 发生错误的话就回滚更新 */
 		int j;
 
 		pmc->sfcount[sfmode]--;
@@ -1756,11 +1819,12 @@ static void ip_mc_clear_src(struct ip_mc_list *pmc)
 
 /*
  * Join a multicast group
+ * 将套接口加入组播组
  */
 int ip_mc_join_group(struct sock *sk , struct ip_mreqn *imr)
 {
 	int err;
-	__be32 addr = imr->imr_multiaddr.s_addr;
+	__be32 addr = imr->imr_multiaddr.s_addr; /* 组播组地址 */
 	struct ip_mc_socklist *iml = NULL, *i;
 	struct in_device *in_dev;
 	struct inet_sock *inet = inet_sk(sk);
@@ -1783,7 +1847,7 @@ int ip_mc_join_group(struct sock *sk , struct ip_mreqn *imr)
 
 	err = -EADDRINUSE;
 	ifindex = imr->imr_ifindex;
-	for (i = inet->mc_list; i; i = i->next) {
+	for (i = inet->mc_list; i; i = i->next) { /* 如果已经加入该组,则返回错误 */
 		if (i->multi.imr_multiaddr.s_addr == addr &&
 		    i->multi.imr_ifindex == ifindex)
 			goto done;
@@ -1817,6 +1881,9 @@ static void ip_sf_socklist_reclaim(struct rcu_head *rp)
 	kfree(psf);
 }
 
+/* 删除设备IP配置块中相关的组播信息
+ * 
+ */
 static int ip_mc_leave_src(struct sock *sk, struct ip_mc_socklist *iml,
 			   struct in_device *in_dev)
 {
@@ -1851,14 +1918,16 @@ static void ip_mc_socklist_reclaim(struct rcu_head *rp)
 /*
  *	Ask a socket to leave a group.
  */
-
+/* 套接口离开组播组
+ *
+ */
 int ip_mc_leave_group(struct sock *sk, struct ip_mreqn *imr)
 {
 	struct inet_sock *inet = inet_sk(sk);
 	struct ip_mc_socklist *iml, **imlp;
 	struct in_device *in_dev;
 	struct net *net = sock_net(sk);
-	__be32 group = imr->imr_multiaddr.s_addr;
+	__be32 group = imr->imr_multiaddr.s_addr; /* 多播组ip */
 	u32 ifindex;
 	int ret = -EADDRNOTAVAIL;
 
@@ -1893,6 +1962,11 @@ int ip_mc_leave_group(struct sock *sk, struct ip_mreqn *imr)
 	return ret;
 }
 
+/* 用于阻塞或者开通组播源
+ * @param add 标志进行何种选项操作
+ * @param omode 进行组播源过滤的模式
+ * @param sk 操作组播组的套接口
+ */
 int ip_mc_source(int add, int omode, struct sock *sk, struct
 	ip_mreq_source *mreqs, int ifindex)
 {
@@ -1912,8 +1986,8 @@ int ip_mc_source(int add, int omode, struct sock *sk, struct
 
 	rtnl_lock();
 
-	imr.imr_multiaddr.s_addr = mreqs->imr_multiaddr;
-	imr.imr_address.s_addr = mreqs->imr_interface;
+	imr.imr_multiaddr.s_addr = mreqs->imr_multiaddr; /* 组播组地址 */
+	imr.imr_address.s_addr = mreqs->imr_interface; /* 本机源地址 */
 	imr.imr_ifindex = ifindex;
 	in_dev = ip_mc_find_dev(net, &imr);
 
@@ -1939,16 +2013,16 @@ int ip_mc_source(int add, int omode, struct sock *sk, struct
 			err = -EINVAL;
 			goto done;
 		}
-	} else if (pmc->sfmode != omode) {
+	} else if (pmc->sfmode != omode) { /* 过滤模式不一致 */
 		/* allow mode switches for empty-set filters */
 		ip_mc_add_src(in_dev, &mreqs->imr_multiaddr, omode, 0, NULL, 0);
 		ip_mc_del_src(in_dev, &mreqs->imr_multiaddr, pmc->sfmode, 0,
 			NULL, 0);
-		pmc->sfmode = omode;
+		pmc->sfmode = omode; /* 重新设置 */
 	}
 
 	psl = pmc->sflist;
-	if (!add) {
+	if (!add) { /* 需要阻塞某个源 */
 		if (!psl)
 			goto done;	/* err = -EADDRNOTAVAIL */
 		rv = !0;
@@ -2030,6 +2104,10 @@ done:
 	return err;
 }
 
+/* 设置组播源过滤列表
+ * @param sk 设置组播源过滤列表的套接口
+ * @param ifindex 设置组播源过滤的网络设备索引
+ */
 int ip_mc_msfilter(struct sock *sk, struct ip_msfilter *msf, int ifindex)
 {
 	int err = 0;
@@ -2066,6 +2144,7 @@ int ip_mc_msfilter(struct sock *sk, struct ip_msfilter *msf, int ifindex)
 		goto done;
 	}
 
+    /* 首先必须找到该组播组 */
 	for (pmc=inet->mc_list; pmc; pmc=pmc->next) {
 		if (pmc->multi.imr_multiaddr.s_addr == msf->imsf_multiaddr &&
 		    pmc->multi.imr_ifindex == imr.imr_ifindex)
@@ -2075,6 +2154,8 @@ int ip_mc_msfilter(struct sock *sk, struct ip_msfilter *msf, int ifindex)
 		err = -EINVAL;
 		goto done;
 	}
+
+	/* 如果存在组播源地址 */
 	if (msf->imsf_numsrc) {
 		newpsl = sock_kmalloc(sk, IP_SFLSIZE(msf->imsf_numsrc),
 							   GFP_KERNEL);

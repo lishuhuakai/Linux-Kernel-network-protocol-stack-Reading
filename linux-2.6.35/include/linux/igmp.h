@@ -1,4 +1,4 @@
-/*
+﻿/*
  *	Linux NET3:	Internet Group Management Protocol  [IGMP]
  *
  *	Authors:
@@ -28,10 +28,10 @@
  */
 
 struct igmphdr {
-	__u8 type;
+	__u8 type; /* 类型 -- v1 v2 v3 */
 	__u8 code;		/* For newer IGMP */
-	__sum16 csum;
-	__be32 group;
+	__sum16 csum; /* 校验和 */
+	__be32 group; /* 组地址 */
 };
 
 /* V3 group record types [grec_type] */
@@ -45,7 +45,7 @@ struct igmphdr {
 struct igmpv3_grec {
 	__u8	grec_type;
 	__u8	grec_auxwords;
-	__be16	grec_nsrcs;
+	__be16	grec_nsrcs; /* 源地址的个数 */
 	__be32	grec_mca;
 	__be32	grec_src[0];
 };
@@ -151,8 +151,8 @@ extern int sysctl_igmp_max_memberships;
 extern int sysctl_igmp_max_msf;
 
 struct ip_sf_socklist {
-	unsigned int		sl_max;
-	unsigned int		sl_count;
+	unsigned int		sl_max; /* 当前分配的空间能存储源地址数上限 */
+	unsigned int		sl_count; /* 当前存储的源地址数目 */
 	struct rcu_head		rcu;
 	__be32			sl_addr[0];
 };
@@ -165,38 +165,47 @@ struct ip_sf_socklist {
 /* ip_mc_socklist is real list now. Speed is not argument;
    this list never used in fast path code
  */
-
+/* ip_mc_socklist用于描述套接口已经加入的组播组,
+ * 以链表的形式链接在传输控制块(inet_sock)的mc_list上
+ */
 struct ip_mc_socklist {
 	struct ip_mc_socklist	*next;
-	struct ip_mreqn		multi;
+	struct ip_mreqn		multi; /* 对应组播组信息,包括组播地址,网络接口以及本地地址 */
 	unsigned int		sfmode;		/* MCAST_{INCLUDE,EXCLUDE} */
-	struct ip_sf_socklist	*sflist;
+	struct ip_sf_socklist	*sflist; /* 源列表 */
 	struct rcu_head		rcu;
 };
 
 struct ip_sf_list {
 	struct ip_sf_list	*sf_next;
-	__be32			sf_inaddr;
+	__be32			sf_inaddr;  /* 需要过滤的组播源 */
+	/* 不同过滤模式(EXCLUDE和INCLUDE)且指定组播源过滤地址的套接口在该接口加入组播组的数量 */
 	unsigned long		sf_count[2];	/* include/exclude counts */
+	/* 标识当前该组播源地址是否应答指定组或源的查询 */
 	unsigned char		sf_gsresp;	/* include in g & s response? */
+	/* 组播源地址状态标志 */
 	unsigned char		sf_oldin;	/* change state */
+	/* 当前还可重传"源列表改变记录"报告的次数 */
 	unsigned char		sf_crcount;	/* retrans. left to send */
 };
 
+/* ip_mc_list结构描述网络设备加入组播组的配置块,用来维护网络设备组播的状态
+ * 包括组播地址,过滤模式,源地址等.
+ */
 struct ip_mc_list {
-	struct in_device	*interface;
-	__be32			multiaddr;
-	struct ip_sf_list	*sources;
+	struct in_device	*interface; /* 指向所属网络设备的IP配置块 */
+	__be32			multiaddr; /* 网络设备加入的组播地址 */
+	struct ip_sf_list	*sources; /* 源地址过滤列表 */
 	struct ip_sf_list	*tomb;
-	unsigned int		sfmode;
-	unsigned long		sfcount[2];
+	unsigned int		sfmode; /* 所属接口的组播源过滤模式,EXCLUDE或INCLUDE */
+	unsigned long		sfcount[2]; /* EXCLUDE或INCLUDE过滤模式的套接口在本接口加入组的播组数 */
 	struct ip_mc_list	*next;
 	struct timer_list	timer;
 	int			users;
 	atomic_t		refcnt;
 	spinlock_t		lock;
 	char			tm_running;
-	char			reporter;
+	char			reporter; /* 标志当前是否正要开始发送igmp报告 */
 	char			unsolicit_count;
 	char			loaded;
 	unsigned char		gsquery;	/* check source marks? */

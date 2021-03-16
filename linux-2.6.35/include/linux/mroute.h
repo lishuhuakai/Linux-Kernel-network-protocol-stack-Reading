@@ -34,7 +34,7 @@
 #define SIOCGETSGCNT	(SIOCPROTOPRIVATE+1)
 #define SIOCGETRPF	(SIOCPROTOPRIVATE+2)
 
-#define MAXVIFS		32	
+#define MAXVIFS		32
 typedef unsigned long vifbitmap_t;	/* User mode code depends on this lot */
 typedef unsigned short vifi_t;
 #define ALL_VIFS	((vifi_t)(-1))
@@ -42,7 +42,7 @@ typedef unsigned short vifi_t;
 /*
  *	Same idea as select
  */
- 
+
 #define VIFM_SET(n,m)	((m)|=(1<<(n)))
 #define VIFM_CLR(n,m)	((m)&=~(1<<(n)))
 #define VIFM_ISSET(n,m)	((m)&(1<<(n)))
@@ -54,10 +54,10 @@ typedef unsigned short vifi_t;
  *	Passed by mrouted for an MRT_ADD_VIF - again we use the
  *	mrouted 3.6 structures for compatibility
  */
- 
+/* 此结构用于描述虚拟接口的信息 */
 struct vifctl {
-	vifi_t	vifc_vifi;		/* Index of VIF */
-	unsigned char vifc_flags;	/* VIFF_ flags */
+	vifi_t	vifc_vifi;		/* Index of VIF,虚拟接口的索引号,也就是该虚拟接口在vif_table数组中的下标 */
+	unsigned char vifc_flags;	/* VIFF_ flags 虚拟接口类型 */
 	unsigned char vifc_threshold;	/* ttl limit */
 	unsigned int vifc_rate_limit;	/* Rate limiter values (NI) */
 	union {
@@ -76,7 +76,7 @@ struct vifctl {
 /*
  *	Cache manipulation structures for mrouted and PIMd
  */
- 
+
 struct mfcctl {
 	struct in_addr mfcc_origin;		/* Origin of mcast	*/
 	struct in_addr mfcc_mcastgrp;		/* Group in question	*/
@@ -88,10 +88,10 @@ struct mfcctl {
 	int	     mfcc_expire;
 };
 
-/* 
+/*
  *	Group count retrieval for mrouted
  */
- 
+
 struct sioc_sg_req {
 	struct in_addr src;
 	struct in_addr grp;
@@ -116,7 +116,7 @@ struct sioc_vif_req {
  *	This is the format the mroute daemon expects to see IGMP control
  *	data. Magically happens to be like an IP packet as per the original
  */
- 
+
 struct igmpmsg {
 	__u32 unused1,unused2;
 	unsigned char im_msgtype;		/* What is this */
@@ -178,6 +178,7 @@ static inline int ip_mr_init(void)
 }
 #endif
 
+/* 虚拟接口 */
 struct vif_device {
 	struct net_device 	*dev;			/* Device we are using */
 	unsigned long	bytes_in,bytes_out;
@@ -190,13 +191,13 @@ struct vif_device {
 };
 
 #define VIFF_STATIC 0x8000
-
+/* Multicast Forwarding Cache -- 组播转发缓存 */
 struct mfc_cache {
 	struct list_head list;
-	__be32 mfc_mcastgrp;			/* Group the entry belongs to 	*/
-	__be32 mfc_origin;			/* Source of packet 		*/
-	vifi_t mfc_parent;			/* Source interface		*/
-	int mfc_flags;				/* Flags on line		*/
+	__be32 mfc_mcastgrp;			/* Group the entry belongs to -- 组播报文的组播地址	*/
+	__be32 mfc_origin;			/* Source of packet -- 组播发送方的ip地址 		*/
+	vifi_t mfc_parent;			/* Source interface	-- 虚拟接口在vif_table数组中的索引	*/
+	int mfc_flags;				/* Flags on line -- 组播转发缓存标志		*/
 
 	union {
 		struct {
@@ -204,8 +205,8 @@ struct mfc_cache {
 			struct sk_buff_head unresolved;	/* Unresolved buffers		*/
 		} unres;
 		struct {
-			unsigned long last_assert;
-			int minvif;
+			unsigned long last_assert; /* 记录最近一次发送警告消息的时间,用来控制发送警告消息的频率 */
+			int minvif; /* 用来限定目前可使用的虚拟接口的范围 */
 			int maxvif;
 			unsigned long bytes;
 			unsigned long pkt;
@@ -224,7 +225,7 @@ struct mfc_cache {
 #define MFC_HASH(a,b)	(((((__force u32)(__be32)a)>>24)^(((__force u32)(__be32)b)>>26))&(MFC_LINES-1))
 #else
 #define MFC_HASH(a,b)	((((__force u32)(__be32)a)^(((__force u32)(__be32)b)>>2))&(MFC_LINES-1))
-#endif		
+#endif
 
 #endif
 

@@ -68,7 +68,7 @@
 #if defined(CONFIG_IP_PIMSM_V1) || defined(CONFIG_IP_PIMSM_V2)
 #define CONFIG_IP_PIMSM	1
 #endif
-
+/* 组播路由表? */
 struct mr_table {
 	struct list_head	list;
 #ifdef CONFIG_NET_NS
@@ -77,7 +77,7 @@ struct mr_table {
 	u32			id;
 	struct sock		*mroute_sk;
 	struct timer_list	ipmr_expire_timer;
-	struct list_head	mfc_unres_queue;
+	struct list_head	mfc_unres_queue; /* 临时组播转发缓存项 */
 	struct list_head	mfc_cache_array[MFC_LINES];
 	struct vif_device	vif_table[MAXVIFS];
 	int			maxvif;
@@ -668,13 +668,16 @@ static void ipmr_update_thresholds(struct mr_table *mrt, struct mfc_cache *cache
 		    ttls[vifi] && ttls[vifi] < 255) {
 			cache->mfc_un.res.ttls[vifi] = ttls[vifi];
 			if (cache->mfc_un.res.minvif > vifi)
-				cache->mfc_un.res.minvif = vifi;
+				cache->mfc_un.res.minvif = vifi; /* 记录最小的 */
 			if (cache->mfc_un.res.maxvif <= vifi)
-				cache->mfc_un.res.maxvif = vifi + 1;
+				cache->mfc_un.res.maxvif = vifi + 1; /* 记录最大的,不包含 */
 		}
 	}
 }
 
+/* 添加虚拟口
+ * @param vifc 虚拟接口描述信息
+ */
 static int vif_add(struct net *net, struct mr_table *mrt,
 		   struct vifctl *vifc, int mrtsock)
 {
@@ -708,7 +711,7 @@ static int vif_add(struct net *net, struct mr_table *mrt,
 		}
 		break;
 #endif
-	case VIFF_TUNNEL:
+	case VIFF_TUNNEL: /* ip-ip隧道 */
 		dev = ipmr_new_tunnel(net, vifc);
 		if (!dev)
 			return -ENOBUFS;
@@ -753,7 +756,7 @@ static int vif_add(struct net *net, struct mr_table *mrt,
 	/*
 	 *	Fill in the VIF structures
 	 */
-	v->rate_limit = vifc->vifc_rate_limit;
+	v->rate_limit = vifc->vifc_rate_limit; /* 拷贝配置中的信息 */
 	v->local = vifc->vifc_lcl_addr.s_addr;
 	v->remote = vifc->vifc_rmt_addr.s_addr;
 	v->flags = vifc->vifc_flags;
@@ -781,6 +784,10 @@ static int vif_add(struct net *net, struct mr_table *mrt,
 	return 0;
 }
 
+/* 路由缓存项的查找
+ * @param origin 发送方的ip地址
+ * @param mcastgrp 组播地址
+ */
 static struct mfc_cache *ipmr_cache_find(struct mr_table *mrt,
 					 __be32 origin,
 					 __be32 mcastgrp)
@@ -946,7 +953,13 @@ static int ipmr_cache_report(struct mr_table *mrt,
 /*
  *	Queue a packet for resolution. It gets locked cache entry!
  */
-
+/* 1.创建临时组播转发缓存项
+ * 2.向组播路由守护进程发送IGMPMSG_NOCACHE类型报告
+ * 3.启动定时器
+ * 4.缓存该组播报文到对应的临时组播转发缓存项中
+ * @param vifi 输入该转发组播报文的网络设备索引号
+ * @param skb 查找不到组播转发缓存的组播报文
+ */
 static int
 ipmr_cache_unresolved(struct mr_table *mrt, vifi_t vifi, struct sk_buff *skb)
 {
@@ -956,6 +969,7 @@ ipmr_cache_unresolved(struct mr_table *mrt, vifi_t vifi, struct sk_buff *skb)
 	const struct iphdr *iph = ip_hdr(skb);
 
 	spin_lock_bh(&mfc_unres_lock);
+    /* 首先查找缓存项 */
 	list_for_each_entry(c, &mrt->mfc_unres_queue, list) {
 		if (c->mfc_mcastgrp == iph->daddr &&
 		    c->mfc_origin == iph->saddr) {
@@ -970,7 +984,7 @@ ipmr_cache_unresolved(struct mr_table *mrt, vifi_t vifi, struct sk_buff *skb)
 		 */
 
 		if (atomic_read(&mrt->cache_resolve_queue_len) >= 10 ||
-		    (c = ipmr_cache_alloc_unres()) == NULL) {
+		    (c = ipmr_cache_alloc_unres()) == NULL) { /* 创建一个cache */
 			spin_unlock_bh(&mfc_unres_lock);
 
 			kfree_skb(skb);
@@ -1046,6 +1060,9 @@ static int ipmr_mfc_delete(struct mr_table *mrt, struct mfcctl *mfc)
 	return -ENOENT;
 }
 
+/* 组播转发缓存的创建
+ * @param mrtsock 表明进行配置的是不是组播路由协议守护进程
+ */
 static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
 			struct mfcctl *mfc, int mrtsock)
 {
@@ -1066,7 +1083,7 @@ static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
 		}
 	}
 
-	if (found) {
+	if (found) { /* 找到了 */
 		write_lock_bh(&mrt_lock);
 		c->mfc_parent = mfc->mfcc_parent;
 		ipmr_update_thresholds(mrt, c, mfc->mfcc_ttls);
@@ -1078,7 +1095,7 @@ static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
 
 	if (!ipv4_is_multicast(mfc->mfcc_mcastgrp.s_addr))
 		return -EINVAL;
-
+    /* 没有找到就创建一个缓存项 */
 	c = ipmr_cache_alloc();
 	if (c == NULL)
 		return -ENOMEM;
@@ -2415,6 +2432,7 @@ static struct pernet_operations ipmr_net_ops = {
 	.exit = ipmr_net_exit,
 };
 
+/* 组播模块的初始化 */
 int __init ip_mr_init(void)
 {
 	int err;
@@ -2429,7 +2447,7 @@ int __init ip_mr_init(void)
 	err = register_pernet_subsys(&ipmr_net_ops);
 	if (err)
 		goto reg_pernet_fail;
-
+    /* 将ip_mr_notifier注册到网络设备通知链中,当网络设备状态等发生变化时可以及时进行响应 */
 	err = register_netdevice_notifier(&ip_mr_notifier);
 	if (err)
 		goto reg_notif_fail;

@@ -236,6 +236,8 @@ static int ip_finish_output(struct sk_buff *skb)
 		return ip_finish_output2(skb);
 }
 
+/* 组播报文的发送
+ */
 int ip_mc_output(struct sk_buff *skb)
 {
 	struct sock *sk = skb->sk;
@@ -285,7 +287,7 @@ int ip_mc_output(struct sk_buff *skb)
 		}
 	}
 
-	if (rt->rt_flags&RTCF_BROADCAST) {
+	if (rt->rt_flags&RTCF_BROADCAST) { /* 输出路由类型为广播类型 */
 		struct sk_buff *newskb = skb_clone(skb, GFP_ATOMIC);
 		if (newskb)
 			NF_HOOK(NFPROTO_IPV4, NF_INET_POST_ROUTING, newskb,

@@ -176,10 +176,14 @@ struct ip_mc_socklist {
 	struct rcu_head		rcu;
 };
 
+/* 过滤列表 */
 struct ip_sf_list {
 	struct ip_sf_list	*sf_next;
-	__be32			sf_inaddr;  /* 需要过滤的组播源 */
+	__be32			sf_inaddr;  /* 需要过滤的组播源地址 */
 	/* 不同过滤模式(EXCLUDE和INCLUDE)且指定组播源过滤地址的套接口在该接口加入组播组的数量 */
+    /* 说白一点,sf_count[exclude] =   2,表示有两个套接口过滤这个源地址
+     * sf_count[include] = 1,表示有一个套接口要接收来自这个源的报文
+     */
 	unsigned long		sf_count[2];	/* include/exclude counts */
 	/* 标识当前该组播源地址是否应答指定组或源的查询 */
 	unsigned char		sf_gsresp;	/* include in g & s response? */

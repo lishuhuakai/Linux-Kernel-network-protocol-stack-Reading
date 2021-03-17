@@ -4152,7 +4152,10 @@ EXPORT_SYMBOL(dev_set_promiscuity);
  *	when releasing a resource needing all multicasts.
  *	Return 0 if successful or a negative errno code on error.
  */
-
+/* 更新网络设备的allmulti标志,当值大于0时,在该设备上启用接收组播报文功能
+ * @param dev 待操作的设备
+ * @param inc
+ */
 int dev_set_allmulti(struct net_device *dev, int inc)
 {
 	unsigned short old_flags = dev->flags;

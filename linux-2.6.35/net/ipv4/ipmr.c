@@ -301,6 +301,7 @@ static void __net_exit ipmr_rules_exit(struct net *net)
 }
 #endif
 
+/* 构建新的mr_table */
 static struct mr_table *ipmr_new_table(struct net *net, u32 id)
 {
 	struct mr_table *mrt;
@@ -318,7 +319,7 @@ static struct mr_table *ipmr_new_table(struct net *net, u32 id)
 
 	/* Forwarding cache */
 	for (i = 0; i < MFC_LINES; i++)
-		INIT_LIST_HEAD(&mrt->mfc_cache_array[i]);
+		INIT_LIST_HEAD(&mrt->mfc_cache_array[i]); /* 缓存项 */
 
 	INIT_LIST_HEAD(&mrt->mfc_unres_queue);
 
@@ -677,12 +678,13 @@ static void ipmr_update_thresholds(struct mr_table *mrt, struct mfc_cache *cache
 
 /* 添加虚拟口
  * @param vifc 虚拟接口描述信息
+ * @param mrtsock 标识当前配置虚拟接口的是否是组播路由守护进程
  */
 static int vif_add(struct net *net, struct mr_table *mrt,
 		   struct vifctl *vifc, int mrtsock)
 {
 	int vifi = vifc->vifc_vifi;
-	struct vif_device *v = &mrt->vif_table[vifi];
+	struct vif_device *v = &mrt->vif_table[vifi]; /* 获得虚拟接口 */
 	struct net_device *dev;
 	struct in_device *in_dev;
 	int err;
@@ -693,7 +695,7 @@ static int vif_add(struct net *net, struct mr_table *mrt,
 
 	switch (vifc->vifc_flags) {
 #ifdef CONFIG_IP_PIMSM
-	case VIFF_REGISTER:
+	case VIFF_REGISTER: /* 在支持PIM-SM协议时,创建用于接收PIM协议报文的网络设备 */
 		/*
 		 * Special Purpose VIF in PIM
 		 * All the packets will be sent to the daemon
@@ -1207,7 +1209,8 @@ static void mrtsock_destruct(struct sock *sk)
  *	that's how BSD mrouted happens to think. Maybe one day with a proper
  *	MOSPF/PIM router set up we can clean this up.
  */
-
+/* 这里的接口是linux内核留给mrouted的
+ */
 int ip_mroute_setsockopt(struct sock *sk, int optname, char __user *optval, unsigned int optlen)
 {
 	int ret;
@@ -1226,7 +1229,7 @@ int ip_mroute_setsockopt(struct sock *sk, int optname, char __user *optval, unsi
 	}
 
 	switch (optname) {
-	case MRT_INIT:
+	case MRT_INIT: /* 启用组播选路 */
 		if (sk->sk_type != SOCK_RAW ||
 		    inet_sk(sk)->inet_num != IPPROTO_IGMP)
 			return -EOPNOTSUPP;
@@ -1249,7 +1252,7 @@ int ip_mroute_setsockopt(struct sock *sk, int optname, char __user *optval, unsi
 		}
 		rtnl_unlock();
 		return ret;
-	case MRT_DONE:
+	case MRT_DONE: /* 停止组播选路 */
 		if (sk != mrt->mroute_sk)
 			return -EACCES;
 		return ip_ra_control(sk, 0, NULL);
@@ -1274,7 +1277,7 @@ int ip_mroute_setsockopt(struct sock *sk, int optname, char __user *optval, unsi
 		 *	Manipulate the forwarding caches. These live
 		 *	in a sort of kernel/user symbiosis.
 		 */
-	case MRT_ADD_MFC:
+	case MRT_ADD_MFC: /* 添加或者删除转发缓存 */
 	case MRT_DEL_MFC:
 		if (optlen != sizeof(mfc))
 			return -EINVAL;
@@ -1513,6 +1516,7 @@ static void ip_encap(struct sk_buff *skb, __be32 saddr, __be32 daddr)
 	nf_reset(skb);
 }
 
+/* 对报文进行转发 */
 static inline int ipmr_forward_finish(struct sk_buff *skb)
 {
 	struct ip_options * opt	= &(IPCB(skb)->opt);
@@ -1528,7 +1532,11 @@ static inline int ipmr_forward_finish(struct sk_buff *skb)
 /*
  *	Processing handlers for ipmr_forward
  */
-
+/* 转发组播报文
+ * @param skb 待转发的组播报文
+ * @param cache 允许该组播报文进行转发的转发缓存
+ * @param vifi 组播报文输出设备对应的虚拟接口
+ */
 static void ipmr_queue_xmit(struct net *net, struct mr_table *mrt,
 			    struct sk_buff *skb, struct mfc_cache *c, int vifi)
 {
@@ -1572,7 +1580,7 @@ static void ipmr_queue_xmit(struct net *net, struct mr_table *mrt,
 			goto out_free;
 	}
 
-	dev = rt->u.dst.dev;
+	dev = rt->u.dst.dev; /* 获取实际的物理设备--可以送上去,也可以转发 */
 
 	if (skb->len+encap > dst_mtu(&rt->u.dst) && (ntohs(iph->frag_off) & IP_DF)) {
 		/* Do not fragment multicasts. Alas, IPv4 does not
@@ -1641,7 +1649,10 @@ static int ipmr_find_vif(struct mr_table *mrt, struct net_device *dev)
 }
 
 /* "local" means that we should preserve one skb (for local delivery) */
-
+/* 处理组播报文
+ * @param skb 待处理的报文
+ * @param cache 组播缓存项
+ */
 static int ip_mr_forward(struct net *net, struct mr_table *mrt,
 			 struct sk_buff *skb, struct mfc_cache *cache,
 			 int local)
@@ -1731,7 +1742,7 @@ dont_forward:
 /*
  *	Multicast packets for forwarding arrive here
  */
-
+/* 处理接收到的组播报文 */
 int ip_mr_input(struct sk_buff *skb)
 {
 	struct mfc_cache *cache;
@@ -1743,7 +1754,7 @@ int ip_mr_input(struct sk_buff *skb)
 	/* Packet is looped back after forward, it should not be
 	   forwarded second time, but still can be delivered locally.
 	 */
-	if (IPCB(skb)->flags&IPSKB_FORWARDED)
+	if (IPCB(skb)->flags&IPSKB_FORWARDED) /* 报文已经转发过了 */
 		goto dont_forward;
 
 	err = ipmr_fib_lookup(net, &skb_rtable(skb)->fl, &mrt);
@@ -1780,7 +1791,7 @@ int ip_mr_input(struct sk_buff *skb)
 	/*
 	 *	No usable cache entry
 	 */
-	if (cache == NULL) {
+	if (cache == NULL) { /* 没有找到缓存项 */
 		int vif;
 
 		if (local) {

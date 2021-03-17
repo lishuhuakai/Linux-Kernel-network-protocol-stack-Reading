@@ -608,7 +608,7 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 			goto e_inval;
 		inet->mc_loop = !!val;
 		break;
-	case IP_MULTICAST_IF:
+	case IP_MULTICAST_IF: /* 发送组播设置默认的网络接口 */
 	{
 		struct ip_mreqn mreq;
 		struct net_device *dev = NULL;
@@ -641,6 +641,7 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 				err = 0;
 				break;
 			}
+            /* 找到对应的发送设备 */
 			dev = ip_dev_find(sock_net(sk), mreq.imr_address.s_addr);
 			if (dev)
 				mreq.imr_ifindex = dev->ifindex;
@@ -691,7 +692,7 @@ static int do_ip_setsockopt(struct sock *sk, int level,
 			err = ip_mc_leave_group(sk, &mreq);
 		break;
 	}
-	case IP_MSFILTER:
+	case IP_MSFILTER: /* igmpv3的源过滤特性 */
 	{
 		struct ip_msfilter *msf;
 

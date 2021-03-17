@@ -78,9 +78,9 @@ struct vifctl {
  */
 
 struct mfcctl {
-	struct in_addr mfcc_origin;		/* Origin of mcast	*/
-	struct in_addr mfcc_mcastgrp;		/* Group in question	*/
-	vifi_t	mfcc_parent;			/* Where it arrived	*/
+	struct in_addr mfcc_origin;		/* Origin of mcast	-- 发送方的ip地址 */
+	struct in_addr mfcc_mcastgrp;		/* Group in question -- 组播报文的组播地址	*/
+	vifi_t	mfcc_parent;			/* Where it arrived --  虚拟接口在vif_table中的索引	*/
 	unsigned char mfcc_ttls[MAXVIFS];	/* Where it is going	*/
 	unsigned int mfcc_pkt_cnt;		/* pkt count for src-grp */
 	unsigned int mfcc_byte_cnt;
@@ -180,7 +180,7 @@ static inline int ip_mr_init(void)
 
 /* 虚拟接口 */
 struct vif_device {
-	struct net_device 	*dev;			/* Device we are using */
+	struct net_device 	*dev;			/* Device we are using -- 该虚拟接口对应的物理网络设备 */
 	unsigned long	bytes_in,bytes_out;
 	unsigned long	pkt_in,pkt_out;		/* Statistics 			*/
 	unsigned long	rate_limit;		/* Traffic shaping (NI) 	*/
@@ -194,7 +194,7 @@ struct vif_device {
 /* Multicast Forwarding Cache -- 组播转发缓存 */
 struct mfc_cache {
 	struct list_head list;
-	__be32 mfc_mcastgrp;			/* Group the entry belongs to -- 组播报文的组播地址	*/
+	__be32 mfc_mcastgrp;	    /* Group the entry belongs to -- 组播报文的组播地址	*/
 	__be32 mfc_origin;			/* Source of packet -- 组播发送方的ip地址 		*/
 	vifi_t mfc_parent;			/* Source interface	-- 虚拟接口在vif_table数组中的索引	*/
 	int mfc_flags;				/* Flags on line -- 组播转发缓存标志		*/

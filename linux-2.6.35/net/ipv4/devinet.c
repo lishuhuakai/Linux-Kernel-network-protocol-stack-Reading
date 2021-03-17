@@ -403,6 +403,9 @@ static int inet_set_ifa(struct net_device *dev, struct in_ifaddr *ifa)
 	return inet_insert_ifa(ifa);
 }
 
+/* 使用ifindex来查找in_device
+ * @param ifindex 接口的索引值
+ */
 struct in_device *inetdev_by_index(struct net *net, int ifindex)
 {
 	struct net_device *dev;
@@ -411,7 +414,7 @@ struct in_device *inetdev_by_index(struct net *net, int ifindex)
 	rcu_read_lock();
 	dev = dev_get_by_index_rcu(net, ifindex);
 	if (dev)
-		in_dev = in_dev_get(dev);
+		in_dev = in_dev_get(dev); /* 一个设备对应一个in_dev */
 	rcu_read_unlock();
 	return in_dev;
 }

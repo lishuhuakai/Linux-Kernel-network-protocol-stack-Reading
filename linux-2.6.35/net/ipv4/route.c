@@ -903,6 +903,7 @@ static void rt_cache_invalidate(struct net *net)
 /*
  * delay < 0  : invalidate cache (fast : entries will be deleted later)
  * delay >= 0 : invalidate & flush cache (can be long)
+ * 刷新路由
  */
 void rt_cache_flush(struct net *net, int delay)
 {
@@ -2286,6 +2287,9 @@ martian_source:
 	goto e_inval;
 }
 
+/* 转发报文,包括多播
+ *
+ */
 int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 			   u8 tos, struct net_device *dev, bool noref)
 {
@@ -2384,7 +2388,7 @@ static int __mkroute_output(struct rtable **result,
 	if (fl->fl4_dst == htonl(0xFFFFFFFF))
 		res->type = RTN_BROADCAST;
 	else if (ipv4_is_multicast(fl->fl4_dst))
-		res->type = RTN_MULTICAST;
+		res->type = RTN_MULTICAST; /* 多播 */
 	else if (ipv4_is_lbcast(fl->fl4_dst) || ipv4_is_zeronet(fl->fl4_dst))
 		return -EINVAL;
 

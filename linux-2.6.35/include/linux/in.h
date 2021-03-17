@@ -138,10 +138,10 @@ struct ip_mreq_source {
 };
 
 struct ip_msfilter {
-	__be32		imsf_multiaddr;
-	__be32		imsf_interface;
-	__u32		imsf_fmode;
-	__u32		imsf_numsrc;
+	__be32		imsf_multiaddr; /* 多播组地址 */
+	__be32		imsf_interface; /* 源过滤网络设备接口 */
+	__u32		imsf_fmode; /* 过滤模式 */
+	__u32		imsf_numsrc; /* 过滤地址个数 */
 	__be32		imsf_slist[1];
 };
 
@@ -245,7 +245,7 @@ struct sockaddr_in {
 
 
 /* <asm/byteorder.h> contains the htonl type stuff.. */
-#include <asm/byteorder.h> 
+#include <asm/byteorder.h>
 
 #ifdef __KERNEL__
 

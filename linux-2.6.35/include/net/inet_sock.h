@@ -138,9 +138,9 @@ struct inet_sock {
 				mc_loop:1,
 				transparent:1,
 				mc_all:1;
-	int			mc_index;
-	__be32			mc_addr;
-	struct ip_mc_socklist	*mc_list;
+	int			mc_index; /* 组播通过此index对应的设备来发送 */
+	__be32			mc_addr; /* 组播源地址 */
+	struct ip_mc_socklist	*mc_list; /* 接口加入的组播组 */
 	struct {
 		unsigned int		flags;
 		unsigned int		fragsize;

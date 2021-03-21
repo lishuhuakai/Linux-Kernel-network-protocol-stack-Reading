@@ -1041,17 +1041,21 @@ struct sched_domain;
 
 struct sched_class {
 	const struct sched_class *next;
-
+    /* 将进程加入到运行队列中，即将调度实体（进程）放入红黑树中，并对 nr_running 变量加1 */
 	void (*enqueue_task) (struct rq *rq, struct task_struct *p, int flags);
+    /* 从运行队列中删除进程，并对 nr_running 变量中减1 */
 	void (*dequeue_task) (struct rq *rq, struct task_struct *p, int flags);
+     /* 放弃CPU，在 compat_yield sysctl 关闭的情况下，该函数实际上执行先出队后入队；在这种情况下，它将调度实体放在红黑树的最右端 */
 	void (*yield_task) (struct rq *rq);
-
+    /* 检查当前进程是否可被新进程抢占 */
 	void (*check_preempt_curr) (struct rq *rq, struct task_struct *p, int flags);
-
+    /* 选择下一个应该要运行的进程运行 */
 	struct task_struct * (*pick_next_task) (struct rq *rq);
+    /* 将进程放回运行队列 */
 	void (*put_prev_task) (struct rq *rq, struct task_struct *p);
 
 #ifdef CONFIG_SMP
+    /* 为进程选择一个合适的CPU */
 	int  (*select_task_rq)(struct rq *rq, struct task_struct *p,
 			       int sd_flag, int flags);
 
@@ -1066,7 +1070,7 @@ struct sched_class {
 	void (*rq_online)(struct rq *rq);
 	void (*rq_offline)(struct rq *rq);
 #endif
-
+    /* 当进程改变它的调度类或进程组时被调用 */
 	void (*set_curr_task) (struct rq *rq);
 	void (*task_tick) (struct rq *rq, struct task_struct *p, int queued);
 	void (*task_fork) (struct task_struct *p);
@@ -1126,28 +1130,43 @@ struct sched_statistics {
 };
 #endif
 
+/* 调度实体 */
 struct sched_entity {
+    /* 权重,在数组prio_to_weight[]包含优先级转权重的数值 */
 	struct load_weight	load;		/* for load-balancing */
-	struct rb_node		run_node;
-	struct list_head	group_node;
-	unsigned int		on_rq;
+	struct rb_node		run_node; /* 实体在红黑树对应的节点信息 */
+	struct list_head	group_node; /* 实体所在的进程组 */
+	unsigned int		on_rq; /* 实体是否处于红黑树运行队列中 */
 
-	u64			exec_start;
-	u64			sum_exec_runtime;
+	u64			exec_start; /* 开始运行的时间 */
+	u64			sum_exec_runtime; /* 总运行时间 */
+    /* 虚拟运行时间，在时间中断或者任务状态发生改变时会更新
+     * 其会不停增长，增长速度与load权重成反比，load越高，增长速度越慢，就越可能处于红黑树最左边被调度
+     * 每次时钟中断都会修改其值
+     * 具体见calc_delta_fair()函数
+     */
 	u64			vruntime;
+    /* 进程在切换cpu时的sum_exec_runtime */
 	u64			prev_sum_exec_runtime;
-
+    /* 此调度实体中进程转移到其他cpu组的数量 */
 	u64			nr_migrations;
 
 #ifdef CONFIG_SCHEDSTATS
+    /* 用于统计一些信息 */
 	struct sched_statistics statistics;
 #endif
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+    /* 父亲调度实体指针，如果是进程则指向其运行队列的调度实体，如果是进程组则指向其上一个进程组的调度实体
+     * 在 set_task_rq 函数中设置
+     */
 	struct sched_entity	*parent;
-	/* rq on which this entity is (to be) queued: */
+	/* rq on which this entity is (to be) queued:
+     * 实体所属的红黑树运行队列
+	 */
 	struct cfs_rq		*cfs_rq;
 	/* rq "owned" by this entity/group: */
+    /* 实体的红黑树运行队列，如果为NULL表明其是一个进程，若非NULL表明其是调度组 */
 	struct cfs_rq		*my_q;
 #endif
 };
@@ -1170,7 +1189,15 @@ struct sched_rt_entity {
 
 struct rcu_node;
 
+/* 进程控制块 */
 struct task_struct {
+    /* 进程状态
+     * TASK_INTERRUPTIBLE  处于睡眠状态,可以被信号打扰
+     * TASK_UNINTERRUPTIBLE 处于深度睡眠状态,不被信号打扰
+     * TASK_RUNNING 表示进程可以被调度执行成为当前进程
+     * TASK_ZOMBIE 进程已经去世(exit),等待收尸
+     * TASK_STOPPED 主要用于调试目的
+     */
 	volatile long state;	/* -1 unrunnable, 0 runnable, >0 stopped */
 	void *stack;
 	atomic_t usage;
@@ -1186,8 +1213,10 @@ struct task_struct {
 #endif
 
 	int prio, static_prio, normal_prio;
-	unsigned int rt_priority;
+	unsigned int rt_priority; /* 优先级别 */
+    /* 调度类,调度处理函数类 */
 	const struct sched_class *sched_class;
+    /* 调度实体(红黑树的一个节点) */
 	struct sched_entity se;
 	struct sched_rt_entity rt;
 
@@ -1209,7 +1238,7 @@ struct task_struct {
 	unsigned int btrace_seq;
 #endif
 
-	unsigned int policy;
+	unsigned int policy; /* 调度策略 */
 	cpumask_t cpus_allowed;
 
 #ifdef CONFIG_TREE_PREEMPT_RCU
@@ -1253,9 +1282,9 @@ struct task_struct {
 	unsigned long stack_canary;
 #endif
 
-	/* 
+	/*
 	 * pointers to (original) parent process, youngest child, younger sibling,
-	 * older sibling, respectively.  (p->father can be replaced with 
+	 * older sibling, respectively.  (p->father can be replaced with
 	 * p->real_parent->pid)
 	 */
 	struct task_struct *real_parent; /* real parent process */
@@ -2018,7 +2047,7 @@ static inline int dequeue_signal_lock(struct task_struct *tsk, sigset_t *mask, s
 	spin_unlock_irqrestore(&tsk->sighand->siglock, flags);
 
 	return ret;
-}	
+}
 
 extern void block_all_signals(int (*notifier)(void *priv), void *priv,
 			      sigset_t *mask);

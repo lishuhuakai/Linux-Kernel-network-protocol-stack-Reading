@@ -780,6 +780,7 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 
 	update_stats_enqueue(cfs_rq, se);
 	check_spread(cfs_rq, se);
+     /* 将se插入到运行队列cfs_rq的红黑树中 */
 	if (se != cfs_rq->curr)
 		__enqueue_entity(cfs_rq, se);
 }
@@ -1046,7 +1047,8 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
 	struct cfs_rq *cfs_rq;
 	struct sched_entity *se = &p->se;
-
+    /* 这里是一个迭代，我们知道，进程有可能是处于一个进程组中的，
+     * 所以当这个处于进程组中的进程加入到该进程组的队列中时，要对此队列向上迭代 */
 	for_each_sched_entity(se) {
 		if (se->on_rq)
 			break;
@@ -1054,7 +1056,7 @@ enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 		enqueue_entity(cfs_rq, se, flags);
 		flags = ENQUEUE_WAKEUP;
 	}
-
+    /* 设置下次调度中断发生时间 */
 	hrtick_update(rq);
 }
 
@@ -3534,13 +3536,13 @@ static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
  */
 static void task_fork_fair(struct task_struct *p)
 {
-	struct cfs_rq *cfs_rq = task_cfs_rq(current);
+	struct cfs_rq *cfs_rq = task_cfs_rq(current); /* 进程p的调度实体se */
 	struct sched_entity *se = &p->se, *curr = cfs_rq->curr;
-	int this_cpu = smp_processor_id();
-	struct rq *rq = this_rq();
+	int this_cpu = smp_processor_id(); /* 获取当前的cpu */
+	struct rq *rq = this_rq(); /* 获取cpu的调度队列 */
 	unsigned long flags;
 
-	raw_spin_lock_irqsave(&rq->lock, flags);
+	raw_spin_lock_irqsave(&rq->lock, flags);  /* 上锁并保存中断记录 */
 
 	if (unlikely(task_cpu(p) != this_cpu))
 		__set_task_cpu(p, this_cpu);
@@ -3559,9 +3561,9 @@ static void task_fork_fair(struct task_struct *p)
 		swap(curr->vruntime, se->vruntime);
 		resched_task(rq->curr);
 	}
-
+    /* 保证了进程p的vruntime是运行队列中最小的(这里占时不确定是不是这个用法，不过确实是最小的了) */
 	se->vruntime -= cfs_rq->min_vruntime;
-
+    /* 解锁，还原中断记录 */
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
 

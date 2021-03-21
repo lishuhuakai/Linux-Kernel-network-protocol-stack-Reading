@@ -243,18 +243,24 @@ struct cfs_rq;
 static LIST_HEAD(task_groups);
 
 /* task group related information */
+/* 进程组,用于实现组调度 */
 struct task_group {
-	struct cgroup_subsys_state css;
+	struct cgroup_subsys_state css; /* 用于进程找到器其所属进程组结构 */
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	/* schedulable entities of this group on each cpu */
+    /* CFS调度器的进程组变量，在 alloc_fair_sched_group() 中进程初始化及分配内存 */
+    /* 该进程组在每个CPU上都有对应的一个调度实体，因为有可能此进程组同时在两个CPU上运行(它的A进程在CPU0上运行，B进程在CPU1上运行) */
 	struct sched_entity **se;
 	/* runqueue "owned" by this group on each cpu */
+    /* 进程组在每个CPU上都有一个CFS运行队列(为什么需要，稍后解释) */
 	struct cfs_rq **cfs_rq;
+     /* 用于保存优先级默认为NICE 0的优先级 */
 	unsigned long shares;
 #endif
 
 #ifdef CONFIG_RT_GROUP_SCHED
+    /* 实时进程调度器的进程组变量,同CFS */
 	struct sched_rt_entity **rt_se;
 	struct rt_rq **rt_rq;
 
@@ -262,10 +268,13 @@ struct task_group {
 #endif
 
 	struct rcu_head rcu;
+    /* 用于建立进程链表(属于此调度组的进程链表) */
 	struct list_head list;
-
+    /* 指向其上层的进程组，每一层的进程组都是它上一层进程组的运行队列的一个调度实体，在同一层中，进程组和进程被同等对待 */
 	struct task_group *parent;
+    /* 进程组的兄弟节点链表 */
 	struct list_head siblings;
+    /* 进程组的儿子节点链表 */
 	struct list_head children;
 };
 
@@ -309,14 +318,24 @@ struct task_group init_task_group;
 #endif	/* CONFIG_CGROUP_SCHED */
 
 /* CFS-related fields in a runqueue */
+/* CFS调度的运行队列，每个CPU的rq会包含一个cfs_rq，
+ * 而每个组调度的sched_entity也会有自己的一个cfs_rq队列
+ */
 struct cfs_rq {
+    /* cfs运行队列中所有进程的总负载 */
 	struct load_weight load;
-	unsigned long nr_running;
+	unsigned long nr_running; /* cfs_rq中调度实体数量 */
 
 	u64 exec_clock;
+    /* 当前CFS队列上最小运行时间，单调递增
+     * 两种情况下更新该值:
+     * 1、更新当前运行任务的累计运行时间时
+     * 2、当任务从队列删除去，如任务睡眠或退出，这时候会查看剩下的任务的vruntime是否大于min_vruntime，如果是则更新该值。
+     */
 	u64 min_vruntime;
-
+    /* 该红黑树的root */
 	struct rb_root tasks_timeline;
+    /* 下一个调度结点(红黑树最左边结点，最左边结点就是下个调度实体) */
 	struct rb_node *rb_leftmost;
 
 	struct list_head tasks;
@@ -326,11 +345,18 @@ struct cfs_rq {
 	 * 'curr' points to currently running entity on this cfs_rq.
 	 * It is set to NULL otherwise (i.e when none are currently running).
 	 */
+	/*
+     * curr: 当前正在运行的sched_entity（对于组虽然它不会在cpu上运行，但是当它的下层有一个task在cpu上运行，那么它所在的cfs_rq就把它当做是该cfs_rq上当前正在运行的sched_entity）
+     * next: 表示有些进程急需运行，即使不遵从CFS调度也必须运行它，调度时会检查是否next需要调度，有就调度next
+     *
+     * skip: 略过进程(不会选择skip指定的进程调度)
+     */
 	struct sched_entity *curr, *next, *last;
 
 	unsigned int nr_spread_over;
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+    /* 属于的cpu */
 	struct rq *rq;	/* cpu runqueue to which this cfs_rq is attached */
 
 	/*
@@ -444,6 +470,10 @@ static struct root_domain def_root_domain;
  * Locking rule: those places that want to lock multiple runqueues
  * (such as the load balancing or the thread migration code), lock
  * acquire operations must be ordered by ascending &runqueue.
+ */
+/* 运行队列
+ * 每一个cpu都有自己的struct rq结构,用于描述在此cpu上所运行的所有进程
+ * 包括一个实时进程队列和一个根CFS运行队列
  */
 struct rq {
 	/* runqueue lock: */
@@ -2451,22 +2481,28 @@ static void __sched_fork(struct task_struct *p)
  */
 void sched_fork(struct task_struct *p, int clone_flags)
 {
-	int cpu = get_cpu();
+	int cpu = get_cpu(); /* 获取当前的cpu,禁止抢占 */
 
-	__sched_fork(p);
+	__sched_fork(p); /* 初始化跟调度相关的值，比如调度实体，运行时间等 */
 	/*
 	 * We mark the process as running here. This guarantees that
 	 * nobody will actually run it, and a signal or other external
 	 * event cannot wake it up and insert it on the runqueue either.
 	 */
+	/*
+     * 标记为运行状态，表明此进程正在运行或准备好运行，实际上没有真正在CPU上运行，
+     * 这里只是导致了外部信号和事件不能够唤醒此进程，之后将它插入到运行队列中
+     */
 	p->state = TASK_RUNNING;
 
 	/*
 	 * Revert to default priority/policy on fork if requested.
 	 */
+	/* 如果需要和重新设置优先级 */
 	if (unlikely(p->sched_reset_on_fork)) {
+        /* 如果是dl调度或者实时调度 */
 		if (p->policy == SCHED_FIFO || p->policy == SCHED_RR) {
-			p->policy = SCHED_NORMAL;
+			p->policy = SCHED_NORMAL;   /* 调度策略为SCHED_NORMAL，这个选项将使用CFS调度 */
 			p->normal_prio = p->static_prio;
 		}
 
@@ -2480,6 +2516,7 @@ void sched_fork(struct task_struct *p, int clone_flags)
 		 * We don't need the reset flag anymore after the fork. It has
 		 * fulfilled its duty:
 		 */
+		 /* sched_reset_on_fork成员在之后已经不需要使用了，直接设为0 */
 		p->sched_reset_on_fork = 0;
 	}
 
@@ -2490,7 +2527,7 @@ void sched_fork(struct task_struct *p, int clone_flags)
 
 	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
-
+    /* 调用调用类的task_fork函数 */
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
 
@@ -2502,7 +2539,7 @@ void sched_fork(struct task_struct *p, int clone_flags)
 	 * Silence PROVE_RCU.
 	 */
 	rcu_read_lock();
-	set_task_cpu(p, cpu);
+	set_task_cpu(p, cpu);  /* 设置新进程的CPU为当前CPU */
 	rcu_read_unlock();
 
 #if defined(CONFIG_SCHEDSTATS) || defined(CONFIG_TASK_DELAY_ACCT)
@@ -2514,10 +2551,12 @@ void sched_fork(struct task_struct *p, int clone_flags)
 #endif
 #ifdef CONFIG_PREEMPT
 	/* Want to start with kernel preemption disabled. */
+    /* 初始化该进程为内核禁止抢占 */
+
 	task_thread_info(p)->preempt_count = 1;
 #endif
 	plist_node_init(&p->pushable_tasks, MAX_PRIO);
-
+    /* 使能抢占 */
 	put_cpu();
 }
 
@@ -2528,6 +2567,7 @@ void sched_fork(struct task_struct *p, int clone_flags)
  * that must be done for every newly created context, then puts the task
  * on the runqueue and wakes it.
  */
+/* 将进程加入队列 */
 void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 {
 	unsigned long flags;
@@ -2546,6 +2586,7 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 	 * We set TASK_WAKING so that select_task_rq() can drop rq->lock
 	 * without people poking at ->cpus_allowed.
 	 */
+	/* 为进程选择一个合适的cpu */
 	cpu = select_task_rq(rq, p, SD_BALANCE_FORK, 0);
 	set_task_cpu(p, cpu);
 
@@ -2554,8 +2595,10 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 #endif
 
 	rq = task_rq_lock(p, &flags);
+    /* 将进程加入cpu的运行队列 */
 	activate_task(rq, p, 0);
 	trace_sched_wakeup_new(p, 1);
+    /* 检查是否需要切换当前进程 */
 	check_preempt_curr(rq, p, WF_FORK);
 #ifdef CONFIG_SMP
 	if (p->sched_class->task_woken)
@@ -3584,6 +3627,7 @@ pick_next_task(struct rq *rq)
 
 /*
  * schedule() is the main scheduler function.
+ * 进行进程的调度
  */
 asmlinkage void __sched schedule(void)
 {
@@ -3593,7 +3637,7 @@ asmlinkage void __sched schedule(void)
 	int cpu;
 
 need_resched:
-	preempt_disable();
+	preempt_disable(); /* 禁止抢占 */
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	rcu_note_context_switch(cpu);
@@ -7503,11 +7547,13 @@ static void init_tg_rt_entry(struct task_group *tg, struct rt_rq *rt_rq,
 }
 #endif
 
+/* 执行到此时内核只有一个进程init_task，current就为init_task。
+ * 之后的init进程在初始化到最后的rest_init中启动 */
 void __init sched_init(void)
 {
 	int i, j;
 	unsigned long alloc_size = 0, ptr;
-
+    /* 计算所需要分配的数据结构空间 */
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	alloc_size += 2 * nr_cpu_ids * sizeof(void **);
 #endif
@@ -7518,20 +7564,23 @@ void __init sched_init(void)
 	alloc_size += num_possible_cpus() * cpumask_size();
 #endif
 	if (alloc_size) {
+        /* 内存分配 */
 		ptr = (unsigned long)kzalloc(alloc_size, GFP_NOWAIT);
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
+         /* 设置 init_task_group 每个CPU上的调度实体指针se */
 		init_task_group.se = (struct sched_entity **)ptr;
 		ptr += nr_cpu_ids * sizeof(void **);
-
+        /* 设置 init_task_group 每个CPU上的CFS运行队列指针cfs_rq */
 		init_task_group.cfs_rq = (struct cfs_rq **)ptr;
 		ptr += nr_cpu_ids * sizeof(void **);
 
 #endif /* CONFIG_FAIR_GROUP_SCHED */
 #ifdef CONFIG_RT_GROUP_SCHED
+        /* 设置 init_task_group 每个CPU上的实时调度实体指针se */
 		init_task_group.rt_se = (struct sched_rt_entity **)ptr;
 		ptr += nr_cpu_ids * sizeof(void **);
-
+        /* 设置 init_task_group 每个CPU上的实时运行队列指针rt_rq */
 		init_task_group.rt_rq = (struct rt_rq **)ptr;
 		ptr += nr_cpu_ids * sizeof(void **);
 
@@ -7547,7 +7596,7 @@ void __init sched_init(void)
 #ifdef CONFIG_SMP
 	init_defrootdomain();
 #endif
-
+    /* 初始化实时进程的带宽限制，用于设置实时进程在CPU中所占用比的 */
 	init_rt_bandwidth(&def_rt_bandwidth,
 			global_rt_period(), global_rt_runtime());
 
@@ -7557,6 +7606,7 @@ void __init sched_init(void)
 #endif /* CONFIG_RT_GROUP_SCHED */
 
 #ifdef CONFIG_CGROUP_SCHED
+    /* 将分配好空间的 init_task_group 加入 task_groups 链表 */
 	list_add(&init_task_group.list, &task_groups);
 	INIT_LIST_HEAD(&init_task_group.children);
 
@@ -7566,13 +7616,17 @@ void __init sched_init(void)
 	update_shares_data = __alloc_percpu(nr_cpu_ids * sizeof(unsigned long),
 					    __alignof__(unsigned long));
 #endif
+    /* 遍历设置每一个cpu */
 	for_each_possible_cpu(i) {
 		struct rq *rq;
-
+        /* 获取cpu的rq队列 */
 		rq = cpu_rq(i);
+        /* 初始化rq队列的自旋锁 */
 		raw_spin_lock_init(&rq->lock);
+        /* CPU运行队列中调度实体(sched_entity)数量为0 */
 		rq->nr_running = 0;
 		rq->calc_load_active = 0;
+        /* 负载下次更新时间 */
 		rq->calc_load_update = jiffies + LOAD_FREQ;
 		init_cfs_rq(&rq->cfs, rq);
 		init_rt_rq(&rq->rt, rq);
@@ -7610,7 +7664,7 @@ void __init sched_init(void)
 		init_tg_rt_entry(&init_task_group, &rq->rt, NULL, i, 1, NULL);
 #endif
 #endif
-
+         /* 初始化该队列所保存的每个CPU的负载情况 */
 		for (j = 0; j < CPU_LOAD_IDX_MAX; j++)
 			rq->cpu_load[j] = 0;
 #ifdef CONFIG_SMP
@@ -7630,10 +7684,11 @@ void __init sched_init(void)
 		init_rq_hrtick(rq);
 		atomic_set(&rq->nr_iowait, 0);
 	}
-
+     /* 设置 init_task 进程的权重 */
 	set_load_weight(&init_task);
 
 #ifdef CONFIG_PREEMPT_NOTIFIERS
+    /* 初始化通知链 */
 	INIT_HLIST_HEAD(&init_task.preempt_notifiers);
 #endif
 
@@ -7657,6 +7712,7 @@ void __init sched_init(void)
 	 * but because we are the idle thread, we just pick up running again
 	 * when this runqueue becomes "idle".
 	 */
+	 /* 将当前进程初始化为idle进程，idle进程用于当CPU没有进程可运行时运行，空转 */
 	init_idle(current, smp_processor_id());
 
 	calc_load_update = jiffies + LOAD_FREQ;
@@ -7664,6 +7720,7 @@ void __init sched_init(void)
 	/*
 	 * During early bootup we pretend to be a normal task:
 	 */
+	/* 设置idle进程使用CFS调度策略 */
 	current->sched_class = &fair_sched_class;
 
 	/* Allocate the nohz_cpu_mask if CONFIG_CPUMASK_OFFSTACK */

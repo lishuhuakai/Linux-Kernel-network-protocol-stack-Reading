@@ -1,6 +1,6 @@
 /*
  *  kernel/sched.c
- *
+ *     -- 调度算法
  *  Kernel scheduler and related syscalls
  *
  *  Copyright (C) 1991-2002  Linus Torvalds
@@ -180,7 +180,7 @@ void init_rt_bandwidth(struct rt_bandwidth *rt_b, u64 period, u64 runtime)
 	rt_b->rt_runtime = runtime;
 
 	raw_spin_lock_init(&rt_b->rt_runtime_lock);
-
+    /* 实时调度的定时器 */
 	hrtimer_init(&rt_b->rt_period_timer,
 			CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 	rt_b->rt_period_timer.function = sched_rt_period_timer;
@@ -398,6 +398,7 @@ struct cfs_rq {
 };
 
 /* Real-Time classes' related field in a runqueue: */
+/* 实时运行队列 */
 struct rt_rq {
 	struct rt_prio_array active;
 	unsigned long rt_nr_running;
@@ -514,7 +515,7 @@ struct rq {
 	 * one CPU and if it got migrated afterwards it may decrease
 	 * it on another CPU. Always updated under the runqueue lock:
 	 */
-	unsigned long nr_uninterruptible;
+	unsigned long nr_uninterruptible; /* 不可中断的task的数目 */
 
 	struct task_struct *curr, *idle;
 	unsigned long next_balance;
@@ -1302,6 +1303,7 @@ static void sched_rt_avg_update(struct rq *rq, u64 rt_delta)
 }
 
 #else /* !CONFIG_SMP */
+/* 将task标记为需要进行调度 */
 static void resched_task(struct task_struct *p)
 {
 	assert_raw_spin_locked(&task_rq(p)->lock);
@@ -1836,6 +1838,7 @@ static void calc_load_account_idle(struct rq *this_rq);
 static void update_sysctl(void);
 static int get_update_sysctl_factor(void);
 
+/* 将进程转移到cpu对于对应的运行队列中来 */
 static inline void __set_task_cpu(struct task_struct *p, unsigned int cpu)
 {
 	set_task_rq(p, cpu);
@@ -1907,6 +1910,7 @@ static void dequeue_task(struct rq *rq, struct task_struct *p, int flags)
 
 /*
  * activate_task - move a task to the runqueue.
+ *  将一个task加入运行队列
  */
 static void activate_task(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -2527,7 +2531,7 @@ void sched_fork(struct task_struct *p, int clone_flags)
 
 	if (!rt_prio(p->prio))
 		p->sched_class = &fair_sched_class;
-    /* 调用调用类的task_fork函数 */
+    /* 调用调用类的task_fork函数,对于cfs来说,对应的函数为task_fork_fair */
 	if (p->sched_class->task_fork)
 		p->sched_class->task_fork(p);
 
@@ -2596,7 +2600,7 @@ void wake_up_new_task(struct task_struct *p, unsigned long clone_flags)
 
 	rq = task_rq_lock(p, &flags);
     /* 将进程加入cpu的运行队列 */
-	activate_task(rq, p, 0);
+	activate_task(rq, p, 0); /* 会调用sched_class的enqueue函数 */
 	trace_sched_wakeup_new(p, 1);
     /* 检查是否需要切换当前进程 */
 	check_preempt_curr(rq, p, WF_FORK);
@@ -2828,11 +2832,11 @@ context_switch(struct rq *rq, struct task_struct *prev,
 	 */
 	arch_start_context_switch(prev);
 
-	if (likely(!mm)) {
+	if (likely(!mm)) {  /* 如果新进程的内存描述符为空，说明新进程为内核线程 */
 		next->active_mm = oldmm;
 		atomic_inc(&oldmm->mm_count);
 		enter_lazy_tlb(oldmm, next);
-	} else
+	} else /* 切换虚拟地址空间 */
 		switch_mm(oldmm, mm, next);
 
 	if (likely(!prev->mm)) {
@@ -2850,6 +2854,7 @@ context_switch(struct rq *rq, struct task_struct *prev,
 #endif
 
 	/* Here we just switch the register state and the stack. */
+    /* 切换寄存器和内核栈，还会重新设置current为切换进去的进程 */
 	switch_to(prev, next, prev);
 
 	barrier();
@@ -3461,16 +3466,17 @@ void thread_group_times(struct task_struct *p, cputime_t *ut, cputime_t *st)
  */
 void scheduler_tick(void)
 {
+    /* 获取当前cpu的id */
 	int cpu = smp_processor_id();
-	struct rq *rq = cpu_rq(cpu);
+	struct rq *rq = cpu_rq(cpu); /* 获取cpu的运行队列 */
 	struct task_struct *curr = rq->curr;
 
 	sched_clock_tick();
 
 	raw_spin_lock(&rq->lock);
-	update_rq_clock(rq);
+	update_rq_clock(rq);  /* 更新该cpu的rq运行时间 */
 	update_cpu_load(rq);
-	curr->sched_class->task_tick(rq, curr, 0);
+	curr->sched_class->task_tick(rq, curr, 0); /* 调度类的tick (比如task_tick_fair) */
 	raw_spin_unlock(&rq->lock);
 
 	perf_event_task_tick(curr);
@@ -3641,7 +3647,8 @@ need_resched:
 	cpu = smp_processor_id();
 	rq = cpu_rq(cpu);
 	rcu_note_context_switch(cpu);
-	prev = rq->curr;
+	prev = rq->curr; /*  */
+     /* 当前进程非自愿切换次数 */
 	switch_count = &prev->nivcsw;
 
 	release_kernel_lock(prev);
@@ -3653,10 +3660,21 @@ need_resched_nonpreemptible:
 		hrtick_clear(rq);
 
 	raw_spin_lock_irq(&rq->lock);
+    /* 清除当前进程的thread_info结构中的flags的TIF_NEED_RESCHED和PREEMPT_NEED_RESCHED标志位，
+     * 这两个位表明其可以被调度调出(因为这里已经调出了，所以这两个位就没必要了) */
 	clear_tsk_need_resched(prev);
 
+    /*
+     * 当内核抢占时会置位thread_info的preempt_count的PREEMPT_ACTIVE位，调用schedule()之后会清除
+     * ，PREEMPT_ACTIVE置位表明是从内核抢占进入到此的
+     * preempt_count()是判断thread_info的preempt_count整体是否为0
+     * prev->state大于0表明不是TASK_RUNNING状态
+     *
+     */
 	if (prev->state && !(preempt_count() & PREEMPT_ACTIVE)) {
+        /* 当前进程不为TASK_RUNNING状态并且不是通过内核态抢占进入调度 */
 		if (unlikely(signal_pending_state(prev->state, prev)))
+            /* 有信号需要处理，置为TASK_RUNNING */
 			prev->state = TASK_RUNNING;
 		else
 			deactivate_task(rq, prev, DEQUEUE_SLEEP);
@@ -3669,6 +3687,7 @@ need_resched_nonpreemptible:
 		idle_balance(cpu, rq);
 
 	put_prev_task(rq, prev);
+     /* 获取下一个调度实体，这里的next的值会是一个进程，而不是一个调度组，在pick_next_task会递归选出一个进程 */
 	next = pick_next_task(rq);
 
 	if (likely(prev != next)) {
@@ -3678,7 +3697,7 @@ need_resched_nonpreemptible:
 		rq->nr_switches++;
 		rq->curr = next;
 		++*switch_count;
-
+        /* 上下文的切换 */
 		context_switch(rq, prev, next); /* unlocks the rq */
 		/*
 		 * the context switch might have flipped the stack from under
@@ -5201,6 +5220,7 @@ void __cpuinit init_idle_bootup_task(struct task_struct *idle)
 
 /**
  * init_idle - set up an idle thread for a given CPU
+ *             在给定的cpu上设定一个idle线程
  * @idle: task in question
  * @cpu: cpu the idle task belongs to
  *
@@ -5215,13 +5235,13 @@ void __cpuinit init_idle(struct task_struct *idle, int cpu)
 	raw_spin_lock_irqsave(&rq->lock, flags);
 
 	__sched_fork(idle);
-	idle->state = TASK_RUNNING;
+	idle->state = TASK_RUNNING; /* 设置为可以被调度 */
 	idle->se.exec_start = sched_clock();
 
 	cpumask_copy(&idle->cpus_allowed, cpumask_of(cpu));
 	__set_task_cpu(idle, cpu);
 
-	rq->curr = rq->idle = idle;
+	rq->curr = rq->idle = idle; /* 记录下idle进程的进程控制块 */
 #if defined(CONFIG_SMP) && defined(__ARCH_WANT_UNLOCKED_CTXSW)
 	idle->oncpu = 1;
 #endif
@@ -7443,16 +7463,22 @@ int in_sched_functions(unsigned long addr)
 		&& addr < (unsigned long)__sched_text_end);
 }
 
+/*
+ * 初始化实时运行队列
+ */
 static void init_cfs_rq(struct cfs_rq *cfs_rq, struct rq *rq)
 {
 	cfs_rq->tasks_timeline = RB_ROOT;
 	INIT_LIST_HEAD(&cfs_rq->tasks);
 #ifdef CONFIG_FAIR_GROUP_SCHED
-	cfs_rq->rq = rq;
+	cfs_rq->rq = rq; /* 记录所属的运行队列 */
 #endif
 	cfs_rq->min_vruntime = (u64)(-(1LL << 20));
 }
 
+/* 初始化实时运行队列
+ *
+ */
 static void init_rt_rq(struct rt_rq *rt_rq, struct rq *rq)
 {
 	struct rt_prio_array *array;
@@ -7557,7 +7583,7 @@ void __init sched_init(void)
 #ifdef CONFIG_FAIR_GROUP_SCHED
 	alloc_size += 2 * nr_cpu_ids * sizeof(void **);
 #endif
-#ifdef CONFIG_RT_GROUP_SCHED
+#ifdef CONFIG_RT_GROUP_SCHED /* 实时调度 */
 	alloc_size += 2 * nr_cpu_ids * sizeof(void **);
 #endif
 #ifdef CONFIG_CPUMASK_OFFSTACK
@@ -7653,6 +7679,7 @@ void __init sched_init(void)
 		 * We achieve this by letting init_task_group's tasks sit
 		 * directly in rq->cfs (i.e init_task_group->se[] = NULL).
 		 */
+		/* cfs的带宽限制 */
 		init_tg_cfs_entry(&init_task_group, &rq->cfs, NULL, i, 1, NULL);
 #endif
 #endif /* CONFIG_FAIR_GROUP_SCHED */
@@ -7667,7 +7694,7 @@ void __init sched_init(void)
          /* 初始化该队列所保存的每个CPU的负载情况 */
 		for (j = 0; j < CPU_LOAD_IDX_MAX; j++)
 			rq->cpu_load[j] = 0;
-#ifdef CONFIG_SMP
+#ifdef CONFIG_SMP /* 负载均衡的相关参数 */
 		rq->sd = NULL;
 		rq->rd = NULL;
 		rq->cpu_power = SCHED_LOAD_SCALE;

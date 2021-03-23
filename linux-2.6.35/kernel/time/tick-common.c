@@ -60,24 +60,27 @@ int tick_is_oneshot_available(void)
 static void tick_periodic(int cpu)
 {
 	if (tick_do_timer_cpu == cpu) {
+        /* 当前cpu负责更新时间 */
 		write_seqlock(&xtime_lock);
 
 		/* Keep track of the next tick event */
 		tick_next_period = ktime_add(tick_next_period, tick_period);
-
+        /* 更新jiffies计数 */
 		do_timer(1);
 		write_sequnlock(&xtime_lock);
 	}
-
+    /* 更新当前进程信息,调度器主要函数 */
 	update_process_times(user_mode(get_irq_regs()));
 	profile_tick(CPU_PROFILING);
 }
 
 /*
  * Event handler for periodic ticks
+ * 发生时钟中断的时候,会调用此函数
  */
 void tick_handle_periodic(struct clock_event_device *dev)
 {
+    /* 获取当前cpu */
 	int cpu = smp_processor_id();
 	ktime_t next;
 

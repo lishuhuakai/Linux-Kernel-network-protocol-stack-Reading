@@ -530,10 +530,10 @@ static void update_curr(struct cfs_rq *cfs_rq)
 	 * since the last time we changed load (this cannot
 	 * overflow on 32 bits):
 	 */
-	delta_exec = (unsigned long)(now - curr->exec_start);
+	delta_exec = (unsigned long)(now - curr->exec_start); /* 距离上次统计,已经执行的时间 */
 	if (!delta_exec)
 		return;
-
+    /* 更新相关的运行时间 */
 	__update_curr(cfs_rq, curr, delta_exec);
 	curr->exec_start = now;
 
@@ -757,6 +757,9 @@ place_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int initial)
 	se->vruntime = vruntime;
 }
 
+/* @param cfg_rq task要加入的运行队列
+ * @param se task的调度实体
+ */
 static void
 enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 {
@@ -771,6 +774,7 @@ enqueue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 	 * Update run-time statistics of the 'current'.
 	 */
 	update_curr(cfs_rq);
+    /* 更新cfs_rq队列总权重 */
 	account_entity_enqueue(cfs_rq, se);
 
 	if (flags & ENQUEUE_WAKEUP) {
@@ -840,20 +844,27 @@ dequeue_entity(struct cfs_rq *cfs_rq, struct sched_entity *se, int flags)
 
 /*
  * Preempt the current task with a newly woken task if needed:
+ * 检查task是否需要进行调度
+ * 判断方法有两种，一种就是判断当前进程是否超过了CPU分配给它的实际运行时间
+ * 另一种就是判断当前进程的虚拟运行时间是否大于下个进程的虚拟运行时间
  */
 static void
 check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 {
 	unsigned long ideal_runtime, delta_exec;
-
+    /* ideal_runtime为进程应该运行的时间
+     * delta_exec为进程增加的实际运行时间
+     * 如果delta_exec超过了ideal_runtime，表示该进程应该让出CPU给其他进程
+     */
 	ideal_runtime = sched_slice(cfs_rq, curr);
 	delta_exec = curr->sum_exec_runtime - curr->prev_sum_exec_runtime;
-	if (delta_exec > ideal_runtime) {
+	if (delta_exec > ideal_runtime) { /* 增加的实际运行实际 > 应该运行实际，说明需要调度出去 */
 		resched_task(rq_of(cfs_rq)->curr);
 		/*
 		 * The current task ran long enough, ensure it doesn't get
 		 * re-elected due to buddy favours.
 		 */
+		/* 清空cfs_rq队列的last，next，skip指针 */
 		clear_buddies(cfs_rq, curr);
 		return;
 	}
@@ -870,10 +881,12 @@ check_preempt_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr)
 		return;
 
 	if (cfs_rq->nr_running > 1) {
+        /* 获取下一个调度进程的se */
 		struct sched_entity *se = __pick_next_entity(cfs_rq);
 		s64 delta = curr->vruntime - se->vruntime;
 
 		if (delta > ideal_runtime)
+              /* 当前进程的虚拟运行时间小于下个进程的虚拟运行时间，说明下个进程比当前进程更应该被CPU使用，resched_curr()函数用于标记当前进程需要被调度出去 */
 			resched_task(rq_of(cfs_rq)->curr);
 	}
 }
@@ -948,12 +961,16 @@ static void put_prev_entity(struct cfs_rq *cfs_rq, struct sched_entity *prev)
 	cfs_rq->curr = NULL;
 }
 
+/* 决定进程是否调度出去
+ * @param queued 为1表示需要进行调度
+ */
 static void
 entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 {
 	/*
 	 * Update run-time statistics of the 'current'.
 	 */
+	/* 更新当前进程运行时间,包括虚拟运行时间 */
 	update_curr(cfs_rq);
 
 #ifdef CONFIG_SCHED_HRTICK
@@ -972,7 +989,7 @@ entity_tick(struct cfs_rq *cfs_rq, struct sched_entity *curr, int queued)
 			hrtimer_active(&rq_of(cfs_rq)->hrtick_timer))
 		return;
 #endif
-
+    /* 检查是否需要调度 */
 	if (cfs_rq->nr_running > 1 || !sched_feat(WAKEUP_PREEMPT))
 		check_preempt_tick(cfs_rq, curr);
 }
@@ -1042,6 +1059,7 @@ static inline void hrtick_update(struct rq *rq)
  * increased. Here we update the fair scheduling stats and
  * then put the task into the rbtree:
  */
+/* 将task加入运行队列 */
 static void
 enqueue_task_fair(struct rq *rq, struct task_struct *p, int flags)
 {
@@ -3517,6 +3535,7 @@ static inline void idle_balance(int cpu, struct rq *rq)
 
 /*
  * scheduler tick hitting a task of our scheduling class:
+ * @param queued 是否需要调度
  */
 static void task_tick_fair(struct rq *rq, struct task_struct *curr, int queued)
 {
@@ -3546,7 +3565,7 @@ static void task_fork_fair(struct task_struct *p)
 
 	if (unlikely(task_cpu(p) != this_cpu))
 		__set_task_cpu(p, this_cpu);
-
+    /* 更新当前进程运行时间 */
 	update_curr(cfs_rq);
 
 	if (curr)

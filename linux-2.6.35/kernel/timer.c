@@ -1265,6 +1265,7 @@ void update_process_times(int user_tick)
 	rcu_check_callbacks(cpu, user_tick);
 	printk_tick();
 	perf_event_do_pending();
+    /* 调度器的tick */
 	scheduler_tick();
 	run_posix_cpu_timers(p);
 }

@@ -100,11 +100,12 @@ typedef unsigned long old_sigset_t;
 #include <asm-generic/signal-defs.h>
 
 struct sigaction {
-	__sighandler_t sa_handler;
+	__sighandler_t sa_handler; /* 指定要执行的动作,如SIG_IGN,SIG_DFL */
 	unsigned long sa_flags;
 #ifdef SA_RESTORER
 	__sigrestore_t sa_restorer;
 #endif
+    /* sa_mask -- 运行信号处理程序时要屏蔽的信号 */
 	sigset_t sa_mask;		/* mask last for extensibility */
 };
 

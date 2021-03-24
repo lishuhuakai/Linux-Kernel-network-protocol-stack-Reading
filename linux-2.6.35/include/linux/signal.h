@@ -12,7 +12,6 @@ extern int print_fatal_signals;
 /*
  * Real Time signals may be queued.
  */
-
 struct sigqueue {
 	struct list_head list;
 	int flags;
@@ -25,7 +24,7 @@ struct sigqueue {
 
 struct sigpending {
 	struct list_head list;
-	sigset_t signal;
+	sigset_t signal; /* 信号位图 */
 };
 
 /*

@@ -444,9 +444,10 @@ extern int get_dumpable(struct mm_struct *mm);
 
 #define MMF_INIT_MASK		(MMF_DUMPABLE_MASK | MMF_DUMP_FILTER_MASK)
 
+/* 指向进程的信号处理程序描述符的指针 */
 struct sighand_struct {
 	atomic_t		count;
-	struct k_sigaction	action[_NSIG];
+	struct k_sigaction	action[_NSIG]; /* 一共有64种信号,每一种信号的处理函数 */
 	spinlock_t		siglock;
 	wait_queue_head_t	signalfd_wqh;
 };
@@ -526,6 +527,7 @@ struct thread_group_cputimer {
  * sighand_struct is always a proper superset of
  * the locking of signal_struct.
  */
+/* 进程的信号描述符 */
 struct signal_struct {
 	atomic_t		sigcnt;
 	atomic_t		live;
@@ -534,13 +536,13 @@ struct signal_struct {
 	wait_queue_head_t	wait_chldexit;	/* for wait4() */
 
 	/* current thread group signal load-balancing target: */
-	struct task_struct	*curr_target;
+	struct task_struct	*curr_target; /* 接收信号的线程组中最后一个进程的描述符 */
 
 	/* shared signal handling: */
-	struct sigpending	shared_pending;
+	struct sigpending	shared_pending; /* 存放共享挂起信号 */
 
 	/* thread group exit support */
-	int			group_exit_code;
+	int			group_exit_code; /* 进程组的进程终止代码 */
 	/* overloaded:
 	 * - notify group_exit_task when ->count is equal to notify_count
 	 * - everyone except group_exit_task is stopped during signal delivery
@@ -1360,11 +1362,11 @@ struct task_struct {
 	struct nsproxy *nsproxy;
 /* signal handlers */
 	struct signal_struct *signal;
-	struct sighand_struct *sighand;
+	struct sighand_struct *sighand; /* task的信号处理函数存储在这个结构中 */
 
-	sigset_t blocked, real_blocked;
+	sigset_t blocked, real_blocked; /* 记录下被屏蔽的信号 */
 	sigset_t saved_sigmask;	/* restored if set_restore_sigmask() was used */
-	struct sigpending pending;
+	struct sigpending pending; /* 用于记录有哪些信号到达,task私有 */
 
 	unsigned long sas_ss_sp;
 	size_t sas_ss_size;

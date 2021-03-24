@@ -468,7 +468,7 @@ static int __dequeue_signal(struct sigpending *pending, sigset_t *mask,
 }
 
 /*
- * Dequeue a signal and return the element to the caller, which is 
+ * Dequeue a signal and return the element to the caller, which is
  * expected to free it.
  *
  * All callers have to hold the siglock.
@@ -544,6 +544,7 @@ int dequeue_signal(struct task_struct *tsk, sigset_t *mask, siginfo_t *info)
 
 /*
  * Tell a process that it has a new active signal..
+ * 告知一个进程,新的信号到达
  *
  * NOTE! we rely on the previous spin_lock to
  * lock interrupts for us! We can only be called with
@@ -557,7 +558,7 @@ void signal_wake_up(struct task_struct *t, int resume)
 {
 	unsigned int mask;
 
-	set_tsk_thread_flag(t, TIF_SIGPENDING);
+	set_tsk_thread_flag(t, TIF_SIGPENDING); /*   置上TIF_SIGPENDING标记 */
 
 	/*
 	 * For SIGKILL, we want to wake it up in the stopped/traced/killable
@@ -569,6 +570,7 @@ void signal_wake_up(struct task_struct *t, int resume)
 	mask = TASK_INTERRUPTIBLE;
 	if (resume)
 		mask |= TASK_WAKEKILL;
+    /* 位于TASK_INTERRUPTIBLE状态的task才尝试唤醒 */
 	if (!wake_up_state(t, mask))
 		kick_process(t);
 }
@@ -788,7 +790,7 @@ static int prepare_signal(int sig, struct task_struct *p, int from_ancestor_ns)
  */
 static inline int wants_signal(int sig, struct task_struct *p)
 {
-	if (sigismember(&p->blocked, sig))
+	if (sigismember(&p->blocked, sig)) /* 信号被屏蔽,不需要 */
 		return 0;
 	if (p->flags & PF_EXITING)
 		return 0;
@@ -824,7 +826,7 @@ static void complete_signal(int sig, struct task_struct *p, int group)
 		 */
 		t = signal->curr_target;
 		while (!wants_signal(sig, t)) {
-			t = next_thread(t);
+			t = next_thread(t); /* 组的下一个进程 */
 			if (t == signal->curr_target)
 				/*
 				 * No thread needs to be woken.
@@ -880,6 +882,9 @@ static inline int legacy_queue(struct sigpending *signals, int sig)
 	return (sig < SIGRTMIN) && sigismember(&signals->signal, sig);
 }
 
+/*
+ * @param group 是否要给组发送信号
+ */
 static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 			int group, int from_ancestor_ns)
 {
@@ -893,12 +898,15 @@ static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 
 	if (!prepare_signal(sig, t, from_ancestor_ns))
 		return 0;
-
+    /* group不为空的话,使用共享的pending队列 */
 	pending = group ? &t->signal->shared_pending : &t->pending;
 	/*
 	 * Short-circuit ignored signals and support queuing
 	 * exactly one non-rt signal, so that we can get more
 	 * detailed information about the cause of the signal.
+	 */
+	/* legacy_queue -- 如果sig < 32, 而且信号已经在pending队列中了
+	 * 就不再进行插入操作
 	 */
 	if (legacy_queue(pending, sig))
 		return 0;
@@ -917,7 +925,7 @@ static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 	   make sure at least one signal gets delivered and don't
 	   pass on the info struct.  */
 
-	if (sig < SIGRTMIN)
+	if (sig < SIGRTMIN) /* sig < 32 表示是非实时信号 */
 		override_rlimit = (is_si_special(info) || info->si_code >= 0);
 	else
 		override_rlimit = 0;
@@ -948,7 +956,7 @@ static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 				q->info.si_pid = 0;
 			break;
 		}
-	} else if (!is_si_special(info)) {
+	} else if (!is_si_special(info)) { /* 实时信号 */
 		if (sig >= SIGRTMIN && info->si_code != SI_USER) {
 			/*
 			 * Queue overflow, abort.  We may abort if the
@@ -968,7 +976,7 @@ static int __send_signal(int sig, struct siginfo *info, struct task_struct *t,
 
 out_set:
 	signalfd_notify(t, sig);
-	sigaddset(&pending->signal, sig);
+	sigaddset(&pending->signal, sig); /* 信号添加到对应的标志位上 */
 	complete_signal(sig, t, group);
 	return 0;
 }
@@ -1025,12 +1033,19 @@ __group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p)
 	return send_signal(sig, info, p, 1);
 }
 
+/* 向指定的tack发送信号
+ * @param sig 信号值
+ * @param info
+ */
 static int
 specific_send_sig_info(int sig, struct siginfo *info, struct task_struct *t)
 {
 	return send_signal(sig, info, t, 0);
 }
 
+/* 发送信号给指定的task
+ * @param group 是否是要给组发送信号
+ */
 int do_send_sig_info(int sig, struct siginfo *info, struct task_struct *p,
 			bool group)
 {
@@ -1128,10 +1143,11 @@ struct sighand_struct *lock_task_sighand(struct task_struct *tsk, unsigned long 
 /*
  * send signal info to all the members of a group
  * - the caller must hold the RCU read lock at least
+ * 将信号发送给组的所有成员
  */
 int group_send_sig_info(int sig, struct siginfo *info, struct task_struct *p)
 {
-	int ret = check_kill_permission(sig, info, p);
+	int ret = check_kill_permission(sig, info, p); /* 权限检查 */
 
 	if (!ret && sig)
 		ret = do_send_sig_info(sig, info, p, true);
@@ -1159,6 +1175,7 @@ int __kill_pgrp_info(int sig, struct siginfo *info, struct pid *pgrp)
 	return success ? 0 : retval;
 }
 
+/* 将信号发送给 */
 int kill_pid_info(int sig, struct siginfo *info, struct pid *pid)
 {
 	int error = -ESRCH;
@@ -1257,7 +1274,7 @@ static int kill_something_info(int sig, struct siginfo *info, pid_t pid)
 	if (pid != -1) {
 		ret = __kill_pgrp_info(sig, info,
 				pid ? find_vpid(-pid) : task_pgrp(current));
-	} else {
+	} else { /* pid < 0 将信号发送给组ID为-pid的进程 */
 		int retval = 0, count = 0;
 		struct task_struct * p;
 
@@ -2163,7 +2180,7 @@ long do_sigpending(void __user *set, unsigned long sigsetsize)
 
 out:
 	return error;
-}	
+}
 
 SYSCALL_DEFINE2(rt_sigpending, sigset_t __user *, set, size_t, sigsetsize)
 {
@@ -2252,7 +2269,7 @@ SYSCALL_DEFINE4(rt_sigtimedwait, const sigset_t __user *, uthese,
 
 	if (copy_from_user(&these, uthese, sizeof(these)))
 		return -EFAULT;
-		
+
 	/*
 	 * Invert the set of allowed signals to get those we
 	 * want to block.
@@ -2311,11 +2328,12 @@ SYSCALL_DEFINE4(rt_sigtimedwait, const sigset_t __user *, uthese,
 	return ret;
 }
 
+/* kill对应的系统调用函数 */
 SYSCALL_DEFINE2(kill, pid_t, pid, int, sig)
 {
 	struct siginfo info;
 
-	info.si_signo = sig;
+	info.si_signo = sig; /* 信号 */
 	info.si_errno = 0;
 	info.si_code = SI_USER;
 	info.si_pid = task_tgid_vnr(current);
@@ -2442,6 +2460,11 @@ SYSCALL_DEFINE4(rt_tgsigqueueinfo, pid_t, tgid, pid_t, pid, int, sig,
 	return do_rt_tgsigqueueinfo(tgid, pid, sig, &info);
 }
 
+/* 安装信号处理函数
+ * @param sig 信号
+ * @param act 新安装的值
+ * @param oact 原来的值需要返回,拷贝到此结构中
+ */
 int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
 {
 	struct task_struct *t = current;
@@ -2455,12 +2478,12 @@ int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
 
 	spin_lock_irq(&current->sighand->siglock);
 	if (oact)
-		*oact = *k;
+		*oact = *k; /* 拷贝原来的值 */
 
 	if (act) {
 		sigdelsetmask(&act->sa.sa_mask,
-			      sigmask(SIGKILL) | sigmask(SIGSTOP));
-		*k = *act;
+			      sigmask(SIGKILL) | sigmask(SIGSTOP)); /* 保证kill以及stop不能被屏蔽 */
+		*k = *act; /* 直接拷贝数据 */
 		/*
 		 * POSIX 3.3.1.3:
 		 *  "Setting a signal action to SIG_IGN for a signal that is
@@ -2472,10 +2495,10 @@ int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
 		 *   (for example, SIGCHLD), shall cause the pending signal to
 		 *   be discarded, whether or not it is blocked"
 		 */
-		if (sig_handler_ignored(sig_handler(t, sig), sig)) {
+		if (sig_handler_ignored(sig_handler(t, sig), sig)) { /* 信号被屏蔽 */
 			sigemptyset(&mask);
-			sigaddset(&mask, sig);
-			rm_from_queue_full(&mask, &t->signal->shared_pending);
+			sigaddset(&mask, sig); /* 设置屏蔽掩码 */
+			rm_from_queue_full(&mask, &t->signal->shared_pending); /* 从共享信号队列中删除该信号 */
 			do {
 				rm_from_queue_full(&mask, &t->pending);
 				t = next_thread(t);
@@ -2487,7 +2510,7 @@ int do_sigaction(int sig, struct k_sigaction *act, struct k_sigaction *oact)
 	return 0;
 }
 
-int 
+int
 do_sigaltstack (const stack_t __user *uss, stack_t __user *uoss, unsigned long sp)
 {
 	stack_t oss;
@@ -2679,6 +2702,7 @@ SYSCALL_DEFINE1(ssetmask, int, newmask)
  */
 SYSCALL_DEFINE2(signal, int, sig, __sighandler_t, handler)
 {
+    /* sig为信号,handler为处理函数 */
 	struct k_sigaction new_sa, old_sa;
 	int ret;
 

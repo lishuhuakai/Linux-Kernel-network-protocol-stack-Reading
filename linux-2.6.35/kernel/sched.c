@@ -2327,7 +2327,7 @@ static int try_to_wake_up(struct task_struct *p, unsigned int state,
 
 	smp_wmb();
 	rq = task_rq_lock(p, &flags);
-	if (!(p->state & state))
+	if (!(p->state & state)) /* 这里比对了task的状态 */
 		goto out;
 
 	if (p->se.on_rq)

@@ -15,8 +15,8 @@
  * nr_file rlimit, so it's safe to set up a ridiculously high absolute
  * upper limit on files-per-process.
  *
- * Some programs (notably those using select()) may have to be 
- * recompiled to take full advantage of the new limits..  
+ * Some programs (notably those using select()) may have to be
+ * recompiled to take full advantage of the new limits..
  */
 
 /* Fixed constants first: */
@@ -173,7 +173,7 @@ struct inodes_stat_t {
 #define SEL_EX		4
 
 /* public flags for file_system_type */
-#define FS_REQUIRES_DEV 1 
+#define FS_REQUIRES_DEV 1
 #define FS_BINARY_MOUNTDATA 2
 #define FS_HAS_SUBTYPE 4
 #define FS_REVAL_DOT	16384	/* Check the paths ".", ".." for staleness */
@@ -471,7 +471,7 @@ struct iattr {
  */
 #include <linux/quota.h>
 
-/** 
+/**
  * enum positive_aop_returns - aop return codes with specific semantics
  *
  * @AOP_WRITEPAGE_ACTIVATE: Informs the caller that page writeback has
@@ -481,7 +481,7 @@ struct iattr {
  * 			    be a candidate for writeback again in the near
  * 			    future.  Other callers must be careful to unlock
  * 			    the page if they get this return.  Returned by
- * 			    writepage(); 
+ * 			    writepage();
  *
  * @AOP_TRUNCATED_PAGE: The AOP method that was handed a locked page has
  *  			unlocked it and the page might have been truncated.
@@ -722,28 +722,29 @@ static inline int mapping_writably_mapped(struct address_space *mapping)
 struct posix_acl;
 #define ACL_NOT_CACHED ((void *)(-1))
 
+/* 索引节点对象 */
 struct inode {
 	struct hlist_node	i_hash;
 	struct list_head	i_list;		/* backing dev IO list */
 	struct list_head	i_sb_list;
-	struct list_head	i_dentry;
-	unsigned long		i_ino;
-	atomic_t		i_count;
-	unsigned int		i_nlink;
-	uid_t			i_uid;
-	gid_t			i_gid;
-	dev_t			i_rdev;
+	struct list_head	i_dentry; /* 索引节点目录项对象链表的头部 */
+	unsigned long		i_ino; /* 索引节点号 */
+	atomic_t		i_count; /* 引用计数器 */
+	unsigned int		i_nlink; /* 硬链接数目 */
+	uid_t			i_uid; /* 所有者标识符 */
+	gid_t			i_gid; /* 组标识符 */
+	dev_t			i_rdev; /* 实设备标识符 */
 	unsigned int		i_blkbits;
 	u64			i_version;
-	loff_t			i_size;
+	loff_t			i_size; /* 文件的字节数 */
 #ifdef __NEED_I_SIZE_ORDERED
 	seqcount_t		i_size_seqcount;
 #endif
-	struct timespec		i_atime;
-	struct timespec		i_mtime;
+	struct timespec		i_atime; /* 上次访问时间 */
+	struct timespec		i_mtime; /* 上次修改时间 */
 	struct timespec		i_ctime;
-	blkcnt_t		i_blocks;
-	unsigned short          i_bytes;
+	blkcnt_t		i_blocks;   /* 块的位数 */
+	unsigned short          i_bytes; /* 块的字节数 */
 	umode_t			i_mode;
 	spinlock_t		i_lock;	/* i_blocks, i_bytes, maybe i_size */
 	struct mutex		i_mutex;
@@ -910,7 +911,7 @@ static inline int ra_has_index(struct file_ra_state *ra, pgoff_t index)
 
 #define FILE_MNT_WRITE_TAKEN	1
 #define FILE_MNT_WRITE_RELEASED	2
-
+/* 文件对象 -- 对文件的抽象 */
 struct file {
 	/*
 	 * fu_list becomes invalid after file_free is called and queued via
@@ -923,12 +924,12 @@ struct file {
 	struct path		f_path;
 #define f_dentry	f_path.dentry
 #define f_vfsmnt	f_path.mnt
-	const struct file_operations	*f_op;
+	const struct file_operations	*f_op; /* 文件操作对象 */
 	spinlock_t		f_lock;  /* f_ep_links, f_flags, no IRQ */
-	atomic_long_t		f_count;
-	unsigned int 		f_flags;
-	fmode_t			f_mode;
-	loff_t			f_pos;
+	atomic_long_t		f_count; /* 文件对象引用计数器 */
+	unsigned int 		f_flags; /* 打开文件时所指定的标志 */
+	fmode_t			f_mode; /* 进程的访问模式 */
+	loff_t			f_pos; /* 当前文件偏移量 */
 	struct fown_struct	f_owner;
 	const struct cred	*f_cred;
 	struct file_ra_state	f_ra;
@@ -1002,10 +1003,10 @@ static inline int file_check_writeable(struct file *filp)
 
 #define	MAX_NON_LFS	((1UL<<31) - 1)
 
-/* Page cache limit. The filesystems should put that into their s_maxbytes 
-   limits, otherwise bad things can happen in VM. */ 
+/* Page cache limit. The filesystems should put that into their s_maxbytes
+   limits, otherwise bad things can happen in VM. */
 #if BITS_PER_LONG==32
-#define MAX_LFS_FILESIZE	(((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1) 
+#define MAX_LFS_FILESIZE	(((u64)PAGE_CACHE_SIZE << (BITS_PER_LONG-1))-1)
 #elif BITS_PER_LONG==64
 #define MAX_LFS_FILESIZE 	0x7fffffffffffffffUL
 #endif
@@ -1316,25 +1317,26 @@ extern int send_sigurg(struct fown_struct *fown);
 extern struct list_head super_blocks;
 extern spinlock_t sb_lock;
 
+/* 超级块对象 */
 struct super_block {
-	struct list_head	s_list;		/* Keep this first */
+	struct list_head	s_list;		/* Keep this first -- 超级块用链表串起来了 */
 	dev_t			s_dev;		/* search index; _not_ kdev_t */
 	unsigned char		s_dirt;
 	unsigned char		s_blocksize_bits;
 	unsigned long		s_blocksize;
 	loff_t			s_maxbytes;	/* Max file size */
 	struct file_system_type	*s_type;
-	const struct super_operations	*s_op;
-	const struct dquot_operations	*dq_op;
-	const struct quotactl_ops	*s_qcop;
+	const struct super_operations	*s_op; /* 超级块方法 */
+	const struct dquot_operations	*dq_op; /* 磁盘限额处理方法 */
+	const struct quotactl_ops	*s_qcop; /* 磁盘限额管理方法 */
 	const struct export_operations *s_export_op;
-	unsigned long		s_flags;
-	unsigned long		s_magic;
-	struct dentry		*s_root;
-	struct rw_semaphore	s_umount;
+	unsigned long		s_flags; /* 安装标志 */
+	unsigned long		s_magic; /* 文件系统的魔数 */
+	struct dentry		*s_root; /* 文件系统根目录的目录项对象 */
+	struct rw_semaphore	s_umount; /* 卸载所用的信号量 */
 	struct mutex		s_lock;
 	int			s_count;
-	atomic_t		s_active;
+	atomic_t		s_active;   /* 次级引用计数器 */
 #ifdef CONFIG_SECURITY
 	void                    *s_security;
 #endif
@@ -1363,7 +1365,7 @@ struct super_block {
 
 	/* Granularity of c/m/atime in ns.
 	   Cannot be worse than a second */
-	u32		   s_time_gran;
+	u32		   s_time_gran; /* 时间戳粒度 */
 
 	/*
 	 * The next field is for VFS *only*. No filesystems have any business
@@ -1556,8 +1558,8 @@ extern ssize_t vfs_writev(struct file *, const struct iovec __user *,
 		unsigned long, loff_t *);
 
 struct super_operations {
-   	struct inode *(*alloc_inode)(struct super_block *sb);
-	void (*destroy_inode)(struct inode *);
+   	struct inode *(*alloc_inode)(struct super_block *sb); /* 为索引节点分配空间 */
+	void (*destroy_inode)(struct inode *); /* 撤销索引节点对象 */
 
    	void (*dirty_inode) (struct inode *);
 	int (*write_inode) (struct inode *, struct writeback_control *wbc);
@@ -2143,7 +2145,7 @@ extern int may_open(struct path *, int, int);
 
 extern int kernel_read(struct file *, loff_t, char *, unsigned long);
 extern struct file * open_exec(const char *);
- 
+
 /* fs/dcache.c -- generic fs support functions */
 extern int is_subdir(struct dentry *, struct dentry *);
 extern int path_is_under(struct path *, struct path *);

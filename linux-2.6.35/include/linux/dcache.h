@@ -85,7 +85,7 @@ full_name_hash(const unsigned char *name, unsigned int len)
 #else
 #define DNAME_INLINE_LEN_MIN 40 /* 128 bytes */
 #endif
-
+/* 目录项对象 */
 struct dentry {
 	atomic_t d_count;
 	unsigned int d_flags;		/* protected by d_lock */
@@ -178,7 +178,7 @@ d_iput:		no		no		no       yes
       */
 
 #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
-#define DCACHE_UNHASHED		0x0010	
+#define DCACHE_UNHASHED		0x0010
 
 #define DCACHE_INOTIFY_PARENT_WATCHED	0x0020 /* Parent inode is watched by inotify */
 
@@ -272,7 +272,7 @@ extern void d_rehash(struct dentry *);
  * This adds the entry to the hash queues and initializes @inode.
  * The entry was actually filled in earlier during d_alloc().
  */
- 
+
 static inline void d_add(struct dentry *entry, struct inode *inode)
 {
 	d_instantiate(entry, inode);
@@ -324,14 +324,14 @@ extern char *dentry_path(struct dentry *, char *, int);
  *	@dentry: dentry to get a reference to
  *
  *	Given a dentry or %NULL pointer increment the reference count
- *	if appropriate and return the dentry. A dentry will not be 
+ *	if appropriate and return the dentry. A dentry will not be
  *	destroyed when it has references. dget() should never be
  *	called for dentries with zero reference counter. For these cases
  *	(preferably none, functions in dcache.c are sufficient for normal
  *	needs and they take necessary precautions) you should hold dcache_lock
  *	and call dget_locked() instead of dget().
  */
- 
+
 static inline struct dentry *dget(struct dentry *dentry)
 {
 	if (dentry) {
@@ -349,7 +349,7 @@ extern struct dentry * dget_locked(struct dentry *);
  *
  *	Returns true if the dentry passed is not currently hashed.
  */
- 
+
 static inline int d_unhashed(struct dentry *dentry)
 {
 	return (dentry->d_flags & DCACHE_UNHASHED);

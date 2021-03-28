@@ -43,7 +43,7 @@ __cacheline_aligned_in_smp DEFINE_SEQLOCK(rename_lock);
 
 EXPORT_SYMBOL(dcache_lock);
 
-static struct kmem_cache *dentry_cache __read_mostly;
+static struct kmem_cache *dentry_cache __read_mostly; /* 目录项缓存 */
 
 #define DNAME_INLINE_LEN (sizeof(struct dentry)-offsetof(struct dentry,d_iname))
 
@@ -72,7 +72,7 @@ static void __d_free(struct dentry *dentry)
 	WARN_ON(!list_empty(&dentry->d_alias));
 	if (dname_external(dentry))
 		kfree(dentry->d_name.name);
-	kmem_cache_free(dentry_cache, dentry); 
+	kmem_cache_free(dentry_cache, dentry);
 }
 
 static void d_callback(struct rcu_head *head)
@@ -127,6 +127,7 @@ static void dentry_iput(struct dentry * dentry)
  */
 static void dentry_lru_add(struct dentry *dentry)
 {
+    /* 将dentry加入到超级块的lru链表中 */
 	list_add(&dentry->d_lru, &dentry->d_sb->s_dentry_lru);
 	dentry->d_sb->s_nr_dentry_unused++;
 	dentry_stat.nr_unused++;
@@ -139,6 +140,7 @@ static void dentry_lru_add_tail(struct dentry *dentry)
 	dentry_stat.nr_unused++;
 }
 
+/* 将dentry从超级块的lru链表中移除 */
 static void dentry_lru_del(struct dentry *dentry)
 {
 	if (!list_empty(&dentry->d_lru)) {
@@ -183,7 +185,7 @@ static struct dentry *d_kill(struct dentry *dentry)
 	return parent;
 }
 
-/* 
+/*
  * This is dput
  *
  * This is complicated by the fact that we do not want to put
@@ -202,7 +204,7 @@ static struct dentry *d_kill(struct dentry *dentry)
 
 /*
  * dput - release a dentry
- * @dentry: dentry to release 
+ * @dentry: dentry to release
  *
  * Release a dentry. This will drop the usage count and if appropriate
  * call the dentry unlink method as well as removing it from the queues and
@@ -242,7 +244,7 @@ repeat:
 		goto kill_it;
   	if (list_empty(&dentry->d_lru)) {
   		dentry->d_flags |= DCACHE_REFERENCED;
-		dentry_lru_add(dentry);
+		dentry_lru_add(dentry); /* 将dentry加入lru链表 */
   	}
  	spin_unlock(&dentry->d_lock);
 	spin_unlock(&dcache_lock);
@@ -270,7 +272,7 @@ EXPORT_SYMBOL(dput);
  *
  * no dcache lock.
  */
- 
+/* 使得一个dentry无效 */
 int d_invalidate(struct dentry * dentry)
 {
 	/*
@@ -751,7 +753,7 @@ void shrink_dcache_for_umount(struct super_block *sb)
  * We descend to the next level whenever the d_subdirs
  * list is non-empty and continue searching.
  */
- 
+
 /**
  * have_submounts - check for mounts over a dentry
  * @parent: dentry to check.
@@ -759,7 +761,7 @@ void shrink_dcache_for_umount(struct super_block *sb)
  * Return true if the parent or its subdirectories contain
  * a mount point
  */
- 
+
 int have_submounts(struct dentry *parent)
 {
 	struct dentry *this_parent = parent;
@@ -829,8 +831,8 @@ resume:
 		next = tmp->next;
 
 		dentry_lru_del_init(dentry);
-		/* 
-		 * move only zero ref count dentries to the end 
+		/*
+		 * move only zero ref count dentries to the end
 		 * of the unused list for prune_dcache
 		 */
 		if (!atomic_read(&dentry->d_count)) {
@@ -873,7 +875,7 @@ out:
  *
  * Prune the dcache to remove unused children of the parent dentry.
  */
- 
+
 void shrink_dcache_parent(struct dentry * parent)
 {
 	struct super_block *sb = parent->d_sb;
@@ -920,7 +922,7 @@ static struct shrinker dcache_shrinker = {
  * available. On a success the dentry is returned. The name passed in is
  * copied and the copy passed in may be reused after this call.
  */
- 
+/* 分配目录缓存项 */
 struct dentry *d_alloc(struct dentry * parent, const struct qstr *name)
 {
 	struct dentry *dentry;
@@ -933,12 +935,12 @@ struct dentry *d_alloc(struct dentry * parent, const struct qstr *name)
 	if (name->len > DNAME_INLINE_LEN-1) {
 		dname = kmalloc(name->len + 1, GFP_KERNEL);
 		if (!dname) {
-			kmem_cache_free(dentry_cache, dentry); 
+			kmem_cache_free(dentry_cache, dentry);
 			return NULL;
 		}
 	} else  {
 		dname = dentry->d_iname;
-	}	
+	}
 	dentry->d_name.name = dname;
 
 	dentry->d_name.len = name->len;
@@ -1011,7 +1013,7 @@ static void __d_instantiate(struct dentry *dentry, struct inode *inode)
  * (or otherwise set) by the caller to indicate that it is now
  * in use by the dcache.
  */
- 
+/* 将entry和inode联系起来 */
 void d_instantiate(struct dentry *entry, struct inode * inode)
 {
 	BUG_ON(!list_empty(&entry->d_alias));
@@ -1100,7 +1102,7 @@ EXPORT_SYMBOL(d_instantiate_unique);
  * instantiated and returned. %NULL is returned if there is insufficient
  * memory or the inode passed is %NULL.
  */
- 
+
 struct dentry * d_alloc_root(struct inode * root_inode)
 {
 	struct dentry *res = NULL;
@@ -1337,7 +1339,7 @@ EXPORT_SYMBOL(d_add_ci);
  * finished using it. %NULL is returned on failure.
  *
  * __d_lookup is dcache_lock free. The hash list is protected using RCU.
- * Memory barriers are used while updating and doing lockless traversal. 
+ * Memory barriers are used while updating and doing lockless traversal.
  * To avoid races with d_move while rename is happening, d_lock is used.
  *
  * Overflows in memcmp(), while d_move, are avoided by keeping the length
@@ -1370,6 +1372,10 @@ struct dentry * d_lookup(struct dentry * parent, struct qstr * name)
 }
 EXPORT_SYMBOL(d_lookup);
 
+/* 在父目录项下查找指定的文件/目录(缓存中找)
+ * @param parent 父目录项
+ * @param name 待查找的项
+ */
 struct dentry * __d_lookup(struct dentry * parent, struct qstr * name)
 {
 	unsigned int len = name->len;
@@ -1381,13 +1387,13 @@ struct dentry * __d_lookup(struct dentry * parent, struct qstr * name)
 	struct dentry *dentry;
 
 	rcu_read_lock();
-	
+
 	hlist_for_each_entry_rcu(dentry, node, head, d_hash) {
 		struct qstr *qstr;
 
 		if (dentry->d_name.hash != hash)
 			continue;
-		if (dentry->d_parent != parent)
+		if (dentry->d_parent != parent) /* 保证父目录一致 */
 			continue;
 
 		spin_lock(&dentry->d_lock);
@@ -1466,7 +1472,7 @@ out:
  * This is used by ncpfs in its readdir implementation.
  * Zero is returned in the dentry is invalid.
  */
- 
+
 int d_validate(struct dentry *dentry, struct dentry *dparent)
 {
 	struct hlist_head *base;
@@ -1481,7 +1487,7 @@ int d_validate(struct dentry *dentry, struct dentry *dparent)
 
 	spin_lock(&dcache_lock);
 	base = d_hash(dparent, dentry->d_name.hash);
-	hlist_for_each(lhp,base) { 
+	hlist_for_each(lhp,base) {
 		/* hlist_for_each_entry_rcu() not required for d_hash list
 		 * as it is parsed under dcache_lock
 		 */
@@ -1509,7 +1515,7 @@ EXPORT_SYMBOL(d_validate);
  * it from the hash queues and waiting for
  * it to be deleted later when it has no users
  */
- 
+
 /**
  * d_delete - delete a dentry
  * @dentry: The dentry to delete
@@ -1517,7 +1523,7 @@ EXPORT_SYMBOL(d_validate);
  * Turn the dentry into a negative dentry if possible, otherwise
  * remove it from the hash queues so it can be deleted later
  */
- 
+
 void d_delete(struct dentry * dentry)
 {
 	int isdir = 0;
@@ -1562,7 +1568,7 @@ static void _d_rehash(struct dentry * entry)
  *
  * Adds a dentry to the hash according to its name.
  */
- 
+
 void d_rehash(struct dentry * entry)
 {
 	spin_lock(&dcache_lock);
@@ -1636,7 +1642,7 @@ static void switch_names(struct dentry *dentry, struct dentry *target)
  * up under the name it had before it was deleted rather than
  * under the original name of the file that was moved on top of it.
  */
- 
+
 /*
  * d_move_locked - move a dentry
  * @dentry: entry to move
@@ -2163,7 +2169,7 @@ out:
  * Returns 0 otherwise.
  * Caller must ensure that "new_dentry" is pinned before calling is_subdir()
  */
-  
+
 int is_subdir(struct dentry *new_dentry, struct dentry *old_dentry)
 {
 	int result;
@@ -2257,7 +2263,7 @@ resume:
  * filesystems using synthetic inode numbers, and is necessary
  * to keep getcwd() working.
  */
- 
+
 ino_t find_inode_number(struct dentry *dir, struct qstr *name)
 {
 	struct dentry * dentry;
@@ -2311,14 +2317,14 @@ static void __init dcache_init(void)
 {
 	int loop;
 
-	/* 
+	/*
 	 * A constructor could be added for stable state like the lists,
 	 * but it is probably not worth it because of the cache nature
-	 * of the dcache. 
+	 * of the dcache.
 	 */
 	dentry_cache = KMEM_CACHE(dentry,
 		SLAB_RECLAIM_ACCOUNT|SLAB_PANIC|SLAB_MEM_SPREAD);
-	
+
 	register_shrinker(&dcache_shrinker);
 
 	/* Hash may have been set up in dcache_init_early */

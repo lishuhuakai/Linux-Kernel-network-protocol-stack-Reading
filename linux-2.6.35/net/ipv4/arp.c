@@ -1374,6 +1374,7 @@ static void arp_format_pneigh_entry(struct seq_file *seq,
 		   dev ? dev->name : "*");
 }
 
+/* 将邻居的信息打印出来 */
 static int arp_seq_show(struct seq_file *seq, void *v)
 {
 	if (v == SEQ_START_TOKEN) {
@@ -1416,8 +1417,8 @@ static int arp_seq_open(struct inode *inode, struct file *file)
 
 static const struct file_operations arp_seq_fops = {
 	.owner		= THIS_MODULE,
-	.open           = arp_seq_open,
-	.read           = seq_read,
+	.open           = arp_seq_open, /* 打开arp文件 */
+	.read           = seq_read, /* 读取arp文件 */
 	.llseek         = seq_lseek,
 	.release	= seq_release_net,
 };
@@ -1442,7 +1443,7 @@ static struct pernet_operations arp_net_ops = {
 
 static int __init arp_proc_init(void)
 {
-	return register_pernet_subsys(&arp_net_ops);
+	return register_pernet_subsys(&arp_net_ops); /* 在/proc/net目录下,创建arp文件 */
 }
 
 #else /* CONFIG_PROC_FS */

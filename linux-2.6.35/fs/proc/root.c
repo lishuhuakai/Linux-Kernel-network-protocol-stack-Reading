@@ -35,6 +35,9 @@ static int proc_set_super(struct super_block *sb, void *data)
 	return set_anon_super(sb, NULL);
 }
 
+/* 将特定于文件系统的超级块数据填充到一个vfsmount结构的实例中，
+ * 使得新的文件系统能够集成到VFS树
+*/
 static int proc_get_sb(struct file_system_type *fs_type,
 	int flags, const char *dev_name, void *data, struct vfsmount *mnt)
 {
@@ -101,6 +104,9 @@ static struct file_system_type proc_fs_type = {
 	.kill_sb	= proc_kill_sb,
 };
 
+/* 初始化proc文件系统
+ *
+ */
 void __init proc_root_init(void)
 {
 	int err;
@@ -122,7 +128,7 @@ void __init proc_root_init(void)
 #ifdef CONFIG_SYSVIPC
 	proc_mkdir("sysvipc", NULL);
 #endif
-	proc_mkdir("fs", NULL);
+	proc_mkdir("fs", NULL); /* /proc/fs */
 	proc_mkdir("driver", NULL);
 	proc_mkdir("fs/nfsd", NULL); /* somewhere for the nfsd filesystem to be mounted */
 #if defined(CONFIG_SUN_OPENPROMFS) || defined(CONFIG_SUN_OPENPROMFS_MODULE)
@@ -145,12 +151,17 @@ static int proc_root_getattr(struct vfsmount *mnt, struct dentry *dentry, struct
 	return 0;
 }
 
+/* 从proc文件系统的根目录开始查找
+ * @param dir
+ * @param dentry 查找结果需要填入此结构体中
+ */
 static struct dentry *proc_root_lookup(struct inode * dir, struct dentry * dentry, struct nameidata *nd)
 {
+    /* 首先查找其他文件 */
 	if (!proc_lookup(dir, dentry, nd)) {
 		return NULL;
 	}
-	
+    /* 然后再查找pid目录 */
 	return proc_pid_lookup(dir, dentry, nd);
 }
 
@@ -193,13 +204,13 @@ static const struct inode_operations proc_root_inode_operations = {
  * This is the root "inode" in the /proc tree..
  */
 struct proc_dir_entry proc_root = {
-	.low_ino	= PROC_ROOT_INO, 
-	.namelen	= 5, 
+	.low_ino	= PROC_ROOT_INO,
+	.namelen	= 5,
 	.name		= "/proc",
-	.mode		= S_IFDIR | S_IRUGO | S_IXUGO, 
-	.nlink		= 2, 
+	.mode		= S_IFDIR | S_IRUGO | S_IXUGO,
+	.nlink		= 2,
 	.count		= ATOMIC_INIT(1),
-	.proc_iops	= &proc_root_inode_operations, 
+	.proc_iops	= &proc_root_inode_operations,
 	.proc_fops	= &proc_root_operations,
 	.parent		= &proc_root,
 };

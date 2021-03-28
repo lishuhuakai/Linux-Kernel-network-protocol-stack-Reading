@@ -4,7 +4,7 @@
  *  Copyright (C) 1991, 1992  Linus Torvalds
  */
 
-#include <linux/slab.h> 
+#include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/fcntl.h>
 #include <linux/file.h>
@@ -292,6 +292,10 @@ ssize_t do_sync_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
 
 EXPORT_SYMBOL(do_sync_read);
 
+/* 读文件
+ * @param file 文件
+ * @param pos 偏移量
+ */
 ssize_t vfs_read(struct file *file, char __user *buf, size_t count, loff_t *pos)
 {
 	ssize_t ret;
@@ -465,7 +469,7 @@ SYSCALL_DEFINE(pwrite64)(unsigned int fd, const char __user *buf,
 	file = fget_light(fd, &fput_needed);
 	if (file) {
 		ret = -ESPIPE;
-		if (file->f_mode & FMODE_PWRITE)  
+		if (file->f_mode & FMODE_PWRITE)
 			ret = vfs_write(file, buf, count, &pos);
 		fput_light(file, fput_needed);
 	}

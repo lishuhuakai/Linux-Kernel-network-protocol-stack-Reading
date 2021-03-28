@@ -14,9 +14,9 @@ struct open_intent {
 };
 
 enum { MAX_NESTED_LINKS = 8 };
-
+/* 文件名 <-> */
 struct nameidata {
-	struct path	path;
+	struct path	path; /* struct dentry以及struct vfsmount记录了找到的文件系统项的数据 */
 	struct qstr	last;
 	struct path	root;
 	unsigned int	flags;

@@ -93,7 +93,7 @@
  *	The classic example of a problem is opening file descriptors
  *	in /proc for a task before it execs a suid executable.
  */
-
+/* 主要用于/proc/pid/目录的相关操作 */
 struct pid_entry {
 	char *name;
 	int len;
@@ -250,10 +250,10 @@ static int proc_pid_cmdline(struct task_struct *task, char * buffer)
 		goto out_mm;	/* Shh! No looking before we're done */
 
  	len = mm->arg_end - mm->arg_start;
- 
+
 	if (len > PAGE_SIZE)
 		len = PAGE_SIZE;
- 
+
 	res = access_process_vm(task, mm->arg_start, buffer, len, 0);
 
 	// If the nul at the end of args has been overwritten, then
@@ -787,18 +787,18 @@ static ssize_t mem_read(struct file * file, char __user * buf,
 		goto out;
 
 	ret = 0;
- 
+
 	mm = get_task_mm(task);
 	if (!mm)
 		goto out_free;
 
 	ret = -EIO;
- 
+
 	if (file->private_data != (void*)((long)current->self_exec_id))
 		goto out_put;
 
 	ret = 0;
- 
+
 	while (count > 0) {
 		int this_len, retval;
 
@@ -814,7 +814,7 @@ static ssize_t mem_read(struct file * file, char __user * buf,
 			ret = -EFAULT;
 			break;
 		}
- 
+
 		ret += retval;
 		src += retval;
 		buf += retval;
@@ -874,7 +874,7 @@ static ssize_t mem_write(struct file * file, const char __user *buf,
 		copied += retval;
 		buf += retval;
 		dst += retval;
-		count -= retval;			
+		count -= retval;
 	}
 	*ppos = dst;
 	free_page((unsigned long) page);
@@ -1485,7 +1485,10 @@ static int task_dumpable(struct task_struct *task)
 	return 0;
 }
 
-
+/*
+ * @param sb 超级块的信息
+ * @param task 任务的相关信息
+ */
 static struct inode *proc_pid_make_inode(struct super_block * sb, struct task_struct *task)
 {
 	struct inode * inode;
@@ -1494,7 +1497,7 @@ static struct inode *proc_pid_make_inode(struct super_block * sb, struct task_st
 
 	/* We need a new inode */
 
-	inode = new_inode(sb);
+	inode = new_inode(sb); /* 创建一个inode节点 */
 	if (!inode)
 		goto out;
 
@@ -1782,6 +1785,9 @@ static const struct dentry_operations tid_fd_dentry_operations =
 	.d_delete	= pid_delete_dentry,
 };
 
+/*
+ * @param task 进程
+ */
 static struct dentry *proc_fd_instantiate(struct inode *dir,
 	struct dentry *dentry, struct task_struct *task, const void *ptr)
 {
@@ -1836,6 +1842,7 @@ out_iput:
 	goto out;
 }
 
+/* 查找对应的fd */
 static struct dentry *proc_lookupfd_common(struct inode *dir,
 					   struct dentry *dentry,
 					   instantiate_t instantiate)
@@ -1856,6 +1863,7 @@ out_no_task:
 	return result;
 }
 
+/* 查找fd文件项 */
 static int proc_readfd_common(struct file * filp, void * dirent,
 			      filldir_t filldir, instantiate_t instantiate)
 {
@@ -1883,7 +1891,7 @@ static int proc_readfd_common(struct file * filp, void * dirent,
 				goto out;
 			filp->f_pos++;
 		default:
-			files = get_files_struct(p);
+			files = get_files_struct(p); /* 获取文件描述符 */
 			if (!files)
 				goto out;
 			rcu_read_lock();
@@ -1897,7 +1905,7 @@ static int proc_readfd_common(struct file * filp, void * dirent,
 					continue;
 				rcu_read_unlock();
 
-				len = snprintf(name, sizeof(name), "%d", fd);
+				len = snprintf(name, sizeof(name), "%d", fd); /* 不停打印fd的值 */
 				if (proc_fill_cache(filp, dirent, filldir,
 						    name, len, instantiate,
 						    p, &fd) < 0) {
@@ -1915,6 +1923,9 @@ out_no_task:
 	return retval;
 }
 
+/* 查找进程的fd
+ *
+ */
 static struct dentry *proc_lookupfd(struct inode *dir, struct dentry *dentry,
 				    struct nameidata *nd)
 {
@@ -2040,7 +2051,7 @@ static struct dentry *proc_pident_instantiate(struct inode *dir,
 	if (S_ISDIR(inode->i_mode))
 		inode->i_nlink = 2;	/* Use getattr to fix if necessary */
 	if (p->iop)
-		inode->i_op = p->iop;
+		inode->i_op = p->iop; /* 继续安装 */
 	if (p->fop)
 		inode->i_fop = p->fop;
 	ei->op = p->op;
@@ -2053,7 +2064,7 @@ out:
 	return error;
 }
 
-static struct dentry *proc_pident_lookup(struct inode *dir, 
+static struct dentry *proc_pident_lookup(struct inode *dir,
 					 struct dentry *dentry,
 					 const struct pid_entry *ents,
 					 unsigned int nents)
@@ -2564,6 +2575,9 @@ static int proc_pid_personality(struct seq_file *m, struct pid_namespace *ns,
 static const struct file_operations proc_task_operations;
 static const struct inode_operations proc_task_inode_operations;
 
+/* 这里记录了进程的操作函数
+ * 包括打印进程的fd等方法
+ */
 static const struct pid_entry tgid_base_stuff[] = {
 	DIR("task",       S_IRUGO|S_IXUGO, proc_task_inode_operations, proc_task_operations),
 	DIR("fd",         S_IRUSR|S_IXUSR, proc_fd_inode_operations, proc_fd_operations),
@@ -2652,6 +2666,9 @@ static const struct file_operations proc_tgid_base_operations = {
 	.readdir	= proc_tgid_base_readdir,
 };
 
+/*
+ * 在/proc/pid/目录下(pid替换为数字), 查找文件项
+ */
 static struct dentry *proc_tgid_base_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd){
 	return proc_pident_lookup(dir, dentry,
 				  tgid_base_stuff, ARRAY_SIZE(tgid_base_stuff));
@@ -2751,6 +2768,9 @@ void proc_flush_task(struct task_struct *task)
 		pid_ns_release_proc(upid->ns);
 }
 
+/* 创建dentry,也就是目录缓存项
+ *
+ */
 static struct dentry *proc_pid_instantiate(struct inode *dir,
 					   struct dentry * dentry,
 					   struct task_struct *task, const void *ptr)
@@ -2762,7 +2782,7 @@ static struct dentry *proc_pid_instantiate(struct inode *dir,
 	if (!inode)
 		goto out;
 
-	inode->i_mode = S_IFDIR|S_IRUGO|S_IXUGO;
+	inode->i_mode = S_IFDIR|S_IRUGO|S_IXUGO; /* 目录 */
 	inode->i_op = &proc_tgid_base_inode_operations;
 	inode->i_fop = &proc_tgid_base_operations;
 	inode->i_flags|=S_IMMUTABLE;
@@ -2791,13 +2811,13 @@ struct dentry *proc_pid_lookup(struct inode *dir, struct dentry * dentry, struct
 	if (!IS_ERR(result) || PTR_ERR(result) != -ENOENT)
 		goto out;
 
-	tgid = name_to_int(dentry);
+	tgid = name_to_int(dentry); /* pid */
 	if (tgid == ~0U)
 		goto out;
 
 	ns = dentry->d_sb->s_fs_info;
 	rcu_read_lock();
-	task = find_task_by_pid_ns(tgid, ns);
+	task = find_task_by_pid_ns(tgid, ns); /* 找到对应的task结构 */
 	if (task)
 		get_task_struct(task);
 	rcu_read_unlock();

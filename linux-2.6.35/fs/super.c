@@ -317,7 +317,7 @@ retry:
 			return ERR_PTR(-ENOMEM);
 		goto retry;
 	}
-		
+
 	err = set(s, data);
 	if (err) {
 		spin_unlock(&sb_lock);
@@ -417,7 +417,7 @@ void iterate_supers(void (*f)(struct super_block *, void *), void *arg)
 /**
  *	get_super - get the superblock of a device
  *	@bdev: device to get the superblock for
- *	
+ *
  *	Scans the superblock list and finds the superblock of the file system
  *	mounted on the device given. %NULL is returned if no match is found.
  */
@@ -484,7 +484,7 @@ restart:
 	spin_unlock(&sb_lock);
 	return NULL;
 }
- 
+
 struct super_block *user_get_super(dev_t dev)
 {
 	struct super_block *sb;
@@ -876,6 +876,9 @@ int get_sb_single(struct file_system_type *fs_type,
 
 EXPORT_SYMBOL(get_sb_single);
 
+/*
+ * @param type 文件系统元信息
+ */
 struct vfsmount *
 vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void *data)
 {
@@ -904,7 +907,7 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void 
 			goto out_free_secdata;
 	}
 
-	error = type->get_sb(type, flags, name, data, mnt);
+	error = type->get_sb(type, flags, name, data, mnt); /* 获取超级块 */
 	if (error < 0)
 		goto out_free_secdata;
 	BUG_ON(!mnt->mnt_sb);
@@ -1055,6 +1058,10 @@ static struct vfsmount *fs_set_subtype(struct vfsmount *mnt, const char *fstype)
 	return ERR_PTR(err);
 }
 
+/*
+ * @param fstype 文件系统类型
+ * @param
+ */
 struct vfsmount *
 do_kern_mount(const char *fstype, int flags, const char *name, void *data)
 {

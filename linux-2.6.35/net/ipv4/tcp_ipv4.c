@@ -2494,7 +2494,8 @@ static struct pernet_operations tcp4_net_ops = {
 
 int __init tcp4_proc_init(void)
 {
-	return register_pernet_subsys(&tcp4_net_ops);
+    /* 注册/proc/net/tcp */
+    return register_pernet_subsys(&tcp4_net_ops);
 }
 
 void tcp4_proc_exit(void)

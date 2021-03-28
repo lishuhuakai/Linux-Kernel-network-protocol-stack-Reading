@@ -32,6 +32,9 @@ static struct net *get_proc_net(const struct inode *inode)
 	return maybe_get_net(PDE_NET(PDE(inode)));
 }
 
+/* 打开序列文件
+ *
+ */
 int seq_open_net(struct inode *ino, struct file *f,
 		 const struct seq_operations *ops, int size)
 {
@@ -118,6 +121,9 @@ static struct net *get_proc_task_net(struct inode *dir)
 	return net;
 }
 
+/* 查找net目录下的文件
+ *
+ */
 static struct dentry *proc_tgid_net_lookup(struct inode *dir,
 		struct dentry *dentry, struct nameidata *nd)
 {
@@ -208,7 +214,7 @@ static __net_init int proc_net_ns_init(struct net *net)
 	netd->parent = &proc_root;
 
 	err = -EEXIST;
-	net_statd = proc_net_mkdir(net, "stat", netd);
+	net_statd = proc_net_mkdir(net, "stat", netd); /* 创建目录stat */
 	if (!net_statd)
 		goto free_net;
 
@@ -233,9 +239,10 @@ static struct pernet_operations __net_initdata proc_net_ns_ops = {
 	.exit = proc_net_ns_exit,
 };
 
+/* 初始化/proc/net */
 int __init proc_net_init(void)
 {
 	proc_symlink("net", NULL, "self/net");
-
+    /* register_pernet_subsys其实会调用proc_net_ns_init函数 */
 	return register_pernet_subsys(&proc_net_ns_ops);
 }

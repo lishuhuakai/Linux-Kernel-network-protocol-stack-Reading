@@ -722,7 +722,9 @@ static inline int mapping_writably_mapped(struct address_space *mapping)
 struct posix_acl;
 #define ACL_NOT_CACHED ((void *)(-1))
 
-/* 索引节点对象 */
+/* 索引节点对象
+ * 文件的元数据
+ */
 struct inode {
 	struct hlist_node	i_hash;
 	struct list_head	i_list;		/* backing dev IO list */
@@ -921,7 +923,7 @@ struct file {
 		struct list_head	fu_list;
 		struct rcu_head 	fu_rcuhead;
 	} f_u;
-	struct path		f_path;
+	struct path		f_path; /* 记录了文件的inode,dentry等信息 */
 #define f_dentry	f_path.dentry
 #define f_vfsmnt	f_path.mnt
 	const struct file_operations	*f_op; /* 文件操作对象 */
@@ -1515,7 +1517,7 @@ struct file_operations {
 
 struct inode_operations {
 	int (*create) (struct inode *,struct dentry *,int, struct nameidata *);
-	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *);
+	struct dentry * (*lookup) (struct inode *,struct dentry *, struct nameidata *); /* 查找函数 */
 	int (*link) (struct dentry *,struct inode *,struct dentry *);
 	int (*unlink) (struct inode *,struct dentry *);
 	int (*symlink) (struct inode *,struct dentry *,const char *);
@@ -1734,14 +1736,16 @@ static inline void file_accessed(struct file *file)
 
 int sync_inode(struct inode *inode, struct writeback_control *wbc);
 
+/* 文件系统类型 */
 struct file_system_type {
 	const char *name;
 	int fs_flags;
+    /* 从底层文件系统中获取超级块 */
 	int (*get_sb) (struct file_system_type *, int,
 		       const char *, void *, struct vfsmount *);
 	void (*kill_sb) (struct super_block *);
 	struct module *owner;
-	struct file_system_type * next;
+	struct file_system_type * next; /* 文件系统实例连成链表 */
 	struct list_head fs_supers;
 
 	struct lock_class_key s_lock_key;

@@ -651,6 +651,10 @@ static inline int __get_file_write_access(struct inode *inode,
 	return error;
 }
 
+/*
+ * @param dentry 目录缓存项
+ * @param mnt 挂载点
+ */
 static struct file *__dentry_open(struct dentry *dentry, struct vfsmount *mnt,
 					struct file *f,
 					int (*open)(struct inode *, struct file *),
@@ -674,17 +678,17 @@ static struct file *__dentry_open(struct dentry *dentry, struct vfsmount *mnt,
 	f->f_path.dentry = dentry;
 	f->f_path.mnt = mnt;
 	f->f_pos = 0;
-	f->f_op = fops_get(inode->i_fop);
-	file_move(f, &inode->i_sb->s_files);
+	f->f_op = fops_get(inode->i_fop); /* 这里赋值文件操作方法 */
+	file_move(f, &inode->i_sb->s_files); /* 将创建的file实例放入超级块的s_files链表上 */
 
 	error = security_dentry_open(f, cred);
 	if (error)
 		goto cleanup_all;
 
 	if (!open && f->f_op)
-		open = f->f_op->open;
+		open = f->f_op->open; /* 底层文件系统的open函数 */
 	if (open) {
-		error = open(inode, f);
+		error = open(inode, f); /* 调用回调函数 */
 		if (error)
 			goto cleanup_all;
 	}
@@ -778,6 +782,9 @@ EXPORT_SYMBOL_GPL(lookup_instantiate_filp);
  *
  * Note that this function destroys the original nameidata
  */
+/* 将创建的file实例放入超级块的s_files链表上
+ * 并调用底层文件系统的file_operations结构中的open函数。
+ */
 struct file *nameidata_to_filp(struct nameidata *nd)
 {
 	const struct cred *cred = current_cred();
@@ -787,6 +794,7 @@ struct file *nameidata_to_filp(struct nameidata *nd)
 	filp = nd->intent.open.file;
 	/* Has the filesystem initialised the file for us? */
 	if (filp->f_path.dentry == NULL)
+        /* __dentry_open将创建的file实例放入超级块的s_files链表上 */
 		filp = __dentry_open(nd->path.dentry, nd->path.mnt, filp,
 				     NULL, cred);
 	else
@@ -881,7 +889,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, int mode)
 	int fd = PTR_ERR(tmp);
 
 	if (!IS_ERR(tmp)) {
-		fd = get_unused_fd_flags(flags);
+		fd = get_unused_fd_flags(flags); /* 获取一个未使用的文件描述符 */
 		if (fd >= 0) {
 			struct file *f = do_filp_open(dfd, tmp, flags, mode, 0);
 			if (IS_ERR(f)) {
@@ -889,6 +897,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, int mode)
 				fd = PTR_ERR(f);
 			} else {
 				fsnotify_open(f->f_path.dentry);
+                /* fd_install必须将file实例放置到进程task_struct的files->fd数组中 */
 				fd_install(fd, f);
 			}
 		}
@@ -897,6 +906,7 @@ long do_sys_open(int dfd, const char __user *filename, int flags, int mode)
 	return fd;
 }
 
+/* open函数的实现 */
 SYSCALL_DEFINE3(open, const char __user *, filename, int, flags, int, mode)
 {
 	long ret;

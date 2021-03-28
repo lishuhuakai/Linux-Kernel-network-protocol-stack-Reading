@@ -2500,6 +2500,7 @@ static const struct file_operations proto_seq_fops = {
 
 static __net_init int proto_init_net(struct net *net)
 {
+    /* /proc/net/protocols */
 	if (!proc_net_fops_create(net, "protocols", S_IRUGO, &proto_seq_fops))
 		return -ENOMEM;
 

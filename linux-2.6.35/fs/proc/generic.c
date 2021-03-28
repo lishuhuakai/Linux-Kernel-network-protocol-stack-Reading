@@ -3,7 +3,7 @@
  *
  * This file contains generic proc-fs routines for handling
  * directories and files.
- * 
+ *
  * Copyright (C) 1991, 1992 Linus Torvalds.
  * Copyright (C) 1997 Theodore Ts'o
  */
@@ -37,6 +37,9 @@ static int proc_match(int len, const char *name, struct proc_dir_entry *de)
 /* buffer size is one page but our output routines use some slack for overruns */
 #define PROC_BLOCK_SIZE	(PAGE_SIZE - 1024)
 
+/* 读取/proc文件系统中的文件
+ *
+ */
 static ssize_t
 __proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 	       loff_t *ppos)
@@ -88,11 +91,11 @@ __proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 			 *    offset within the buffer.  Return the number (n)
 			 *    of bytes there are from the beginning of the
 			 *    buffer up to the last byte of data.  If the
-			 *    number of supplied bytes (= n - offset) is 
+			 *    number of supplied bytes (= n - offset) is
 			 *    greater than zero and you didn't signal eof
 			 *    and the reader is prepared to take more data
 			 *    you will be called again with the requested
-			 *    offset advanced by the number of bytes 
+			 *    offset advanced by the number of bytes
 			 *    absorbed.  This interface is useful for files
 			 *    no larger than the buffer.
 			 * 1) Set *start = an unsigned long value less than
@@ -166,7 +169,7 @@ __proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 			if (n > count)
 				n = count;
 		}
-		
+
  		n -= copy_to_user(buf, start < page ? page : start, n);
 		if (n == 0) {
 			if (retval == 0)
@@ -183,6 +186,9 @@ __proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 	return retval;
 }
 
+/* 读取proc文件
+ *
+ */
 static ssize_t
 proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 	       loff_t *ppos)
@@ -204,6 +210,9 @@ proc_file_read(struct file *file, char __user *buf, size_t nbytes,
 	return rv;
 }
 
+/* 向proc文件系统写入数据
+ *
+ */
 static ssize_t
 proc_file_write(struct file *file, const char __user *buffer,
 		size_t count, loff_t *ppos)
@@ -263,7 +272,7 @@ static int proc_notify_change(struct dentry *dentry, struct iattr *iattr)
 	error = inode_setattr(inode, iattr);
 	if (error)
 		goto out;
-	
+
 	de->uid = inode->i_uid;
 	de->gid = inode->i_gid;
 	de->mode = inode->i_mode;
@@ -389,9 +398,9 @@ static const struct inode_operations proc_link_inode_operations = {
 };
 
 /*
- * As some entries in /proc are volatile, we want to 
- * get rid of unused dentries.  This could be made 
- * smarter: we could keep a "volatile" flag in the 
+ * As some entries in /proc are volatile, we want to
+ * get rid of unused dentries.  This could be made
+ * smarter: we could keep a "volatile" flag in the
  * inode to indicate which ones to keep.
  */
 static int proc_delete_dentry(struct dentry * dentry)
@@ -415,7 +424,7 @@ struct dentry *proc_lookup_de(struct proc_dir_entry *de, struct inode *dir,
 	int error = -ENOENT;
 
 	spin_lock(&proc_subdir_lock);
-	for (de = de->subdir; de ; de = de->next) {
+	for (de = de->subdir; de ; de = de->next) { /* 遍历下一层 */
 		if (de->namelen != dentry->d_name.len)
 			continue;
 		if (!memcmp(dentry->d_name.name, de->name, de->namelen)) {
@@ -442,6 +451,9 @@ out_unlock:
 	return ERR_PTR(error);
 }
 
+/* 查找对应的文件
+ *
+ */
 struct dentry *proc_lookup(struct inode *dir, struct dentry *dentry,
 		struct nameidata *nd)
 {
@@ -519,7 +531,7 @@ int proc_readdir_de(struct proc_dir_entry *de, struct file *filp, void *dirent,
 	}
 	ret = 1;
 out:
-	return ret;	
+	return ret;
 }
 
 int proc_readdir(struct file *filp, void *dirent, filldir_t filldir)
@@ -536,7 +548,7 @@ int proc_readdir(struct file *filp, void *dirent, filldir_t filldir)
  */
 static const struct file_operations proc_dir_operations = {
 	.llseek			= generic_file_llseek,
-	.read			= generic_read_dir,
+	.read			= generic_read_dir, /* 不允许读目录项 */
 	.readdir		= proc_readdir,
 };
 
@@ -549,26 +561,30 @@ static const struct inode_operations proc_dir_inode_operations = {
 	.setattr	= proc_notify_change,
 };
 
+/* 为proc文件注册对应的操作函数
+ * @param dir 父目录项
+ * @param dp 文件项
+ */
 static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp)
 {
 	unsigned int i;
 	struct proc_dir_entry *tmp;
-	
+
 	i = get_inode_number();
 	if (i == 0)
 		return -EAGAIN;
 	dp->low_ino = i;
 
-	if (S_ISDIR(dp->mode)) {
+	if (S_ISDIR(dp->mode)) { /* 目录 */
 		if (dp->proc_iops == NULL) {
 			dp->proc_fops = &proc_dir_operations;
 			dp->proc_iops = &proc_dir_inode_operations;
 		}
 		dir->nlink++;
-	} else if (S_ISLNK(dp->mode)) {
+	} else if (S_ISLNK(dp->mode)) { /* 链接 */
 		if (dp->proc_iops == NULL)
 			dp->proc_iops = &proc_link_inode_operations;
-	} else if (S_ISREG(dp->mode)) {
+	} else if (S_ISREG(dp->mode)) { /* 文件 */
 		if (dp->proc_fops == NULL)
 			dp->proc_fops = &proc_file_operations;
 		if (dp->proc_iops == NULL)
@@ -576,7 +592,7 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 	}
 
 	spin_lock(&proc_subdir_lock);
-
+    /* 遍历父目录的子目录项 */
 	for (tmp = dir->subdir; tmp; tmp = tmp->next)
 		if (strcmp(tmp->name, dp->name) == 0) {
 			WARN(1, KERN_WARNING "proc_dir_entry '%s/%s' already registered\n",
@@ -592,6 +608,9 @@ static int proc_register(struct proc_dir_entry * dir, struct proc_dir_entry * dp
 	return 0;
 }
 
+/* 创建proc目录项
+ *
+ */
 static struct proc_dir_entry *__proc_create(struct proc_dir_entry **parent,
 					  const char *name,
 					  mode_t mode,
@@ -689,6 +708,7 @@ struct proc_dir_entry *proc_net_mkdir(struct net *net, const char *name,
 }
 EXPORT_SYMBOL_GPL(proc_net_mkdir);
 
+/* 在proc文件系统下创建目录 */
 struct proc_dir_entry *proc_mkdir(const char *name,
 		struct proc_dir_entry *parent)
 {
@@ -696,6 +716,11 @@ struct proc_dir_entry *proc_mkdir(const char *name,
 }
 EXPORT_SYMBOL(proc_mkdir);
 
+/* 创建proc文件项
+ * @param name 文件名称
+ * @param mode 文件属性
+ * @param parent 父目录项
+ */
 struct proc_dir_entry *create_proc_entry(const char *name, mode_t mode,
 					 struct proc_dir_entry *parent)
 {

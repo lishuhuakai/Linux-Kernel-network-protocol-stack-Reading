@@ -458,6 +458,7 @@ static __net_init int ip_proc_init_net(struct net *net)
 		goto out_sockstat;
 	if (!proc_net_fops_create(net, "netstat", S_IRUGO, &netstat_seq_fops))
 		goto out_netstat;
+    /* 打印/proc/net/snmp的相关信息 */
 	if (!proc_net_fops_create(net, "snmp", S_IRUGO, &snmp_seq_fops))
 		goto out_snmp;
 

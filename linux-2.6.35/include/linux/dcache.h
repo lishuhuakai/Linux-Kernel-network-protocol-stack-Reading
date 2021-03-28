@@ -85,12 +85,15 @@ full_name_hash(const unsigned char *name, unsigned int len)
 #else
 #define DNAME_INLINE_LEN_MIN 40 /* 128 bytes */
 #endif
-/* 目录项对象 */
+/*
+ * 目录项缓存 -- 建立文件名和inode的关联
+ */
 struct dentry {
-	atomic_t d_count;
+	atomic_t d_count; /* 目录项对象的引用计数 */
 	unsigned int d_flags;		/* protected by d_lock */
 	spinlock_t d_lock;		/* per dentry lock */
 	int d_mounted;
+    /* 文件名所属的inode,NULL表示不存在文件名 */
 	struct inode *d_inode;		/* Where the name belongs to - NULL is
 					 * negative */
 	/*
@@ -99,7 +102,7 @@ struct dentry {
 	 */
 	struct hlist_node d_hash;	/* lookup hash list */
 	struct dentry *d_parent;	/* parent directory */
-	struct qstr d_name;
+	struct qstr d_name; /* 文件名称 */
 
 	struct list_head d_lru;		/* LRU list */
 	/*
@@ -109,10 +112,11 @@ struct dentry {
 		struct list_head d_child;	/* child of parent list */
 	 	struct rcu_head d_rcu;
 	} d_u;
+    /* 子目录/文件的目录项构成的链表 */
 	struct list_head d_subdirs;	/* our children */
 	struct list_head d_alias;	/* inode alias list */
 	unsigned long d_time;		/* used by d_revalidate */
-	const struct dentry_operations *d_op;
+	const struct dentry_operations *d_op; /* 目录项方法 */
 	struct super_block *d_sb;	/* The root of the dentry tree */
 	void *d_fsdata;			/* fs-specific data */
 
@@ -384,6 +388,7 @@ static inline struct dentry *dget_parent(struct dentry *dentry)
 
 extern void dput(struct dentry *);
 
+/* 判断此目录是不是一个挂载点 */
 static inline int d_mountpoint(struct dentry *dentry)
 {
 	return dentry->d_mounted;

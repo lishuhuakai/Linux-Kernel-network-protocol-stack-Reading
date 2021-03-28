@@ -45,8 +45,8 @@
  * The new code replaces the old recursive symlink resolution with
  * an iterative one (in case of non-nested symlink chains).  It does
  * this with calls to <fs>_follow_link().
- * As a side effect, dir_namei(), _namei() and follow_link() are now 
- * replaced with a single function lookup_dentry() that can handle all 
+ * As a side effect, dir_namei(), _namei() and follow_link() are now
+ * replaced with a single function lookup_dentry() that can handle all
  * the special cases of the former code.
  *
  * With the new dcache, the pathname is stored at each inode, at least as
@@ -566,7 +566,7 @@ __do_follow_link(struct path *path, struct nameidata *nd, void **p)
  * limiting consecutive symlinks to 40.
  *
  * Without that kind of total limit, nasty chains of consecutive
- * symlinks can cause almost arbitrarily long lookups. 
+ * symlinks can cause almost arbitrarily long lookups.
  */
 static inline int do_follow_link(struct path *path, struct nameidata *nd)
 {
@@ -668,13 +668,16 @@ int follow_down(struct path *path)
 	return 0;
 }
 
+/* 回到父目录
+ *
+ */
 static __always_inline void follow_dotdot(struct nameidata *nd)
 {
 	set_root(nd);
 
 	while(1) {
 		struct dentry *old = nd->path.dentry;
-
+        /* 如果已经是根目录了,就什么也不做 */
 		if (nd->path.dentry == nd->root.dentry &&
 		    nd->path.mnt == nd->root.mnt) {
 			break;
@@ -696,6 +699,10 @@ static __always_inline void follow_dotdot(struct nameidata *nd)
  *  small and for now I'd prefer to have fast path as straight as possible.
  *  It _is_ time-critical.
  */
+/* 查找指定项
+ * @param name 文件名
+ * @param nd->dentry 父目录项
+ */
 static int do_lookup(struct nameidata *nd, struct qstr *name,
 		     struct path *path)
 {
@@ -711,11 +718,11 @@ static int do_lookup(struct nameidata *nd, struct qstr *name,
 		if (err < 0)
 			return err;
 	}
-
+    /* 首先在目录项高速缓存中查找 */
 	dentry = __d_lookup(nd->path.dentry, name);
 	if (!dentry)
 		goto need_lookup;
-	if (dentry->d_op && dentry->d_op->d_revalidate)
+	if (dentry->d_op && dentry->d_op->d_revalidate) /* 即使在缓存中找到了,也并不意味着它是最新的,需要校验 */
 		goto need_revalidate;
 done:
 	path->mnt = mnt;
@@ -723,7 +730,7 @@ done:
 	__follow_mount(path);
 	return 0;
 
-need_lookup:
+need_lookup: /* 可能要到磁盘上去加载 */
 	parent = nd->path.dentry;
 	dir = parent->d_inode;
 
@@ -741,6 +748,7 @@ need_lookup:
 	 * fast walk).
 	 *
 	 * so doing d_lookup() (with seqlock), instead of lockfree __d_lookup
+	 * 第一遍在缓存中查找,缓存中找不到,就要实际加载了.
 	 */
 	dentry = d_lookup(parent, name);
 	if (!dentry) {
@@ -754,9 +762,9 @@ need_lookup:
 		new = d_alloc(parent, name);
 		dentry = ERR_PTR(-ENOMEM);
 		if (new) {
-			dentry = dir->i_op->lookup(dir, new, nd);
+			dentry = dir->i_op->lookup(dir, new, nd); /* 调用父目录的lookup函数,对于proc文件系统 -- proc_lookup */
 			if (dentry)
-				dput(new);
+				dput(new); /* 这里会将dentry加入高速缓存 */
 			else
 				dentry = new;
 		}
@@ -812,14 +820,18 @@ static inline int follow_on_final(struct inode *inode, unsigned lookup_flags)
  * Returns 0 and nd will have valid dentry and mnt on success.
  * Returns error and drops reference to input namei data on failure.
  */
+ /* 名字解析
+  * @param name 文件名
+  * @param nd 查找缓存项
+  */
 static int link_path_walk(const char *name, struct nameidata *nd)
 {
 	struct path next;
 	struct inode *inode;
 	int err;
 	unsigned int lookup_flags = nd->flags;
-	
-	while (*name=='/')
+
+	while (*name=='/') /* 跳过路径名第一个分量前的斜杠 */
 		name++;
 	if (!*name)
 		goto return_reval;
@@ -843,11 +855,13 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 		c = *(const unsigned char *)name;
 
 		hash = init_name_hash();
+        /* 将路径名分解为分量 */
 		do {
 			name++;
 			hash = partial_name_hash(c, hash);
 			c = *(const unsigned char *)name;
 		} while (c && (c != '/'));
+        /* this记录了解析出的分量 */
 		this.len = name - (const char *) this.name;
 		this.hash = end_name_hash(hash);
 
@@ -863,12 +877,14 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 		 * to be able to know about the current root directory and
 		 * parent relationships.
 		 */
-		if (this.name[0] == '.') switch (this.len) {
-			default:
+		if (this.name[0] == '.')
+            switch (this.len) {
+			default: /* 当前目录跳过 */
 				break;
-			case 2:	
+			case 2:
 				if (this.name[1] != '.')
 					break;
+                /* ..到上一层 */
 				follow_dotdot(nd);
 				inode = nd->path.dentry->d_inode;
 				/* fallthrough */
@@ -876,6 +892,7 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 				continue;
 		}
 		/* This does the actual lookups.. */
+        /* 查找 */
 		err = do_lookup(nd, &this, &next);
 		if (err)
 			break;
@@ -895,7 +912,7 @@ static int link_path_walk(const char *name, struct nameidata *nd)
 				break;
 		} else
 			path_to_nameidata(&next, nd);
-		err = -ENOTDIR; 
+		err = -ENOTDIR;
 		if (!inode->i_op->lookup)
 			break;
 		continue;
@@ -911,7 +928,7 @@ last_component:
 		if (this.name[0] == '.') switch (this.len) {
 			default:
 				break;
-			case 2:	
+			case 2:
 				if (this.name[1] != '.')
 					break;
 				follow_dotdot(nd);
@@ -935,20 +952,20 @@ last_component:
 		if (!inode)
 			break;
 		if (lookup_flags & LOOKUP_DIRECTORY) {
-			err = -ENOTDIR; 
+			err = -ENOTDIR;
 			if (!inode->i_op->lookup)
 				break;
 		}
 		goto return_base;
 lookup_parent:
 		nd->last = this;
-		nd->last_type = LAST_NORM;
+		nd->last_type = LAST_NORM; /* 最后一个分量是普通文件名 */
 		if (this.name[0] != '.')
 			goto return_base;
 		if (this.len == 1)
-			nd->last_type = LAST_DOT;
+			nd->last_type = LAST_DOT; /* 最后一个分量是. */
 		else if (this.len == 2 && this.name[1] == '.')
-			nd->last_type = LAST_DOTDOT;
+			nd->last_type = LAST_DOTDOT; /* 最后一个分量是.. */
 		else
 			goto return_base;
 return_reval:
@@ -975,6 +992,10 @@ return_err:
 	return err;
 }
 
+/*
+ * @param name 文件名
+ * @param nd 查找结果
+ */
 static int path_walk(const char *name, struct nameidata *nd)
 {
 	struct path save = nd->path;
@@ -1000,6 +1021,9 @@ static int path_walk(const char *name, struct nameidata *nd)
 	return result;
 }
 
+/* 根据路径名称构建nameidata结构
+ *
+ */
 static int path_init(int dfd, const char *name, unsigned int flags, struct nameidata *nd)
 {
 	int retval = 0;
@@ -1011,14 +1035,14 @@ static int path_init(int dfd, const char *name, unsigned int flags, struct namei
 	nd->depth = 0;
 	nd->root.mnt = NULL;
 
-	if (*name=='/') {
+	if (*name=='/') { /* 如果路径名的第一个字符为'/',查找必须从根目录开始 */
 		set_root(nd);
 		nd->path = nd->root;
 		path_get(&nd->root);
 	} else if (dfd == AT_FDCWD) {
 		struct fs_struct *fs = current->fs;
 		read_lock(&fs->lock);
-		nd->path = fs->pwd;
+		nd->path = fs->pwd; /* 从当前目录开始查找 */
 		path_get(&fs->pwd);
 		read_unlock(&fs->lock);
 	} else {
@@ -1069,6 +1093,11 @@ static int do_path_lookup(int dfd, const char *name,
 	return retval;
 }
 
+/* 路径名查找
+ * @param name 文件名称
+ * @param flags 标志信息
+ * @param nd 存放查找的结果
+ */
 int path_lookup(const char *name, unsigned int flags,
 			struct nameidata *nd)
 {
@@ -1609,6 +1638,9 @@ exit:
 	return ERR_PTR(error);
 }
 
+/* 根据查找结果来进行下一步操作
+ *
+ */
 static struct file *do_last(struct nameidata *nd, struct path *path,
 			    int open_flag, int acc_mode,
 			    int mode, const char *pathname)
@@ -1758,6 +1790,11 @@ exit:
  * are not the same as in the local variable "flag". See
  * open_to_namei_flags() for more details.
  */
+/* 打开对应的文件,或者说查找文件的inode
+ * @param pathname 路径名称
+ * @param open_flag 打开标记信息
+ * @param dfd 文件句柄
+ */
 struct file *do_filp_open(int dfd, const char *pathname,
 		int open_flag, int mode, int acc_mode)
 {
@@ -1785,12 +1822,12 @@ struct file *do_filp_open(int dfd, const char *pathname,
 		acc_mode = MAY_OPEN | ACC_MODE(open_flag);
 
 	/* O_TRUNC implies we need access checks for write permissions */
-	if (open_flag & O_TRUNC)
+	if (open_flag & O_TRUNC) /* 截断 */
 		acc_mode |= MAY_WRITE;
 
-	/* Allow the LSM permission hook to distinguish append 
+	/* Allow the LSM permission hook to distinguish append
 	   access from general write access. */
-	if (open_flag & O_APPEND)
+	if (open_flag & O_APPEND) /* 在尾部追加 */
 		acc_mode |= MAY_APPEND;
 
 	/* find the parent */
@@ -1802,6 +1839,7 @@ reval:
 		nd.flags |= LOOKUP_REVAL;
 
 	current->total_link_count = 0;
+    /* 查找 */
 	error = link_path_walk(pathname, &nd);
 	if (error) {
 		filp = ERR_PTR(error);
@@ -1905,6 +1943,11 @@ exit_parent:
  * This is the helper to open a file from kernelspace if you really
  * have to.  But in generally you should not do this, so please move
  * along, nothing to see here..
+ */
+/* 打开文件
+ * @param filename 文件名称
+ * @param flags 访问模式标志
+ * @param mode  许可权位掩码
  */
 struct file *filp_open(const char *filename, int flags, int mode)
 {
@@ -2639,7 +2682,7 @@ int vfs_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 	if (old_dentry->d_inode == new_dentry->d_inode)
  		return 0;
- 
+
 	error = may_delete(old_dir, old_dentry, is_dir);
 	if (error)
 		return error;

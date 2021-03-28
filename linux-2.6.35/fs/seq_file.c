@@ -129,6 +129,9 @@ Eoverflow:
  *
  *	Ready-made ->f_op->read()
  */
+/* 读取序列文件
+ * @param ppos 偏移量
+ */
 ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 {
 	struct seq_file *m = (struct seq_file *)file->private_data;
@@ -196,13 +199,13 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 		err = PTR_ERR(p);
 		if (!p || IS_ERR(p))
 			break;
-		err = m->op->show(m, p);
+		err = m->op->show(m, p); /* 这里将内容输入序列文件m */
 		if (err < 0)
 			break;
 		if (unlikely(err))
 			m->count = 0;
 		if (unlikely(!m->count)) {
-			p = m->op->next(m, p, &pos);
+			p = m->op->next(m, p, &pos); /* 获取下一个元素 */
 			m->index = pos;
 			continue;
 		}

@@ -438,7 +438,7 @@ struct vfsmount *__lookup_mnt(struct vfsmount *mnt, struct dentry *dentry,
  */
 struct vfsmount *lookup_mnt(struct path *path)
 {
-	struct vfsmount *child_mnt;
+	struct vfsmount *child_mnt; /* 子挂载点 */
 	spin_lock(&vfsmount_lock);
 	if ((child_mnt = __lookup_mnt(path->mnt, path->dentry, 1)))
 		mntget(child_mnt);

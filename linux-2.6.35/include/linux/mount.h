@@ -1,6 +1,6 @@
 /*
  *
- * Definitions for mount interface. This describes the in the kernel build 
+ * Definitions for mount interface. This describes the in the kernel build
  * linkedlist with mounted filesystems.
  *
  * Author:  Marco van Wieringen <mvw@planets.elm.net>
@@ -47,11 +47,18 @@ struct mnt_namespace;
 
 #define MNT_INTERNAL	0x4000
 
+/* 挂载结构
+ * 每一个文件系统都会有一个对应的这样的结构
+ */
 struct vfsmount {
 	struct list_head mnt_hash;
+    /* 挂载点所在的父文件系统 */
 	struct vfsmount *mnt_parent;	/* fs we are mounted on */
+    /* 挂载点在文件系统中的dentry */
 	struct dentry *mnt_mountpoint;	/* dentry of mountpoint */
+    /* 当前文件系统系统根目录的dentry */
 	struct dentry *mnt_root;	/* root of the mounted tree */
+    /* 指向超级块的指针 */
 	struct super_block *mnt_sb;	/* pointer to superblock */
 	struct list_head mnt_mounts;	/* list of children, anchored here */
 	struct list_head mnt_child;	/* and going through their mnt_child */

@@ -48,16 +48,19 @@ typedef	int (read_proc_t)(char *page, char **start, off_t off,
 typedef	int (write_proc_t)(struct file *file, const char __user *buffer,
 			   unsigned long count, void *data);
 
+/* proc文件系统中的每一个数据项都用proc_dir_entry来表示
+ * 包括数据项以及目录
+ */
 struct proc_dir_entry {
 	unsigned int low_ino;
 	unsigned short namelen;
-	const char *name;
+	const char *name; /* 数据项名称 */
 	mode_t mode;
 	nlink_t nlink;
 	uid_t uid;
 	gid_t gid;
 	loff_t size;
-	const struct inode_operations *proc_iops;
+	const struct inode_operations *proc_iops; /* inode的操作函数 */
 	/*
 	 * NULL ->proc_fops means "PDE is going away RSN" or
 	 * "PDE is just created". In either case, e.g. ->read_proc won't be
@@ -66,11 +69,11 @@ struct proc_dir_entry {
 	 * If you're allocating ->proc_fops dynamically, save a pointer
 	 * somewhere.
 	 */
-	const struct file_operations *proc_fops;
+	const struct file_operations *proc_fops; /* 文件的操作函数 */
 	struct proc_dir_entry *next, *parent, *subdir;
 	void *data;
-	read_proc_t *read_proc;
-	write_proc_t *write_proc;
+	read_proc_t *read_proc; /* 从内核读取数据 */
+	write_proc_t *write_proc; /* 向内核写入数据 */
 	atomic_t count;		/* use count */
 	int pde_users;	/* number of callers into module in progress */
 	spinlock_t pde_unload_lock; /* proc_fops checks and pde_users bumps */
@@ -156,7 +159,7 @@ static inline struct proc_dir_entry *proc_create(const char *name, mode_t mode,
 }
 
 static inline struct proc_dir_entry *create_proc_read_entry(const char *name,
-	mode_t mode, struct proc_dir_entry *base, 
+	mode_t mode, struct proc_dir_entry *base,
 	read_proc_t *read_proc, void * data)
 {
 	struct proc_dir_entry *res=create_proc_entry(name,mode,base);
@@ -166,7 +169,7 @@ static inline struct proc_dir_entry *create_proc_read_entry(const char *name,
 	}
 	return res;
 }
- 
+
 extern struct proc_dir_entry *proc_net_fops_create(struct net *net,
 	const char *name, mode_t mode, const struct file_operations *fops);
 extern void proc_net_remove(struct net *net, const char *name);
@@ -210,7 +213,7 @@ static inline struct proc_dir_entry *proc_mkdir(const char *name,
 	struct proc_dir_entry *parent) {return NULL;}
 
 static inline struct proc_dir_entry *create_proc_read_entry(const char *name,
-	mode_t mode, struct proc_dir_entry *base, 
+	mode_t mode, struct proc_dir_entry *base,
 	read_proc_t *read_proc, void * data) { return NULL; }
 
 struct tty_driver;
@@ -260,17 +263,20 @@ union proc_op {
 
 struct ctl_table_header;
 struct ctl_table;
-
+/* 支持以面向inode的范式来查看proc文件系统的数据项
+ * 此结构用于将特定于proc的数据和VFS层的inode数据关联起来
+ */
 struct proc_inode {
-	struct pid *pid;
+	struct pid *pid; /* 进程id */
 	int fd;
 	union proc_op op;
-	struct proc_dir_entry *pde;
+	struct proc_dir_entry *pde; /* proc文件系统对某些东西做了简化 */
 	struct ctl_table_header *sysctl;
 	struct ctl_table *sysctl_entry;
-	struct inode vfs_inode;
+	struct inode vfs_inode; /* inode数据项 */
 };
 
+/* 从inode结构获取proc_inode结构 */
 static inline struct proc_inode *PROC_I(const struct inode *inode)
 {
 	return container_of(inode, struct proc_inode, vfs_inode);

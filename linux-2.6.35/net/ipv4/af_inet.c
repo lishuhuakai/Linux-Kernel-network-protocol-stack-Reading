@@ -1549,6 +1549,7 @@ static __net_initdata struct pernet_operations ipv4_mib_ops = {
 	.exit = ipv4_mib_exit_net,
 };
 
+/* 注册mib统计信息 */
 static int __init init_ipv4_mibs(void)
 {
 	return register_pernet_subsys(&ipv4_mib_ops);

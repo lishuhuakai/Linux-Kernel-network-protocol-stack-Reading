@@ -78,6 +78,7 @@ static void init_once(void *foo)
 	inode_init_once(&ei->vfs_inode);
 }
 
+/* 分配缓存节点 */
 void __init proc_init_inodecache(void)
 {
 	proc_inode_cachep = kmem_cache_create("proc_inode_cache",
@@ -460,8 +461,11 @@ struct inode *proc_get_inode(struct super_block *sb, unsigned int ino,
 	} else
 	       pde_put(de);
 	return inode;
-}			
+}
 
+/* 填充超级块的相关信息
+ *
+ */
 int proc_fill_super(struct super_block *s)
 {
 	struct inode * root_inode;
@@ -472,8 +476,9 @@ int proc_fill_super(struct super_block *s)
 	s->s_magic = PROC_SUPER_MAGIC;
 	s->s_op = &proc_sops;
 	s->s_time_gran = 1;
-	
+
 	pde_get(&proc_root);
+    /* 获得inode节点 */
 	root_inode = proc_get_inode(s, PROC_ROOT_INO, &proc_root);
 	if (!root_inode)
 		goto out_no_root;

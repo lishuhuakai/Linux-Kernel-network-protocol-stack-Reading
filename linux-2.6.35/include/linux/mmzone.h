@@ -277,11 +277,12 @@ struct zone_reclaim_stat {
 	unsigned long		nr_saved_scan[NR_LRU_LISTS];
 };
 
+/* 内存域 */
 struct zone {
 	/* Fields commonly accessed by the page allocator */
 
 	/* zone watermarks, access with *_wmark_pages(zone) macros */
-	unsigned long watermark[NR_WMARK];
+	unsigned long watermark[NR_WMARK]; /* 通常由页分配器访问 */
 
 	/*
 	 * We don't know if the memory that we're going to allocate will be freeable
@@ -311,7 +312,7 @@ struct zone {
 	/* see spanned/present_pages for more description */
 	seqlock_t		span_seqlock;
 #endif
-	struct free_area	free_area[MAX_ORDER];
+	struct free_area	free_area[MAX_ORDER]; /* 不同长度的空闲区域  */
 
 #ifndef CONFIG_SPARSEMEM
 	/*
@@ -334,7 +335,7 @@ struct zone {
 	ZONE_PADDING(_pad1_)
 
 	/* Fields commonly accessed by the page reclaim scanner */
-	spinlock_t		lru_lock;	
+	spinlock_t		lru_lock;
 	struct zone_lru {
 		struct list_head list;
 	} lru[NR_LRU_LISTS];
@@ -345,7 +346,7 @@ struct zone {
 	unsigned long		flags;		   /* zone flags, see below */
 
 	/* Zone statistics */
-	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS];
+	atomic_long_t		vm_stat[NR_VM_ZONE_STAT_ITEMS]; /* 内存区域统计量 */
 
 	/*
 	 * prev_priority holds the scanning priority for this zone.  It is
@@ -606,9 +607,10 @@ extern struct page *mem_map;
  * per-zone basis.
  */
 struct bootmem_data;
+/* 内存节点 */
 typedef struct pglist_data {
 	struct zone node_zones[MAX_NR_ZONES];
-	struct zonelist node_zonelists[MAX_ZONELISTS];
+	struct zonelist node_zonelists[MAX_ZONELISTS]; /* 备用结点 */
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
 	struct page *node_mem_map;
@@ -633,9 +635,9 @@ typedef struct pglist_data {
 	unsigned long node_present_pages; /* total number of physical pages */
 	unsigned long node_spanned_pages; /* total size of physical page
 					     range, including holes */
-	int node_id;
+	int node_id; /* 全局节点id */
 	wait_queue_head_t kswapd_wait;
-	struct task_struct *kswapd;
+	struct task_struct *kswapd; /* 守护进程的等待队列 */
 	int kswapd_max_order;
 } pg_data_t;
 
@@ -718,7 +720,7 @@ static inline int is_normal_idx(enum zone_type idx)
 }
 
 /**
- * is_highmem - helper function to quickly check if a struct zone is a 
+ * is_highmem - helper function to quickly check if a struct zone is a
  *              highmem zone or not.  This is an attempt to keep references
  *              to ZONE_{DMA/NORMAL/HIGHMEM/etc} in general code to a minimum.
  * @zone - pointer to struct zone variable

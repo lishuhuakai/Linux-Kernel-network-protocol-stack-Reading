@@ -36,12 +36,15 @@ struct page {
 					 * updated asynchronously */
 	atomic_t _count;		/* Usage count, see below. */
 	union {
+        /* 内存管理子系统中映射的页表项计数,用于表示页是否已经映射,还用于限制
+         * 逆向映射搜索
+         */
 		atomic_t _mapcount;	/* Count of ptes mapped in mms,
 					 * to show when page is mapped
 					 * & limit reverse map searches.
 					 */
 		struct {		/* SLUB */
-			u16 inuse;
+			u16 inuse; /* 用于slub分配器,对象的数目 */
 			u16 objects;
 		};
 	};

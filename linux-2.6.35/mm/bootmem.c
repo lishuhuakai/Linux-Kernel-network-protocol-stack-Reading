@@ -92,6 +92,11 @@ static void __init link_bootmem(bootmem_data_t *bdata)
 
 /*
  * Called once to set up the allocator itself.
+ * 初始化某内存节点的bootmem
+ * @param  bdata 待初始化的某节点的bootmem
+ * @param mapstart 保存bootmem位图的页块的首页面pfn
+ * @param start bootmem内存区的其实pfn
+ * @param end bootmem内存区的截止pfn
  */
 static unsigned long __init init_bootmem_core(bootmem_data_t *bdata,
 	unsigned long mapstart, unsigned long start, unsigned long end)
@@ -99,11 +104,16 @@ static unsigned long __init init_bootmem_core(bootmem_data_t *bdata,
 	unsigned long mapsize;
 
 	mminit_validate_memmodel_limits(&start, &end);
+    /* node_bootmem_map 保存本节点bootmem位图的虚拟地址 */
 	bdata->node_bootmem_map = phys_to_virt(PFN_PHYS(mapstart));
 	bdata->node_min_pfn = start;
+    /* 全局链表bdata_list保存所有内存节点的bootmem，并且按照pfn，即物理地址有序排列 */
 	bdata->node_low_pfn = end;
 	link_bootmem(bdata);
-
+    /* 将start与end间（包括空洞）的每一页都初始化为保留的，即位图对应的比特位置1。
+     * 对我的开发板而言，start为0，end为0x20000，位图也就对应0至512MB的内存。这是低端内存区，
+     * 共128K个页面，也就需要128K个比特位，即16K个字节，从而Mapsize为0x4000，因此位图共占用了4个页面。
+     */
 	/*
 	 * Initially all pages are reserved - setup_arch() has to
 	 * register free RAM areas explicitly.
@@ -353,7 +363,7 @@ static int __init __reserve(bootmem_data_t *bdata, unsigned long sidx,
 		eidx + bdata->node_min_pfn,
 		flags);
 
-	for (idx = sidx; idx < eidx; idx++)
+	for (idx = sidx; idx < eidx; idx++) /* 一个bit位代表一个页 */
 		if (test_and_set_bit(idx, bdata->node_bootmem_map)) {
 			if (exclusive) {
 				__free(bdata, sidx, idx);
@@ -456,6 +466,10 @@ void __init free_bootmem_node(pg_data_t *pgdat, unsigned long physaddr,
  *
  * The range must be contiguous but may span node boundaries.
  */
+/* 释放一块内存给bootmem分配器
+ * @param addr 待释放内存的物理地址
+ * @param size 待释放的内存的大小
+ */
 void __init free_bootmem(unsigned long addr, unsigned long size)
 {
 #ifdef CONFIG_NO_BOOTMEM
@@ -467,7 +481,7 @@ void __init free_bootmem(unsigned long addr, unsigned long size)
 
 	start = PFN_UP(addr);
 	end = PFN_DOWN(addr + size);
-
+    /* 将这部分空间对应的位图比特位清0 */
 	mark_bootmem(start, end, 0, 0);
 #endif
 }
@@ -526,6 +540,7 @@ int __init reserve_bootmem(unsigned long addr, unsigned long size,
 }
 
 #ifndef CONFIG_NO_BOOTMEM
+/* 按照idx进行对齐 */
 static unsigned long __init align_idx(struct bootmem_data *bdata,
 				      unsigned long idx, unsigned long step)
 {
@@ -549,6 +564,13 @@ static unsigned long __init align_off(struct bootmem_data *bdata,
 	return ALIGN(base + off, align) - base;
 }
 
+/* bootmem分配器核心函数
+ * @param bdata 某内存节点的bootmem
+ * @param size 分配内存的大小
+ * @param align 对齐大小
+ * @param goal 限定范围的起始地址
+ * @param limit 限定范围的截止地址
+ */
 static void * __init alloc_bootmem_core(struct bootmem_data *bdata,
 					unsigned long size, unsigned long align,
 					unsigned long goal, unsigned long limit)
@@ -562,37 +584,50 @@ static void * __init alloc_bootmem_core(struct bootmem_data *bdata,
 
 	BUG_ON(!size);
 	BUG_ON(align & (align - 1));
+    /* 起始地址+申请的内存大小>截止地址，参数错误,这里要求limit不为0 */
 	BUG_ON(limit && goal + size > limit);
 
 	if (!bdata->node_bootmem_map)
 		return NULL;
 
-	min = bdata->node_min_pfn;
-	max = bdata->node_low_pfn;
+	min = bdata->node_min_pfn;   /* min表示bootmem的起始pfn */
+	max = bdata->node_low_pfn; /* max表示bootmem的截止pfn */
 
-	goal >>= PAGE_SHIFT;
-	limit >>= PAGE_SHIFT;
+	goal >>= PAGE_SHIFT; /* 从哪个页开始分配 */
+	limit >>= PAGE_SHIFT; /* 需要分配多少个页 */
 
 	if (limit && max > limit)
 		max = limit;
 	if (max <= min)
 		return NULL;
-
+    /* step为扫描位图时，每次递增的页数／pfn偏移数。由对齐大小计算而来，
+     * 不足一页时，step为1，表示每次递增一页
+     */
 	step = max(align >> PAGE_SHIFT, 1UL);
 
-	if (goal && min < goal && goal < max)
+	if (goal && min < goal && goal < max) /* 参数指定的起始pfn更大，根据它计算起始pfn，并按申请的页数对齐*/
 		start = ALIGN(goal, step);
 	else
 		start = ALIGN(min, step);
-
+    /* 计算起始pfn与bootmem起始pfn的偏移,
+     * 后面扫描位图时从这个sidx开始
+     */
 	sidx = start - bdata->node_min_pfn;
+    /* 计算截止pfn与bootmem起始pfn的偏移。
+     * 扫描的就是sidx至midx之间的这部分bootmem内存区 */
 	midx = max - bdata->node_min_pfn;
-
+    /* hint_idx表示优先扫描的偏移，如果大于sidx，则从hint_idx处开始扫描。
+     * 何为优先扫描呢？由于分配是从低地址开始，显然下一次扫描时，从上一次
+     * 分配的截止地址开始扫描成功率会更高。hint_idx之前的空间可能由于对齐的原因仍是空闲的。
+     * 释放bootmem时会更新hint_idx的值，指向释放的位置。仅当优先扫描失败，
+     * 才需要回过头来扫描以前分配过的区域。
+     */
 	if (bdata->hint_idx > sidx) {
 		/*
 		 * Handle the valid case of sidx being zero and still
 		 * catch the fallback below.
 		 */
+		 /* fallback表示首次扫描是否优先扫描 */
 		fallback = sidx + 1;
 		sidx = align_idx(bdata, bdata->hint_idx, step);
 	}
@@ -601,43 +636,59 @@ static void * __init alloc_bootmem_core(struct bootmem_data *bdata,
 		int merge;
 		void *region;
 		unsigned long eidx, i, start_off, end_off;
+        /* 从位图中找到满足对齐要求的,为0的,连续的比特位 */
 find_block:
-		sidx = find_next_zero_bit(bdata->node_bootmem_map, midx, sidx);
+        /* 从位图中找到下一个为0的比特位 */
+		sidx = find_next_zero_bit(bdata->node_bootmem_map, midx, sidx); /* sidx以页为单位 */
+         /* 将sidx按照申请的页数对齐，对齐后的比特位不一定是0 */
 		sidx = align_idx(bdata, sidx, step);
+         /* 计算结尾pfn */
 		eidx = sidx + PFN_UP(size);
-
+        /* 如果超出了截止pfn，整个位图扫描完毕，未找到符合条件的空闲内存区，跳出循环 */
 		if (sidx >= midx || eidx > midx)
 			break;
 
+        /* 检查sidx和eidx之间的所有比特位是否全部为0 */
 		for (i = sidx; i < eidx; i++)
 			if (test_bit(i, bdata->node_bootmem_map)) {
+                /* 某比特位为1,这段区间不符合条件,从下一个对齐偏移处继续                         扫描 */
 				sidx = align_idx(bdata, i, step);
+                /* 前面对齐采用的是入式对齐，如果是第一个比特位为1，即对齐余数为0，
+                 * 没有入上去，需要加上step */
 				if (sidx == i)
 					sidx += step;
 				goto find_block;
 			}
-
+        /* last_end_off表示上一次分配截止地址的偏移。如果其不是页面大小对齐的，
+         * 说明该页中还有空闲的空间。并且如果其所在的页面就是扫描到的内存区的上一页，
+         * 则可以利用该页的空闲空间。*/
 		if (bdata->last_end_off & (PAGE_SIZE - 1) &&
 				PFN_DOWN(bdata->last_end_off) + 1 == sidx)
+		    /* start_off表示本次分配的内存区起始处的地址偏移，需要按照指定方式对齐 */
 			start_off = align_off(bdata, bdata->last_end_off, align);
 		else
+            /* 否则的话，就是从新的页面开始分配了，直接通过pfn偏移计算地址偏移 */
 			start_off = PFN_PHYS(sidx);
-
+        /* 如果使用了上一页的空闲空间，该页对应的比特位无需置1，已经置过了 */
 		merge = PFN_DOWN(start_off) < sidx;
-		end_off = start_off + size;
+        /* 计算本次分配的截止地址偏移 */
+		end_off = start_off + size; /* end_off以及start_off都是物理地址 */
 
 		bdata->last_end_off = end_off;
+        /* 计算本次分配的截止地址偏移 */
 		bdata->hint_idx = PFN_UP(end_off);
 
 		/*
 		 * Reserve the area now:
 		 */
+		/* 将要分配出去的内存区对应的位图比特位置1，BOOTMEM_EXCLUSIVE表示此次分配是排它的 */
 		if (__reserve(bdata, PFN_DOWN(start_off) + merge,
 				PFN_UP(end_off), BOOTMEM_EXCLUSIVE))
 			BUG();
 
 		region = phys_to_virt(PFN_PHYS(bdata->node_min_pfn) +
 				start_off);
+        /* 将要分配出去的内存区清0 */
 		memset(region, 0, size);
 		/*
 		 * The min_count is set to 0 so that bootmem allocated blocks
@@ -707,16 +758,19 @@ restart:
 	void *region;
 
 restart:
+    /* 从体系结构优先选择的节点分配bootmem */
 	region = alloc_arch_preferred_bootmem(NULL, size, align, goal, limit);
 	if (region)
 		return region;
-
+     /* 遍历bdata_list中的bootmem，UMA只有一个节点 */
 	list_for_each_entry(bdata, &bdata_list, list) {
+	    /* 此节点bootmem的截止pfn在参数指定的起始pfn之下，不符合要求，跳过 */
 		if (goal && bdata->node_low_pfn <= PFN_DOWN(goal))
 			continue;
+        /* 此节点bootmem的起始pfn在参数指定的截止pfn之上，不符合要求，跳过 */
 		if (limit && bdata->node_min_pfn >= PFN_DOWN(limit))
 			break;
-
+        /* first-fit算法 */
 		region = alloc_bootmem_core(bdata, size, align, goal, limit);
 		if (region)
 			return region;
@@ -784,9 +838,15 @@ static void * __init ___alloc_bootmem(unsigned long size, unsigned long align,
  *
  * The function panics if the request can not be satisfied.
  */
+ /* 通过bootmem分配器分配内存
+  * @param size 请求的大小
+  * @param align 数据对齐大小
+  * @param goal 指定了开始搜索适当空闲内存区的起始地址
+  */
 void * __init __alloc_bootmem(unsigned long size, unsigned long align,
 			      unsigned long goal)
 {
+    /* limit为限定范围的截止地址,0表示没有限制 */
 	unsigned long limit = 0;
 
 #ifdef CONFIG_NO_BOOTMEM

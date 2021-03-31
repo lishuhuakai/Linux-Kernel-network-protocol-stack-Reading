@@ -167,14 +167,17 @@ enum zone_watermarks {
 #define high_wmark_pages(z) (z->watermark[WMARK_HIGH])
 
 struct per_cpu_pages {
+    /* 列表中页数 */
 	int count;		/* number of pages in the list */
+    /* 页表上限水印,在需要的情况下清空列表 */
 	int high;		/* high watermark, emptying needed */
 	int batch;		/* chunk size for buddy add/remove */
 
 	/* Lists of pages, one per migrate type stored on the pcp-lists */
-	struct list_head lists[MIGRATE_PCPTYPES];
+	struct list_head lists[MIGRATE_PCPTYPES]; /* 页的链表 */
 };
 
+/* 冷热页 */
 struct per_cpu_pageset {
 	struct per_cpu_pages pcp;
 #ifdef CONFIG_NUMA
@@ -723,6 +726,7 @@ static inline int is_normal_idx(enum zone_type idx)
  * is_highmem - helper function to quickly check if a struct zone is a
  *              highmem zone or not.  This is an attempt to keep references
  *              to ZONE_{DMA/NORMAL/HIGHMEM/etc} in general code to a minimum.
+ * 什么是HIGHMEM ?
  * @zone - pointer to struct zone variable
  */
 static inline int is_highmem(struct zone *zone)

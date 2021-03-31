@@ -25,14 +25,14 @@ extern unsigned long saved_max_pfn;
 
 #ifndef CONFIG_NO_BOOTMEM
 /*
- * node_bootmem_map is a map pointer - the bits represent all physical 
+ * node_bootmem_map is a map pointer - the bits represent all physical
  * memory pages (including holes) on the node.
  */
 typedef struct bootmem_data {
-	unsigned long node_min_pfn;
-	unsigned long node_low_pfn;
-	void *node_bootmem_map;
-	unsigned long last_end_off;
+	unsigned long node_min_pfn; /* 系统中第一个页的编号 */
+	unsigned long node_low_pfn; /* 可以直接管理的物理地址空间中最后一个页的编号 */
+	void *node_bootmem_map; /* 指向存储分配位图的内存区的指针 */
+	unsigned long last_end_off; /* 上一次分配内存块的末尾的物理地址 */
 	unsigned long hint_idx;
 	struct list_head list;
 } bootmem_data_t;

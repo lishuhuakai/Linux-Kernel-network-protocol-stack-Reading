@@ -48,8 +48,10 @@
 
 struct kmem_cache {
 /* 1) per-cpu data, touched during every alloc/free */
+/* per-cpu数据,在每次分配/释放期间都会访问 */
 	struct array_cache *array[NR_CPUS];
 /* 2) Cache tunables. Protected by cache_chain_mutex */
+/* 可调整的缓存参数,由cache_chain_mutex保护 */
 	unsigned int batchcount;
 	unsigned int limit;
 	unsigned int shared;
@@ -57,19 +59,20 @@ struct kmem_cache {
 	unsigned int buffer_size;
 	u32 reciprocal_buffer_size;
 /* 3) touched by every alloc & free from the backend */
-
+/* 后端每次分配和释放内存时都会访问 */
 	unsigned int flags;		/* constant flags */
 	unsigned int num;		/* # of objs per slab */
 
 /* 4) cache_grow/shrink */
 	/* order of pgs per slab (2^n) */
+/* 缓存的增长/缩减,每个slab中页数,区以2位底的对数 */
 	unsigned int gfporder;
 
 	/* force GFP flags, e.g. GFP_DMA */
 	gfp_t gfpflags;
 
-	size_t colour;			/* cache colouring range */
-	unsigned int colour_off;	/* colour offset */
+	size_t colour;			/* cache colouring range -- 缓存着色范围 */
+	unsigned int colour_off;	/* colour offset -- 着色偏移 */
 	struct kmem_cache *slabp_cache;
 	unsigned int slab_size;
 	unsigned int dflags;		/* dynamic flags */
@@ -115,6 +118,7 @@ struct kmem_cache {
 	 * We still use [MAX_NUMNODES] and not [1] or [0] because cache_cache
 	 * is statically defined, so we reserve the max number of nodes.
 	 */
+	/* 3个slab列表,完全用尽,空闲,部分空闲 */
 	struct kmem_list3 *nodelists[MAX_NUMNODES];
 	/*
 	 * Do not add fields after nodelists[]
@@ -149,6 +153,9 @@ static inline size_t slab_buffer_size(struct kmem_cache *cachep)
 }
 #endif
 
+/* 内存分配
+ * @param size 待申请的内存大小
+ */
 static __always_inline void *kmalloc(size_t size, gfp_t flags)
 {
 	struct kmem_cache *cachep;

@@ -420,11 +420,17 @@ static inline void rmv_page_order(struct page *page)
  *
  * Assumption: *_mem_map is contiguous at least up to MAX_ORDER
  */
+/* 伙伴查找函数
+ * @param page 给定的页块
+ * @param page_idx 给定页块的索引
+ * @param order 页块所在链表的order
+ */
 static inline struct page *
 __page_find_buddy(struct page *page, unsigned long page_idx, unsigned int order)
 {
 	unsigned long buddy_idx = page_idx ^ (1 << order);
-
+      /* 比如0和1为伙伴，0为小伙伴，1为大伙伴。buddy_idx大于page_idx时，给出的是小伙伴，
+       * 计算出的是大伙伴，buddy_idx小于page_idx时，给出的是大伙伴，计算出的是小伙伴。*/
 	return page + (buddy_idx - page_idx);
 }
 
@@ -447,15 +453,21 @@ __find_combined_index(unsigned long page_idx, unsigned int order)
  *
  * For recording page's order, we use page_private(page).
  */
+/* 对伙伴做一下校验
+ * @param page 给定的页块
+ * @param buddy 伙伴页块
+ * @param odrder 页块所在链表的order
+ */
 static inline int page_is_buddy(struct page *page, struct page *buddy,
 								int order)
 {
 	if (!pfn_valid_within(page_to_pfn(buddy)))
 		return 0;
-
+    /* 是否在同一个zone */
 	if (page_zone_id(page) != page_zone_id(buddy))
 		return 0;
-
+      /* 通过检查PG_buddy 标志位判断buddy是否在伙伴系统中，并且buddy是否在order级的
+       * 链表中，page的private成员存放页块所在链表的order。*/
 	if (PageBuddy(buddy) && page_order(buddy) == order) {
 		VM_BUG_ON(page_count(buddy) != 0);
 		return 1;
@@ -487,12 +499,18 @@ static inline int page_is_buddy(struct page *page, struct page *buddy,
  * -- wli
  */
 
+/* 页块释放函数
+ * @param page 待释放的页块
+ * @param zone 页块所在的区
+ * @param order 页块所在链表的order
+ */
 static inline void __free_one_page(struct page *page,
 		struct zone *zone, unsigned int order,
 		int migratetype)
 {
 	unsigned long page_idx;
 	unsigned long combined_idx;
+    /* 感觉好像所有的page构建了一个数组 */
 	struct page *buddy;
 
 	if (unlikely(PageCompound(page)))
@@ -500,26 +518,33 @@ static inline void __free_one_page(struct page *page,
 			return;
 
 	VM_BUG_ON(migratetype == -1);
-
+    /* 将与伙伴算法无关的高位屏蔽 */
 	page_idx = page_to_pfn(page) & ((1 << MAX_ORDER) - 1);
-
+    /* 保证页块索引是2order的整数倍 */
 	VM_BUG_ON(page_idx & ((1 << order) - 1));
+    /* 可以暂时不用管下面的函数,主要是用于检验 */
 	VM_BUG_ON(bad_range(zone, page));
-
+    /* 按照伙伴算法来合并伙伴 */
 	while (order < MAX_ORDER-1) {
+        /* 查找待释放页块的伙伴 */
 		buddy = __page_find_buddy(page, page_idx, order);
 		if (!page_is_buddy(page, buddy, order))
 			break;
 
 		/* Our buddy is free, merge with it and move up one order. */
+        /* 将伙伴从原链表中删除 */
 		list_del(&buddy->lru);
 		zone->free_area[order].nr_free--;
 		rmv_page_order(buddy);
+        /* 利用伙伴算法公式计算合并后的父节点的页块索引 */
 		combined_idx = __find_combined_index(page_idx, order);
+        /* 获得合并后页块的第一个页面 */
 		page = page + (combined_idx - page_idx);
 		page_idx = combined_idx;
+        /* 继续在上一级order链表中应用伙伴合并算法 */
 		order++;
 	}
+     /* 设置页块的PG_buddy标志位（通过此标志位表示页块已经加入到伙伴系统中），并设private为当前order */
 	set_page_order(page, order);
 
 	/*
@@ -725,19 +750,37 @@ void __meminit __free_pages_bootmem(struct page *page, unsigned int order)
  *
  * -- wli
  */
+ /* 将一个大页块分解为若干小页块
+  * @param zone 页块所在的区
+  * @param page 待分解大页块的第一个页面
+  * @param low 申请页块的order
+  * @param high 待分解页块的order
+  * @param area 包含待分解页块所在链表的free_area
+  */
 static inline void expand(struct zone *zone, struct page *page,
 	int low, int high, struct free_area *area,
 	int migratetype)
 {
 	unsigned long size = 1 << high;
 
+    /* 逐步将大页块分解成小页块，举例说明：假设申请256个页面的页块，待分解的是
+       1024的页块，第一次循环先从1024页块分出一个512的页块，第二次循环再分出一个
+       256的页块
+     */
 	while (high > low) {
+        /* 指向低一级的free_area */
 		area--;
+        /* 当前链表的order */
 		high--;
+        /* 当前链表的页块大小 */
 		size >>= 1;
+        /* 检验页块是否有效,检查是否有空洞,页块中的页面是否都在同一个zone中 */
 		VM_BUG_ON(bad_range(zone, &page[size]));
+        /* 将高地址区的页块加入链表，上例中，第一次循环是512页块，第二次循环是剩下的256页块 */
 		list_add(&page[size].lru, &area->free_list[migratetype]);
 		area->nr_free++;
+        /* 设置页块的PG_buddy标志位（通过此标志位表示页块已经加入到伙伴系统中），
+           并设置private为当前order */
 		set_page_order(&page[size], high);
 	}
 }
@@ -793,18 +836,22 @@ struct page *__rmqueue_smallest(struct zone *zone, unsigned int order,
 	unsigned int current_order;
 	struct free_area * area;
 	struct page *page;
-
+    /* 自申请页块的order至MAX_ORDER -1, 扫描各个链表 */
 	/* Find a page of the appropriate size in the preferred list */
 	for (current_order = order; current_order < MAX_ORDER; ++current_order) {
 		area = &(zone->free_area[current_order]);
+        /* 如果本链表为空，即没有空闲页块，则查找更高一级的链表 */
 		if (list_empty(&area->free_list[migratetype]))
 			continue;
-
+        /* 获得空闲页块中的第一个页面 */
 		page = list_entry(area->free_list[migratetype].next,
 							struct page, lru);
 		list_del(&page->lru);
+        /* 清除此页块的PG_buddy标志位，设置private为0，为后面分解页块做准备 */
 		rmv_page_order(page);
+        /* 链表页块数目减一 */
 		area->nr_free--;
+        /* 分解页块 */
 		expand(zone, page, order, current_order, area, migratetype);
 		return page;
 	}
@@ -978,6 +1025,10 @@ __rmqueue_fallback(struct zone *zone, int order, int start_migratetype)
 /*
  * Do the hard work of removing an element from the buddy allocator.
  * Call me with the zone->lock already held.
+ */
+/* 分配函数
+ * @param zone free_area空心啊页块链表所在的区
+ * @param order 在哪一级的链表上申请页块
  */
 static struct page *__rmqueue(struct zone *zone, unsigned int order,
 						int migratetype)

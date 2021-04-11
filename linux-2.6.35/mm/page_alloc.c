@@ -2143,6 +2143,7 @@ got_pg:
 
 /*
  * This is the 'heart' of the zoned buddy allocator.
+ * 页分配
  */
 struct page *
 __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
@@ -2850,6 +2851,7 @@ static void set_zonelist_order(void)
 		current_zonelist_order = user_zonelist_order;
 }
 
+
 static void build_zonelists(pg_data_t *pgdat)
 {
 	int j, node, load;
@@ -3029,6 +3031,7 @@ __build_all_zonelists(void *data)
 #ifdef CONFIG_NUMA
 	memset(node_load, 0, sizeof(node_load));
 #endif
+    /* 遍历系统中所有的活动节点 */
 	for_each_online_node(nid) {
 		pg_data_t *pgdat = NODE_DATA(nid);
 
@@ -3080,6 +3083,9 @@ __build_all_zonelists(void *data)
 /*
  * Called with zonelists_mutex held always
  * unless system_state == SYSTEM_BOOTING.
+ */
+/* 建立内存管理节点以及内存域所需要的数据结构
+ *
  */
 void build_all_zonelists(void *data)
 {
@@ -4168,7 +4174,8 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 	}
 }
 
-static void __init_refok alloc_node_mem_map(struct pglist_data *pgdat)
+static void __init_refok
+alloc_node_mem_map(struct pglist_data *pgdat)
 {
 	/* Skip empty nodes */
 	if (!pgdat->node_spanned_pages)
@@ -4764,7 +4771,9 @@ void __init set_dma_reserve(unsigned long new_dma_reserve)
 }
 
 #ifndef CONFIG_NEED_MULTIPLE_NODES
-/* UMA系统上,只需要一个bootmem_t实例 */
+/* UMA系统上,只需要一个bootmem_t实例
+ * 我们一般使用的的交换机,普通pc都是UMA系统
+ */
 struct pglist_data __refdata contig_page_data = {
 #ifndef CONFIG_NO_BOOTMEM
  .bdata = &bootmem_node_data[0]

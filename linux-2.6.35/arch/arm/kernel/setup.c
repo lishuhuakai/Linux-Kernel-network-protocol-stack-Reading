@@ -385,7 +385,12 @@ static struct machine_desc * __init setup_machine(unsigned int nr)
 	return list;
 }
 
-static int __init arm_add_memory(unsigned long start, unsigned long size)
+/* 非常重要的一个函数,用于添加内存块信息
+ * @param start 起始物理地址
+ * @param size 长度
+ */
+static int __init
+arm_add_memory(unsigned long start, unsigned long size)
 {
 	struct membank *bank = &meminfo.bank[meminfo.nr_banks];
 
@@ -419,6 +424,8 @@ static int __init arm_add_memory(unsigned long start, unsigned long size)
  * Pick out the memory size.  We look for mem=size@start,
  * where start and size are "size[KkMm]"
  */
+/* 解析命令行参数中的mem=xxx信息
+ */
 static int __init early_mem(char *p)
 {
 	static int usermem __initdata = 0;
@@ -435,11 +442,11 @@ static int __init early_mem(char *p)
 		meminfo.nr_banks = 0;
 	}
 
-	start = PHYS_OFFSET;
-	size  = memparse(p, &endp);
+	start = PHYS_OFFSET; /* 起始地址 */
+	size  = memparse(p, &endp); /* 内存块大小 */
 	if (*endp == '@')
 		start = memparse(endp + 1, NULL);
-
+    /* 就是在这个函数中,将原始的参数信息填入meminfo结构体中 */
 	arm_add_memory(start, size);
 
 	return 0;
@@ -715,7 +722,7 @@ void __init setup_arch(char **cmdline_p)
 	*cmdline_p = cmd_line;
 
 	parse_early_param();
-
+    /* 初始化分页机制 */
 	paging_init(mdesc);
 	request_standard_resources(&meminfo, mdesc);
 

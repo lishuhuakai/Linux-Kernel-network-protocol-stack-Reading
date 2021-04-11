@@ -32,6 +32,7 @@ struct address_space;
  * who is mapping it.
  */
 struct page {
+    /* 描述page的状态和其他信息 */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
 	atomic_t _count;		/* Usage count, see below. */

@@ -12,13 +12,13 @@
 
 /* PAGE_SHIFT determines the page size */
 
-#define PAGE_SHIFT	12
+#define PAGE_SHIFT	12  /* 指定offset字段的位数 */
 #ifdef __ASSEMBLY__
-#define PAGE_SIZE	(1 << PAGE_SHIFT)
+#define PAGE_SIZE	(1 << PAGE_SHIFT) /* 页大小,这里是4k */
 #else
 #define PAGE_SIZE	(1UL << PAGE_SHIFT)
 #endif
-#define PAGE_MASK	(~(PAGE_SIZE-1))
+#define PAGE_MASK	(~(PAGE_SIZE-1)) /* mask主要用于屏蔽offset字段的所有位 */
 
 #include <asm/setup.h>
 

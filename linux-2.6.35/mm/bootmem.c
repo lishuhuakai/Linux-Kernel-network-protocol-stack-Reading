@@ -64,7 +64,8 @@ static unsigned long __init bootmap_bytes(unsigned long pages)
 
 /**
  * bootmem_bootmap_pages - calculate bitmap size in pages
- * @pages: number of pages the bitmap has to represent
+ * 计算位图大小,单位是页
+ * @pages: number of pages the bitmap has to represent 页的数目
  */
 unsigned long __init bootmem_bootmap_pages(unsigned long pages)
 {
@@ -75,6 +76,7 @@ unsigned long __init bootmem_bootmap_pages(unsigned long pages)
 
 /*
  * link bdata in order
+ * 将bdata按照顺序挂到链表中
  */
 static void __init link_bootmem(bootmem_data_t *bdata)
 {
@@ -131,7 +133,8 @@ static unsigned long __init init_bootmem_core(bootmem_data_t *bdata,
  * init_bootmem_node - register a node as boot memory
  * @pgdat: node to register
  * @freepfn: pfn where the bitmap for this node is to be placed
- * @startpfn: first pfn on the node
+ *           放置位图的页帧
+ * @startpfn: first pfn on the node 起始页帧
  * @endpfn: first pfn after the node
  *
  * Returns the number of bytes needed to hold the bitmap for this node.
@@ -227,6 +230,7 @@ unsigned long __init free_all_memory_core_early(int nodeid)
 	return count;
 }
 #else
+/* 释放掉bootmem内存节点 */
 static unsigned long __init free_all_bootmem_core(bootmem_data_t *bdata)
 {
 	int aligned;

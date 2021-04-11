@@ -40,7 +40,8 @@ static inline void pud_clear(pud_t *pud)	{ }
  */
 #define set_pud(pudptr, pudval)			set_pmd((pmd_t *)(pudptr), (pmd_t) { pudval })
 
-static inline pmd_t * pmd_offset(pud_t * pud, unsigned long address)
+static inline pmd_t *
+pmd_offset(pud_t * pud, unsigned long address)
 {
 	return (pmd_t *)pud;
 }

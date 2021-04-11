@@ -619,6 +619,7 @@ static int packet_rcv(struct sk_buff *skb, struct net_device *dev,
 	spin_lock(&sk->sk_receive_queue.lock);
 	po->stats.tp_packets++;
 	skb->dropcount = atomic_read(&sk->sk_drops);
+    /* 将符合要求的报文挂载到接收队列的缓存中 */
 	__skb_queue_tail(&sk->sk_receive_queue, skb);
 	spin_unlock(&sk->sk_receive_queue.lock);
 	sk->sk_data_ready(sk, skb->len);
@@ -1431,7 +1432,7 @@ static struct proto packet_proto = {
 /*
  *	Create a packet of type SOCK_PACKET.
  */
-
+/* 构建SOCK_PACKET套接字 */
 static int packet_create(struct net *net, struct socket *sock, int protocol,
 			 int kern)
 {
@@ -1481,7 +1482,7 @@ static int packet_create(struct net *net, struct socket *sock, int protocol,
 
 	if (proto) {
 		po->prot_hook.type = proto;
-		dev_add_pack(&po->prot_hook);
+		dev_add_pack(&po->prot_hook); /* 这里是一个很重要的函数,会将po->prot_hook挂载到ptype_all链表上 */
 		sock_hold(sk);
 		po->running = 1;
 	}

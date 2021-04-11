@@ -198,10 +198,11 @@ static struct tagtable __tagtable_##fn __tag = { tag, fn }
 # define NR_BANKS 8
 #endif
 
+/* 内存银行,对大块内存的抽象 */
 struct membank {
-	unsigned long start;
-	unsigned long size;
-	unsigned short node;
+	unsigned long start; /* 起始物理地址 */
+	unsigned long size;  /* 长度 */
+	unsigned short node; /* 内存块的标识 */
 	unsigned short highmem;
 };
 

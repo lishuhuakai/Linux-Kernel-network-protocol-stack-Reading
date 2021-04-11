@@ -121,6 +121,9 @@ extern void __pgd_error(const char *file, int line, unsigned long val);
 #define pgd_ERROR(pgd)		__pgd_error(__FILE__, __LINE__, pgd_val(pgd))
 #endif /* !__ASSEMBLY__ */
 
+/* PMD -- page middle directory 页中间目录
+ *
+ */
 #define PMD_SIZE		(1UL << PMD_SHIFT)
 #define PMD_MASK		(~(PMD_SIZE-1))
 #define PGDIR_SIZE		(1UL << PGDIR_SHIFT)
@@ -370,14 +373,22 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 #define set_pgd(pgd,pgdp)	do { } while (0)
 
 /* to find an entry in a page-table-directory */
+/* 查找线性地址addr对应的目录项在页全局目录中的索引 */
 #define pgd_index(addr)		((addr) >> PGDIR_SHIFT)
-
+/* 接收内存描述符地址mm和线性地址addr作为参数。这个宏产生地址addr
+ * 在页全局目录中相应表项的线性地址；通过内存描述符mm内的一个指针
+ * 可以找到这个页全局目录
+ */
 #define pgd_offset(mm, addr)	((mm)->pgd+pgd_index(addr))
 
 /* to find an entry in a kernel page-table-directory */
+/* 产生主内核页全局目录中的某个项的线性地址,该项对应于地址addr */
 #define pgd_offset_k(addr)	pgd_offset(&init_mm, addr)
 
 /* Find an entry in the second-level page table.. */
+/* 接收指向页上级目录项的指针 pud 和线性地址 addr 作为参数。
+ * 这个宏产生目录项addr在页中间目录中的偏移地址。
+ * 在两级或三级分页系统中，它产生 pud,即页全局目录项的地址 */
 #define pmd_offset(dir, addr)	((pmd_t *)(dir))
 
 /* Find an entry in the third-level page table.. */

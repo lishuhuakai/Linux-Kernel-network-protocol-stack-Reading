@@ -177,7 +177,11 @@ struct per_cpu_pages {
 	struct list_head lists[MIGRATE_PCPTYPES]; /* 页的链表 */
 };
 
-/* 冷热页 */
+/* 冷热页
+ * 内核说页面是热的,意味着页面已经加载到CPU的高速缓存, 与在内存中的页相比,
+ * 其数据访问速度更快. 相反, 冷页则不再高速缓存中. 在多处理器系统上每个CPU
+ * 都有一个或者多个高速缓存. 各个CPU的管理必须是独立的.
+ */
 struct per_cpu_pageset {
 	struct per_cpu_pages pcp;
 #ifdef CONFIG_NUMA
@@ -294,6 +298,7 @@ struct zone {
 	 * to run OOM on the lower zones despite there's tons of freeable ram
 	 * on the higher zones). This array is recalculated at runtime if the
 	 * sysctl_lowmem_reserve_ratio sysctl changes.
+	 * 分别为各种内存域指定了若干页,用于一些无论如何都不能失败的关键性内存分配
 	 */
 	unsigned long		lowmem_reserve[MAX_NR_ZONES];
 
@@ -409,6 +414,7 @@ struct zone {
 	 */
 	struct pglist_data	*zone_pgdat;
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
+   /* 指向内存域的第一个页帧 */
 	unsigned long		zone_start_pfn;
 
 	/*
@@ -616,7 +622,7 @@ typedef struct pglist_data {
 	struct zonelist node_zonelists[MAX_ZONELISTS]; /* 备用结点 */
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */
-	struct page *node_mem_map;
+	struct page *node_mem_map; /* 指向page实例数组的指针,用于描述节点的所有物理内存页,它包含了节点中所有内存域的页 */
 #ifdef CONFIG_CGROUP_MEM_RES_CTLR
 	struct page_cgroup *node_page_cgroup;
 #endif
@@ -634,8 +640,12 @@ typedef struct pglist_data {
 	 */
 	spinlock_t node_size_lock;
 #endif
+    /* 起始页面帧号，指出该节点在全局mem_map中的偏移
+     * 系统中所有的页帧是依次编号的，每个页帧的号码都是全局唯一的（不只是结点内唯一）  */
 	unsigned long node_start_pfn;
+    /* node中真正可以使用的page的数目 */
 	unsigned long node_present_pages; /* total number of physical pages */
+    /* 该节点以页帧为单位的总长度,这个不等于node_present_pages,这里包含内存空洞 */
 	unsigned long node_spanned_pages; /* total size of physical page
 					     range, including holes */
 	int node_id; /* 全局节点id */

@@ -31,6 +31,7 @@
  * PMD_SHIFT determines the size of the area a second-level page table can map
  * PGDIR_SHIFT determines what a third-level page table entry can map
  */
+/* PGDIR -- page global directory 页全局目录 */
 #define PGDIR_SHIFT		21
 
 #define PGDIR_SIZE		(1UL << PGDIR_SHIFT)
@@ -94,7 +95,7 @@ extern unsigned int kobjsize(const void *objp);
 
 #include <asm-generic/pgtable.h>
 
-#else 
+#else
 
 /*
  * dummy tlb and user structures.

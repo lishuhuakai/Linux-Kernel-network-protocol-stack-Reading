@@ -32,8 +32,8 @@ struct memblock_region {
 struct memblock {
 	unsigned long debug;
 	u64 rmo_size;
-	struct memblock_region memory;
-	struct memblock_region reserved;
+	struct memblock_region memory; /* 表示可分配的内存 */
+	struct memblock_region reserved; /* 表示已经分配出去了的内存 */
 };
 
 extern struct memblock memblock;

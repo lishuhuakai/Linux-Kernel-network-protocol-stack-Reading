@@ -594,10 +594,13 @@ static inline unsigned long my_zero_pfn(unsigned long addr)
 #else
 # define HAVE_PTE_SPECIAL 0
 #endif
+/*
+ * 根据pte,以及虚拟地址,拼凑出物理地址,返回对应的page描述符
+ */
 struct page *vm_normal_page(struct vm_area_struct *vma, unsigned long addr,
 				pte_t pte)
 {
-	unsigned long pfn = pte_pfn(pte);
+	unsigned long pfn = pte_pfn(pte); /* 页帧 */
 
 	if (HAVE_PTE_SPECIAL) {
 		if (likely(!pte_special(pte)))
@@ -618,7 +621,7 @@ struct page *vm_normal_page(struct vm_area_struct *vma, unsigned long addr,
 			goto out;
 		} else {
 			unsigned long off;
-			off = (addr - vma->vm_start) >> PAGE_SHIFT;
+			off = (addr - vma->vm_start) >> PAGE_SHIFT; /* 页内偏移 */
 			if (pfn == vma->vm_pgoff + off)
 				return NULL;
 			if (!is_cow_mapping(vma->vm_flags))
@@ -1231,6 +1234,7 @@ EXPORT_SYMBOL_GPL(zap_vma_ptes);
  * follow_page - look up a page descriptor from a user-virtual address
  * @vma: vm_area_struct mapping @address
  * @address: virtual address to look up
+ *            待查找的虚拟地址
  * @flags: flags modifying lookup behaviour
  *
  * @flags can have FOLL_ flags set, defined in <linux/mm.h>
@@ -1242,10 +1246,10 @@ EXPORT_SYMBOL_GPL(zap_vma_ptes);
 struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 			unsigned int flags)
 {
-	pgd_t *pgd;
-	pud_t *pud;
-	pmd_t *pmd;
-	pte_t *ptep, pte;
+	pgd_t *pgd; /* 全局页目录 */
+	pud_t *pud; /* 页上级目录 */
+	pmd_t *pmd; /* 页中级目录 */
+	pte_t *ptep, pte; /* 页表 */
 	spinlock_t *ptl;
 	struct page *page;
 	struct mm_struct *mm = vma->vm_mm;
@@ -1257,7 +1261,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 	}
 
 	page = NULL;
-	pgd = pgd_offset(mm, address);
+	pgd = pgd_offset(mm, address); /* 找到地址对应的pgd项的索引 */
 	if (pgd_none(*pgd) || unlikely(pgd_bad(*pgd)))
 		goto no_page_table;
 
@@ -1272,7 +1276,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 	if (unlikely(pud_bad(*pud)))
 		goto no_page_table;
 
-	pmd = pmd_offset(pud, address);
+	pmd = pmd_offset(pud, address); /* 页中级目录 */
 	if (pmd_none(*pmd))
 		goto no_page_table;
 	if (pmd_huge(*pmd)) {
@@ -1286,7 +1290,7 @@ struct page *follow_page(struct vm_area_struct *vma, unsigned long address,
 	ptep = pte_offset_map_lock(mm, pmd, address, &ptl);
 
 	pte = *ptep;
-	if (!pte_present(pte))
+	if (!pte_present(pte)) /* 页表不存在 */
 		goto no_page;
 	if ((flags & FOLL_WRITE) && !pte_write(pte))
 		goto unlock;
@@ -1353,7 +1357,7 @@ int __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 
 	VM_BUG_ON(!!pages != !!(gup_flags & FOLL_GET));
 
-	/* 
+	/*
 	 * Require read or write permissions.
 	 * If FOLL_FORCE is set, we only require the "MAY" flags.
 	 */

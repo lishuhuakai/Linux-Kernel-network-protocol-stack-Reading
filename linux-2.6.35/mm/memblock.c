@@ -45,6 +45,9 @@ static void memblock_dump(struct memblock_region *region, char *name)
 	}
 }
 
+/* 打印出所有的内存块
+ *
+ */
 void memblock_dump_all(void)
 {
 	if (!memblock_debug)

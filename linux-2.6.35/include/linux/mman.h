@@ -24,7 +24,7 @@ static inline void vm_acct_memory(long pages)
 {
 	percpu_counter_add(&vm_committed_as, pages);
 }
-
+/* 更新相关的统计信息 */
 static inline void vm_unacct_memory(long pages)
 {
 	vm_acct_memory(-pages);

@@ -744,7 +744,11 @@ can_vma_merge_after(struct vm_area_struct *vma, unsigned long vm_flags,
  * mprotect_fixup updates vm_flags & vm_page_prot on successful return.
  */
 /* 区域合并
- *
+ * @param mm 相关进程的地址空间实例
+ * @param prev 紧接着新区域之前的区域
+ * @param addr,end,vm_flags 新区域的开始地址,结束地址,标志
+ * @param file,pgoff 如果该区域属于一个文件映射,file表示改文件的file实例指针,pgoff指定了映射在文件数据内的偏移
+ * @param policy 可以忽略,只在NUMA中使用
  */
 struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			struct vm_area_struct *prev, unsigned long addr,
@@ -774,6 +778,7 @@ struct vm_area_struct *vma_merge(struct mm_struct *mm,
 	/*
 	 * Can it merge with the predecessor?
 	 */
+	 /* 要保证前一个区域的end,恰好是本区域的开始 */
 	if (prev && prev->vm_end == addr &&
   			mpol_equal(vma_policy(prev), policy) &&
 			can_vma_merge_after(prev, vm_flags,
@@ -947,7 +952,7 @@ unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
 			unsigned long len, unsigned long prot,
 			unsigned long flags, unsigned long pgoff)
 {
-	struct mm_struct * mm = current->mm;
+	struct mm_struct * mm = current->mm; /* 当前用户进程的mm */
 	struct inode *inode;
 	unsigned int vm_flags;
 	int error;
@@ -970,7 +975,7 @@ unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
 		addr = round_hint_to_min(addr);
 
 	/* Careful about overflows.. */
-	len = PAGE_ALIGN(len);
+	len = PAGE_ALIGN(len); /* 检测len是否越界,len的范围在0~TASK_SIZE之间 */
 	if (!len)
 		return -ENOMEM;
 
@@ -979,13 +984,13 @@ unsigned long do_mmap_pgoff(struct file *file, unsigned long addr,
                return -EOVERFLOW;
 
 	/* Too many mappings? */
-	if (mm->map_count > sysctl_max_map_count)
+	if (mm->map_count > sysctl_max_map_count) /* 一个进程mmap的个数是有限制的 */
 		return -ENOMEM;
 
 	/* Obtain the address to map to. we verify (or select) it and ensure
 	 * that it represents a valid section of the address space.
 	 */
-	addr = get_unmapped_area(file, addr, len, pgoff, flags);
+	addr = get_unmapped_area(file, addr, len, pgoff, flags); /* 获取没有映射的地址 */
 	if (addr & ~PAGE_MASK)
 		return addr;
 
@@ -1208,6 +1213,12 @@ unsigned long mmap_region(struct file *file, unsigned long addr,
 	/* Clear old maps */
 	error = -ENOMEM;
 munmap_back:
+    /* 函数find_vma_prepare()与find_vma()基本相同，它扫描当前进程地址空间的vm_area_struct
+	 * 结构所形成的红黑树，试图找到结束地址高于addr的第一个区间；如果找到了一个虚拟区，
+	 * 说明addr所在的虚拟区已经在使用，也就是已经有映射存在，因此要调用do_munmap()
+	 * 把这个老的虚拟区从进程地址空间中撤销，如果撤销不成功，就返回一个负数；
+	 * 如果撤销成功，就继续查找，直到在红黑树中找不到addr所在的虚拟区
+	 */
 	vma = find_vma_prepare(mm, addr, &prev, &rb_link, &rb_parent);
 	if (vma && vma->vm_start < addr + len) {
 		if (do_munmap(mm, addr, len))
@@ -1377,16 +1388,23 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 	if (flags & MAP_FIXED)
 		return addr;
 
-	if (addr) {
+	if (addr) { /* 如果指定了首地址 */
 		addr = PAGE_ALIGN(addr);
 		vma = find_vma(mm, addr);
-		if (TASK_SIZE - len >= addr &&
+        /* vma为NULL即addr的地址不在任一个VMA(vma->vm_start~vma->vm_end) addr的地址没有被映射，
+		   而且空洞足够我们这次的映射，那么返回addr以准备这次的映射 */
+		if (TASK_SIZE - len >= addr && /* 长度足够 */
 		    (!vma || addr + len <= vma->vm_start))
 			return addr;
 	}
-	if (len > mm->cached_hole_size) {
+	if (len > mm->cached_hole_size) { /* 如果所需要的长度大于当前vma之间的空洞长度 */
 	        start_addr = addr = mm->free_area_cache;
 	} else {
+	        /* 需要的长度小于当前空洞，为了不至于时间浪费，那么从0开始搜寻，
+			 * 这里的搜寻基地址TASK_UNMAPPED_BASE很重要，用户mmap的地址的基地址必须在TASK_UNMAPPED_BASE之上，
+			 * 但是一定这样严格 吗？看上面的if (addr)判断，如果用户给了一个地址在TASK_UNMAPPED_BASE之下，
+			 * 映射实际上还是会发生的。
+			 */
 	        start_addr = addr = TASK_UNMAPPED_BASE;
 	        mm->cached_hole_size = 0;
 	}
@@ -1394,7 +1412,7 @@ arch_get_unmapped_area(struct file *filp, unsigned long addr,
 full_search:
 	for (vma = find_vma(mm, addr); ; vma = vma->vm_next) {
 		/* At this point:  (!vma || addr < vma->vm_end). */
-		if (TASK_SIZE - len < addr) {
+		if (TASK_SIZE - len < addr) { /* 长度不够 */
 			/*
 			 * Start a new search - just in case we missed
 			 * some holes.
@@ -1408,6 +1426,11 @@ full_search:
 			return -ENOMEM;
 		}
 		if (!vma || addr + len <= vma->vm_start) {
+            /* 如果第一次find_vma返回值即为NULL ，vma没有被映射并且空洞足够映射
+			 * !vma的条件只有可能在循环的第一次满足，在其后不可能满足，在其后的判断条件即为
+			 * vma->vma_end~vma->vma_next->vma_start之间的空洞大小大于所需要映射的长度即可，
+			 * 下面判断条件中的addr为vma->vma_end,而vma->vm_start为 vma->vma_next->vma_start
+			 */
 			/*
 			 * Remember the place where we stopped the search:
 			 */
@@ -1537,7 +1560,9 @@ void arch_unmap_area_topdown(struct mm_struct *mm, unsigned long addr)
 }
 
 /* 在虚拟地址空间中,寻找一个适当的区域用于映射.
+ * @param addr 开始的虚拟地址
  * @param len 地址长度
+ * @param pgoff 文件的偏移
  */
 unsigned long
 get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
@@ -1557,7 +1582,7 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 	get_area = current->mm->get_unmapped_area;
 	if (file && file->f_op && file->f_op->get_unmapped_area)
 		get_area = file->f_op->get_unmapped_area;
-	addr = get_area(file, addr, len, pgoff, flags);
+	addr = get_area(file, addr, len, pgoff, flags); /* arch_get_unmapped_area */
 	if (IS_ERR_VALUE(addr))
 		return addr;
 
@@ -1583,8 +1608,9 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 		/* Check the cache first. */
 		/* (Cache hit rate is typically around 35%.) */
 		vma = mm->mmap_cache;
+        /* vma->vm_end > addr && vma->vm_start <= addr 表示addr在这个虚拟区域之内 */
 		if (!(vma && vma->vm_end > addr && vma->vm_start <= addr)) {
-			struct rb_node * rb_node;
+			struct rb_node * rb_node; /* 如果addr不在这个虚拟区域之内,就要遍历下一个vma节点 */
 
 			rb_node = mm->mm_rb.rb_node;
 			vma = NULL;
@@ -1612,7 +1638,10 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 
 EXPORT_SYMBOL(find_vma);
 
-/* Same as find_vma, but also return a pointer to the previous VMA in *pprev. */
+/* Same as find_vma, but also return a pointer to the previous VMA in *pprev.
+ * 查找vma
+ * @param addr 虚拟地址
+ */
 struct vm_area_struct *
 find_vma_prev(struct mm_struct *mm, unsigned long addr,
 			struct vm_area_struct **pprev)
@@ -1877,6 +1906,9 @@ static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma)
  * Get rid of page table information in the indicated region.
  *
  * Called with the mm semaphore held.
+ * 从页表中删除与映射相关的所有表项.
+ * @param start 起始地址
+ * @param end 结束地址
  */
 static void unmap_region(struct mm_struct *mm,
 		struct vm_area_struct *vma, struct vm_area_struct *prev,
@@ -1928,6 +1960,8 @@ detach_vmas_to_be_unmapped(struct mm_struct *mm, struct vm_area_struct *vma,
 /*
  * __split_vma() bypasses sysctl_max_map_count checking.  We use this on the
  * munmap path where it doesn't make sense to fail.
+ * @param addr 终止地址
+ * @param new_below
  */
 static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	      unsigned long addr, int new_below)
@@ -1939,7 +1973,7 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	if (is_vm_hugetlb_page(vma) && (addr &
 					~(huge_page_mask(hstate_vma(vma)))))
 		return -EINVAL;
-
+    /* 创建一个vma实例 */
 	new = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);
 	if (!new)
 		goto out_err;
@@ -1950,7 +1984,7 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 	INIT_LIST_HEAD(&new->anon_vma_chain);
 
 	if (new_below)
-		new->vm_end = addr;
+		new->vm_end = addr; /* 修改终止地址即可 */
 	else {
 		new->vm_start = addr;
 		new->vm_pgoff += ((addr - vma->vm_start) >> PAGE_SHIFT);
@@ -1967,7 +2001,7 @@ static int __split_vma(struct mm_struct * mm, struct vm_area_struct * vma,
 		goto out_free_mpol;
 
 	if (new->vm_file) {
-		get_file(new->vm_file);
+		get_file(new->vm_file); /* 增加引用计数 */
 		if (vma->vm_flags & VM_EXECUTABLE)
 			added_exe_file_vma(mm);
 	}
@@ -2018,6 +2052,10 @@ int split_vma(struct mm_struct *mm, struct vm_area_struct *vma,
  * what needs doing, and the areas themselves, which do the
  * work.  This now handles partial unmappings.
  * Jeremy Fitzhardinge <jeremy@goop.org>
+ * 取消映射
+ * @param mm 进程的内存描述符
+ * @param start 虚拟地址
+ * @param len 长度
  */
 int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 {
@@ -2031,6 +2069,7 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 		return -EINVAL;
 
 	/* Find the first overlapping VMA */
+    /* 找到解除映射区域的vm_area_struct实例 */
 	vma = find_vma_prev(mm, start, &prev);
 	if (!vma)
 		return 0;
@@ -2048,6 +2087,9 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 	 * unmapped vm_area_struct will remain in use: so lower split_vma
 	 * places tmp vma above, and higher split_vma places tmp vma below.
 	 */
+	/* 如果解除映射区域的起始地址与find_vma_prev找到的区域起始地址不同,则只
+     * 解除部分映射,而不是整个区域映射.
+	 */
 	if (start > vma->vm_start) {
 		int error;
 
@@ -2058,7 +2100,7 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 		 */
 		if (end < vma->vm_end && mm->map_count >= sysctl_max_map_count)
 			return -ENOMEM;
-
+        /* 对vma进行切分,从vma->start ~ start */
 		error = __split_vma(mm, vma, start, 0);
 		if (error)
 			return error;

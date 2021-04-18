@@ -183,7 +183,7 @@ struct vm_fault {
 /*
  * These are the virtual MM functions - opening of an area, closing and
  * unmapping it (needed to keep files on disk up-to-date etc), pointer
- * to the functions called when a no-page or a wp-page exception occurs. 
+ * to the functions called when a no-page or a wp-page exception occurs.
  */
 struct vm_operations_struct {
 	void (*open)(struct vm_area_struct * area);
@@ -1272,6 +1272,15 @@ extern unsigned long mmap_region(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long flags,
 	unsigned int vm_flags, unsigned long pgoff);
 
+/*
+ * @param addr 指向欲映射的内存起始地址,通常设置为NULL,代表让系统自动选定地址
+ * @param len 长度
+ * @param prot 映射区域的保护方式,包括:
+ *        PROT_EXEC 映射区域可以被执行
+ *        PROT_READ 映射区域可以被读取
+ *        PROT_WRITE 映射区域可以被写入
+ * @param offset 文件映射的偏移量,通常设置为0,代表从文件最前方开始对应
+ */
 static inline unsigned long do_mmap(struct file *file, unsigned long addr,
 	unsigned long len, unsigned long prot,
 	unsigned long flag, unsigned long offset)

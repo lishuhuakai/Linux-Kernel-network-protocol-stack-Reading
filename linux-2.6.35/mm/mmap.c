@@ -63,7 +63,7 @@ static void unmap_region(struct mm_struct *mm,
  * MAP_SHARED	r: (no) no	r: (yes) yes	r: (no) yes	r: (no) yes
  *		w: (no) no	w: (no) no	w: (yes) yes	w: (no) no
  *		x: (no) no	x: (no) yes	x: (no) yes	x: (yes) yes
- *		
+ *
  * MAP_PRIVATE	r: (no) no	r: (yes) yes	r: (no) yes	r: (no) yes
  *		w: (no) no	w: (no) no	w: (copy) copy	w: (no) no
  *		x: (no) no	x: (no) yes	x: (no) yes	x: (yes) yes
@@ -743,6 +743,9 @@ can_vma_merge_after(struct vm_area_struct *vma, unsigned long vm_flags,
  * Odd one out? Case 8, because it extends NNNN but needs flags of XXXX:
  * mprotect_fixup updates vm_flags & vm_page_prot on successful return.
  */
+/* 区域合并
+ *
+ */
 struct vm_area_struct *vma_merge(struct mm_struct *mm,
 			struct vm_area_struct *prev, unsigned long addr,
 			unsigned long end, unsigned long vm_flags,
@@ -1416,7 +1419,7 @@ full_search:
 		addr = vma->vm_end;
 	}
 }
-#endif	
+#endif
 
 void arch_unmap_area(struct mm_struct *mm, unsigned long addr)
 {
@@ -1533,6 +1536,9 @@ void arch_unmap_area_topdown(struct mm_struct *mm, unsigned long addr)
 		mm->free_area_cache = mm->mmap_base;
 }
 
+/* 在虚拟地址空间中,寻找一个适当的区域用于映射.
+ * @param len 地址长度
+ */
 unsigned long
 get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 		unsigned long pgoff, unsigned long flags)
@@ -1565,7 +1571,10 @@ get_unmapped_area(struct file *file, unsigned long addr, unsigned long len,
 
 EXPORT_SYMBOL(get_unmapped_area);
 
-/* Look up the first VMA which satisfies  addr < vm_end,  NULL if none. */
+/* Look up the first VMA which satisfies  addr < vm_end,  NULL if none.
+ * 将虚拟地址关联到区域
+ * @param addr 虚拟地址
+ */
 struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 {
 	struct vm_area_struct *vma = NULL;

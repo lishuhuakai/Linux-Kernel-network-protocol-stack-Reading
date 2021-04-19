@@ -2538,11 +2538,17 @@ static int build_zonelists_node(pg_data_t *pgdat, struct zonelist *zonelist,
 
 	BUG_ON(zone_type >= MAX_NR_ZONES);
 	zone_type++;
-
+	/* populated_zone()用于判断管理区zone的present_pages成员是否为0，如果不为0的话，
+	 * 表示该管理区存在页面，那么则通过zoneref_set_zone()将其设置到zonelist的_zonerefs里面，
+	 * 而check_highest_zone()在没有开启NUMA的情况下是个空函数。由此可以看出
+	 * build_zonelists_node()实则上是按照ZONE_HIGHMEM—>ZONE_NORMAL—>ZONE_DMA的顺序去迭代排布
+	 * 到_zonerefs里面的，表示一个申请内存的代价由低廉到昂贵的顺序，这是一个分配内存时的备用
+	 * 次序。 */
 	do {
 		zone_type--;
 		zone = pgdat->node_zones + zone_type;
 		if (populated_zone(zone)) {
+			/* 这里设置好引用 */
 			zoneref_set_zone(zone,
 				&zonelist->_zonerefs[nr_zones++]);
 			check_highest_zone(zone_type);
@@ -2950,7 +2956,7 @@ static void set_zonelist_order(void)
 {
 	current_zonelist_order = ZONELIST_ORDER_ZONE;
 }
-
+/* Not define NUMA,普通linux会走这里的逻辑 */
 static void build_zonelists(pg_data_t *pgdat)
 {
 	int node, local_node;

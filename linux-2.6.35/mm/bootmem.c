@@ -1016,6 +1016,7 @@ void * __init __alloc_bootmem_node_nopanic(pg_data_t *pgdat, unsigned long size,
 /**
  * __alloc_bootmem_low - allocate low boot memory
  * @size: size of the request in bytes
+ *        请求的内存大小,单位为字节
  * @align: alignment of the region
  * @goal: preferred starting address of the region
  *

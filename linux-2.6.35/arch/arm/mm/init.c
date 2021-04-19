@@ -164,6 +164,9 @@ find_node_limits(int node, struct meminfo *mi,
  * the start of a bank, so if we allocate the bootmap bitmap at
  * the end, we won't clash.
  */
+ /* @param mi 内存信息
+  * @param bootmap_pages 需要分配的页数
+  */
 static unsigned int __init
 find_bootmap_pfn(int node, struct meminfo *mi, unsigned int bootmap_pages)
 {

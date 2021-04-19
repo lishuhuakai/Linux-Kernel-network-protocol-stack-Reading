@@ -610,7 +610,7 @@ static void __init create_36bit_mapping(struct map_desc *md,
  * offsets, and we take full advantage of sections and
  * supersections.
  */
-/* 记录下映射关系
+/* 记录下映射关系,实际是将信息写入页表
  *
  */
 static void __init create_mapping(struct map_desc *md)
@@ -653,7 +653,7 @@ static void __init create_mapping(struct map_desc *md)
 		       __pfn_to_phys(md->pfn), addr);
 		return;
 	}
-
+	/* 这里应当是将相关信息写入页表 */
 	pgd = pgd_offset_k(addr);
 	end = addr + length;
 	do {

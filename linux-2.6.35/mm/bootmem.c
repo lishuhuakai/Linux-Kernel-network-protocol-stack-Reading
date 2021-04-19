@@ -230,7 +230,9 @@ unsigned long __init free_all_memory_core_early(int nodeid)
 	return count;
 }
 #else
-/* 释放掉bootmem内存节点 */
+/* 释放掉bootmem内存节点
+ * 返回值是页帧的数目
+ */
 static unsigned long __init free_all_bootmem_core(bootmem_data_t *bdata)
 {
 	int aligned;

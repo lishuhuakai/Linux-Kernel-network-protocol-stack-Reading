@@ -723,7 +723,7 @@ sanity_check_meminfo(void)
 		    __va(bank->start) < (void *)PAGE_OFFSET)
 			highmem = 1;
 
-		bank->highmem = highmem;
+		bank->highmem = highmem; /* 高端内存 */
 
 		/*
 		 * Split those memory banks which are partially overlapping

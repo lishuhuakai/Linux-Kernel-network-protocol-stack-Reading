@@ -451,7 +451,7 @@ void __init bootmem_init(void)
 	 */
 	for_each_node(node)
 		bootmem_free_node(node, mi);
-
+	/* 高端内存的虚拟地址 */
 	high_memory = __va((max_low << PAGE_SHIFT) - 1) + 1;
 
 	/*
@@ -462,8 +462,8 @@ void __init bootmem_init(void)
 	 * Note: max_low_pfn and max_pfn reflect the number of _pages_ in
 	 * the system, not the maximum PFN.
 	 */
-	max_low_pfn = max_low - PHYS_PFN_OFFSET;
-	max_pfn = max_high - PHYS_PFN_OFFSET;
+	max_low_pfn = max_low - PHYS_PFN_OFFSET; /* 高端内存的页号 */
+	max_pfn = max_high - PHYS_PFN_OFFSET; 
 }
 
 static inline int free_area(unsigned long pfn, unsigned long end, char *s)
@@ -484,6 +484,10 @@ static inline int free_area(unsigned long pfn, unsigned long end, char *s)
 	return pages;
 }
 
+/* 内存释放
+ * @param start_pfn 起始帧
+ * @param end_pfn 终止帧
+ */
 static inline void
 free_memmap(int node, unsigned long start_pfn, unsigned long end_pfn)
 {
@@ -508,7 +512,7 @@ free_memmap(int node, unsigned long start_pfn, unsigned long end_pfn)
 	 * free the section of the memmap array.
 	 */
 	if (pg < pgend)
-		free_bootmem_node(NODE_DATA(node), pg, pgend - pg);
+		free_bootmem_node(NODE_DATA(node), pg, pgend - pg); /* 这里将内存释放到bootmem之中 */
 }
 
 /*
@@ -539,7 +543,7 @@ static void __init free_unused_memmap_node(int node, struct meminfo *mi)
 		 * between the current bank and the previous, free it.
 		 */
 		if (prev_bank_end && prev_bank_end != bank_start)
-			free_memmap(node, prev_bank_end, bank_start);
+			free_memmap(node, prev_bank_end, bank_start); /* 存在空闲空间就进行释放 */
 
 		prev_bank_end = bank_pfn_end(bank); /* 终止页 */
 	}
@@ -562,7 +566,9 @@ void __init mem_init(void)
 	max_mapnr   = pfn_to_page(max_pfn + PHYS_PFN_OFFSET) - mem_map;
 #endif
 
-	/* this will put all unused low memory onto the freelists */
+	/* this will put all unused low memory onto the freelists 
+     * 将所有未使用的低端内存放入freelists
+ 	 */
 	for_each_online_node(node) {
 		pg_data_t *pgdat = NODE_DATA(node);
 
@@ -578,7 +584,7 @@ void __init mem_init(void)
 				    __phys_to_pfn(__pa(swapper_pg_dir)), NULL);
 #endif
 
-#ifdef CONFIG_HIGHMEM
+#ifdef CONFIG_HIGHMEM /* 高端内存 */
 	/* set highmem page free */
 	for_each_online_node(node) {
 		for_each_nodebank (i, &meminfo, node) {
@@ -607,7 +613,7 @@ void __init mem_init(void)
 
 			do {
 				if (PageReserved(page))
-					reserved_pages++;
+					reserved_pages++; /* 保留页的数目 */
 				else if (!page_count(page))
 					free_pages++;
 				page++;
@@ -622,7 +628,7 @@ void __init mem_init(void)
 	printk(KERN_INFO "Memory:");
 	num_physpages = 0;
 	for (i = 0; i < meminfo.nr_banks; i++) {
-		num_physpages += bank_pfn_size(&meminfo.bank[i]);
+		num_physpages += bank_pfn_size(&meminfo.bank[i]); /* 统计物理页的个数 */
 		printk(" %ldMB", bank_phys_size(&meminfo.bank[i]) >> 20);
 	}
 	printk(" = %luMB total\n", num_physpages >> (20 - PAGE_SHIFT));

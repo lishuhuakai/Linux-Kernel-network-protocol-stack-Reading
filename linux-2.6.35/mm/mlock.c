@@ -178,9 +178,10 @@ static long __mlock_vma_pages_range(struct vm_area_struct *vma,
 		 * disable migration of this page.  However, page may
 		 * still be truncated out from under us.
 		 */
+		/* 为进程地址空间分配物理内存并且建立映射关系 */
 		ret = __get_user_pages(current, mm, addr,
 				min_t(int, nr_pages, ARRAY_SIZE(pages)),
-				gup_flags, pages, NULL);
+				gup_flags, pages, NULL); 
 		/*
 		 * This can happen for, e.g., VM_NONLINEAR regions before
 		 * a page has been allocated and mapped at a given offset,

@@ -494,9 +494,9 @@ static void __init alloc_init_pte(pmd_t *pmd, unsigned long addr,
 {
 	pte_t *pte;
 
-	if (pmd_none(*pmd)) {
+	if (pmd_none(*pmd)) { /* 如果PGD的内容为空,即PTE还没有创建,择取建立页面 */
 		pte = alloc_bootmem_low_pages(2 * PTRS_PER_PTE * sizeof(pte_t));
-		__pmd_populate(pmd, __pa(pte) | type->prot_l1);
+		__pmd_populate(pmd, __pa(pte) | type->prot_l1); /* 生成pmd页表目录,并刷入RAM */
 	}
 
 	pte = pte_offset_kernel(pmd, addr);
@@ -541,6 +541,7 @@ alloc_init_section(pgd_t *pgd, unsigned long addr,
 		 * No need to loop; pte's aren't interested in the
 		 * individual L1 entries.
 		 */
+		 /* arm-linux采用两级页表映射,跳过PUD/PMD直接创建PTE */
 		alloc_init_pte(pmd, addr, end, __phys_to_pfn(phys), type);
 	}
 }
@@ -610,7 +611,7 @@ static void __init create_36bit_mapping(struct map_desc *md,
  * offsets, and we take full advantage of sections and
  * supersections.
  */
-/* 记录下映射关系,实际是将信息写入页表
+/* 记录下映射关系,实际是将映射关系信息写入页表
  *
  */
 static void __init create_mapping(struct map_desc *md)
@@ -633,7 +634,7 @@ static void __init create_mapping(struct map_desc *md)
 		       __pfn_to_phys((u64)md->pfn), md->virtual);
 	}
 
-	type = &mem_types[md->type];
+	type = &mem_types[md->type]; /* 找到对应的struct mem_type */
 
 	/*
 	 * Catch 36-bit addresses
@@ -643,8 +644,8 @@ static void __init create_mapping(struct map_desc *md)
 		return;
 	}
 
-	addr = md->virtual & PAGE_MASK;
-	phys = (unsigned long)__pfn_to_phys(md->pfn);
+	addr = md->virtual & PAGE_MASK; /* 对齐到页 */
+	phys = (unsigned long)__pfn_to_phys(md->pfn); /* 页到物理地址转换 */
 	length = PAGE_ALIGN(md->length + (md->virtual & ~PAGE_MASK));
 
 	if (type->prot_l1 == 0 && ((addr | phys | length) & ~SECTION_MASK)) {
@@ -654,16 +655,16 @@ static void __init create_mapping(struct map_desc *md)
 		return;
 	}
 	/* 这里应当是将相关信息写入页表 */
-	pgd = pgd_offset_k(addr);
+	pgd = pgd_offset_k(addr); /* 根据addr找到对应虚拟地址对应的pgd地址 */
 	end = addr + length;
 	do {
 		unsigned long next = pgd_addr_end(addr, end);
 
-		alloc_init_section(pgd, addr, next, phys, type);
+		alloc_init_section(pgd, addr, next, phys, type); /* 初始化下一级页表 */
 
 		phys += next - addr;
 		addr = next;
-	} while (pgd++, addr != end);
+	} while (pgd++, addr != end); /* 遍历区间地址，步长是PGDIR_SIZE，即2MB大小的空间 */
 }
 
 /*
@@ -822,6 +823,7 @@ static inline void prepare_page_table(void)
 	/*
 	 * Clear out all the mappings below the kernel image.
 	 */
+	/* 清空0~MODULES_VADDR地址段的一级页表 */
 	for (addr = 0; addr < MODULES_VADDR; addr += PGDIR_SIZE)
 		pmd_clear(pmd_off_k(addr));
 
@@ -829,7 +831,8 @@ static inline void prepare_page_table(void)
 	/* The XIP kernel is mapped in the module area -- skip over it */
 	addr = ((unsigned long)_etext + PGDIR_SIZE - 1) & PGDIR_MASK;
 #endif
-	for ( ; addr < PAGE_OFFSET; addr += PGDIR_SIZE)
+	/* 清除MODULES_VADDR~PAGE_OFFSSET地址段的一级页表 */
+	for ( ; addr < PAGE_OFFSET; addr += PGDIR_SIZE) 
 		pmd_clear(pmd_off_k(addr));
 
 	/*
@@ -1045,7 +1048,14 @@ static inline void map_memory_bank(struct membank *bank)
 
 	create_mapping(&map);
 }
-
+/* 创建内核的页表
+ * 不同设备可能不太一样,举一个例子:
+ * 创建两块区间映射
+ * 区间一0x60000000~0x60800000(0xc0000000~0xc0800000)
+ *    具有读写执行权限,主要用于存放Kernel代码数据段,还包括swapper_pg_dir内容
+ * 区间二0x60800000~0x8f800000(0xc0800000~0xef800000)
+ *   具有读写,不允许执行,是Normal Memory部分
+ */
 static void __init map_lowmem(void)
 {
 	struct meminfo *mi = &meminfo;

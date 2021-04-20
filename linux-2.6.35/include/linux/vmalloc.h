@@ -24,14 +24,14 @@ struct vm_area_struct;		/* vma defining user mapping in mm_types.h */
 #endif
 
 struct vm_struct {
-	struct vm_struct	*next;
-	void			*addr;
-	unsigned long		size;
+	struct vm_struct	*next; /* 下一个vm */
+	void			*addr; /* 指向第一个内存单元虚拟地址 */
+	unsigned long		size; /* 该内存区对应的大小 */
 	unsigned long		flags;
-	struct page		**pages;
-	unsigned int		nr_pages;
-	unsigned long		phys_addr;
-	void			*caller;
+	struct page		**pages; /* 执行页面描述符的指针数组 */
+	unsigned int		nr_pages; /* vmalloc映射的page数目 */
+	unsigned long		phys_addr; /* 用来映射硬件设备的IO共享内存 */
+	void			*caller; /* 调用vmalloc之类的函数的返回地址 */
 };
 
 /*

@@ -319,7 +319,7 @@ static void __init bootmem_free_node(int node, struct meminfo *mi)
 	 * to do anything fancy with the allocation of this memory to the
 	 * zones, now is the time to do it.
 	 */
-	zone_size[0] = max_low - min;
+	zone_size[0] = max_low - min; /* 计算每一个zone的大小 */
 #ifdef CONFIG_HIGHMEM
 	zone_size[ZONE_HIGHMEM] = max_high - max_low;
 #endif
@@ -327,6 +327,7 @@ static void __init bootmem_free_node(int node, struct meminfo *mi)
 	/*
 	 * For each bank in this node, calculate the size of the holes.
 	 *  holes = node_size - sum(bank_sizes_in_node)
+	 * 计算空洞的大小
 	 */
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
 	for_each_nodebank(i, mi, node) {
@@ -383,7 +384,7 @@ static void arm_memory_present(struct meminfo *mi, int node)
 #endif
 
 /* bootmem分配器的初始化
- *
+ * zone的初始化
  */
 void __init bootmem_init(void)
 {
@@ -450,7 +451,7 @@ void __init bootmem_init(void)
 	 * for memmap_init_zone(), otherwise all PFNs are invalid.
 	 */
 	for_each_node(node)
-		bootmem_free_node(node, mi);
+		bootmem_free_node(node, mi); /* 这个函数会初始化zone */
 	/* 高端内存的虚拟地址 */
 	high_memory = __va((max_low << PAGE_SHIFT) - 1) + 1;
 

@@ -2190,7 +2190,7 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 		return error;
 
 	flags = VM_DATA_DEFAULT_FLAGS | VM_ACCOUNT | mm->def_flags;
-
+	/* 判断虚拟地址空间是否有足够的空间,这部分代码和体系结构耦合 */
 	error = get_unmapped_area(NULL, addr, len, 0, MAP_FIXED);
 	if (error & ~PAGE_MASK)
 		return error;
@@ -2236,6 +2236,7 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 		return -ENOMEM;
 
 	/* Can we just expand an old private anonymous mapping? */
+	/* 看有没有可能合并addr附近的vma */
 	vma = vma_merge(mm, prev, addr, addr + len, flags,
 					NULL, NULL, pgoff, NULL);
 	if (vma)
@@ -2244,6 +2245,7 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 	/*
 	 * create a vma struct for an anonymous mapping
 	 */
+	/* 如果没有办法合并,只能新创建一个vma，vma空间为[addr, addr+len) */
 	vma = kmem_cache_zalloc(vm_area_cachep, GFP_KERNEL);
 	if (!vma) {
 		vm_unacct_memory(len >> PAGE_SHIFT);
@@ -2261,7 +2263,7 @@ unsigned long do_brk(unsigned long addr, unsigned long len)
 out:
 	mm->total_vm += len >> PAGE_SHIFT;
 	if (flags & VM_LOCKED) {
-		if (!mlock_vma_pages_range(vma, addr, addr + len))
+		if (!mlock_vma_pages_range(vma, addr, addr + len)) /* 这里直接做映射操作 */
 			mm->locked_vm += (len >> PAGE_SHIFT);
 	}
 	return addr;

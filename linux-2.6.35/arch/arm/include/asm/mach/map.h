@@ -12,10 +12,10 @@
 #include <asm/io.h>
 
 struct map_desc {
-	unsigned long virtual;
-	unsigned long pfn;
-	unsigned long length;
-	unsigned int type;
+	unsigned long virtual; /* 虚拟地址起始地址 */
+	unsigned long pfn; /* 物理地址的开始页帧号 */
+	unsigned long length; /* 内存空间的大小 */
+	unsigned int type; /* mem_types中的序号 */
 };
 
 /* types 0-3 are defined in asm/io.h */

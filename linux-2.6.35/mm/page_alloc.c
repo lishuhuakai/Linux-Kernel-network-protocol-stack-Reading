@@ -3969,14 +3969,14 @@ static unsigned long __meminit zone_absent_pages_in_node(int nid,
 	return __absent_pages_in_range(nid, zone_start_pfn, zone_end_pfn);
 }
 
-#else
+#else /* bootmem */
 static inline unsigned long __meminit zone_spanned_pages_in_node(int nid,
 					unsigned long zone_type,
 					unsigned long *zones_size)
 {
 	return zones_size[zone_type];
 }
-
+/* 内存空洞大小 */
 static inline unsigned long __meminit zone_absent_pages_in_node(int nid,
 						unsigned long zone_type,
 						unsigned long *zholes_size)
@@ -3989,6 +3989,7 @@ static inline unsigned long __meminit zone_absent_pages_in_node(int nid,
 
 #endif
 
+/* 计算总的页数 */
 static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 		unsigned long *zones_size, unsigned long *zholes_size)
 {
@@ -4005,7 +4006,7 @@ static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 		realtotalpages -=
 			zone_absent_pages_in_node(pgdat->node_id, i,
 								zholes_size);
-	pgdat->node_present_pages = realtotalpages;
+	pgdat->node_present_pages = realtotalpages; /* 不包含内存空洞的总数 */
 	printk(KERN_DEBUG "On node %d totalpages: %lu\n", pgdat->node_id,
 							realtotalpages);
 }
@@ -4108,19 +4109,20 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		unsigned long size, realsize, memmap_pages;
 		enum lru_list l;
 
-		size = zone_spanned_pages_in_node(nid, j, zones_size);
+		size = zone_spanned_pages_in_node(nid, j, zones_size); /* 总大小 */
 		realsize = size - zone_absent_pages_in_node(nid, j,
-								zholes_size);
+								zholes_size); /* 减去空洞的大小 */
 
 		/*
 		 * Adjust realsize so that it accounts for how much memory
 		 * is used by this zone for memmap. This affects the watermark
 		 * and per-cpu initialisations
 		 */
+		/* 计算struct page本身需要耗费的空间 */
 		memmap_pages =
 			PAGE_ALIGN(size * sizeof(struct page)) >> PAGE_SHIFT;
 		if (realsize >= memmap_pages) {
-			realsize -= memmap_pages;
+			realsize -= memmap_pages; /* 减去元数据耗费的空间 */
 			if (memmap_pages)
 				printk(KERN_DEBUG
 				       "  %s zone: %lu pages used for memmap\n",
@@ -4229,7 +4231,8 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 	pg_data_t *pgdat = NODE_DATA(nid);
 
 	pgdat->node_id = nid;
-	pgdat->node_start_pfn = node_start_pfn;
+	pgdat->node_start_pfn = node_start_pfn; /* 起始页帧 */
+	/* 计算Node的page数目，1GB/4KB=262144 */
 	calculate_node_totalpages(pgdat, zones_size, zholes_size);
 
 	alloc_node_mem_map(pgdat);
@@ -4239,7 +4242,7 @@ void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		(unsigned long)pgdat->node_mem_map);
 #endif
 
-	free_area_init_core(pgdat, zones_size, zholes_size);
+	free_area_init_core(pgdat, zones_size, zholes_size); /* 逐个初始化Node中的zone */
 }
 
 #ifdef CONFIG_ARCH_POPULATES_NODE_MAP
@@ -4267,7 +4270,9 @@ static inline void setup_nr_node_ids(void)
  * add_active_range - Register a range of PFNs backed by physical memory
  * @nid: The node ID the range resides on
  * @start_pfn: The start PFN of the available physical memory
+ *           可用  物理内存的起始页帧
  * @end_pfn: The end PFN of the available physical memory
+ *           可用物理内存的终止页帧
  *
  * These ranges are stored in an early_node_map[] and later used by
  * free_area_init_nodes() to calculate zone sizes and holes. If the
@@ -4840,7 +4845,7 @@ static void calculate_totalreserve_pages(void)
 
 	for_each_online_pgdat(pgdat) {
 		for (i = 0; i < MAX_NR_ZONES; i++) {
-			struct zone *zone = pgdat->node_zones + i;
+			struct zone *zone = pgdat->node_zones + i; /* 遍历每一个zone */
 			unsigned long max = 0;
 
 			/* Find valid and maximum lowmem_reserve in the zone */

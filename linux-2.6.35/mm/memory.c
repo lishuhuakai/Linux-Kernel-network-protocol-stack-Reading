@@ -1345,6 +1345,9 @@ no_page_table:
 	return page;
 }
 
+/* 内存分配
+ *
+ */
 int __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 		     unsigned long start, int nr_pages, unsigned int gup_flags,
 		     struct page **pages, struct vm_area_struct **vmas)
@@ -1369,7 +1372,8 @@ int __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 
 	do {
 		struct vm_area_struct *vma;
-
+		/* 查找VMA,如果vma->vm_start大于查找地址start，那么它会尝试去扩增vma，
+		 * 把vma->vm_start边界扩大到start中 */
 		vma = find_extend_vma(mm, start);
 		if (!vma && in_gate_area(tsk, start)) {
 			unsigned long pg = start & PAGE_MASK;
@@ -1485,7 +1489,7 @@ int __get_user_pages(struct task_struct *tsk, struct mm_struct *mm,
 			}
 			if (IS_ERR(page))
 				return i ? i : PTR_ERR(page);
-			if (pages) {
+			if (pages) { /* flush页面对应的cache */
 				pages[i] = page;
 
 				flush_anon_page(vma, page, start);

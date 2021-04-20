@@ -585,6 +585,9 @@ struct zoneref {
  */
 struct zonelist {
 	struct zonelist_cache *zlcache_ptr;		     // NULL or &zlcache
+	/* 关于zoneref数组,它的第一个成员指向的zone是页面分配器的第一个候选者
+     * 其他成员是第一个候选者分配失败之后才考虑的,有限价逐渐降低
+	 */
 	struct zoneref _zonerefs[MAX_ZONES_PER_ZONELIST + 1];
 #ifdef CONFIG_NUMA
 	struct zonelist_cache zlcache;			     // optional ...
@@ -616,9 +619,11 @@ extern struct page *mem_map;
  * per-zone basis.
  */
 struct bootmem_data;
-/* 内存节点 */
+/* 内存节点
+ * 普通的linux设备一般只有一个pglist_data实例
+ */
 typedef struct pglist_data {
-	struct zone node_zones[MAX_NR_ZONES];
+	struct zone node_zones[MAX_NR_ZONES]; /* 一般包含三个管理区,ZONE_DMA, ZONE_NORMAL, ZONE_HIGHMEM */
 	struct zonelist node_zonelists[MAX_ZONELISTS]; /* 备用结点 */
 	int nr_zones;
 #ifdef CONFIG_FLAT_NODE_MEM_MAP	/* means !SPARSEMEM */

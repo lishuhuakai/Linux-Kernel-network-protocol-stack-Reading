@@ -731,7 +731,7 @@ void __meminit __free_pages_bootmem(struct page *page, unsigned int order)
 		}
 
 		set_page_refcounted(page);
-		__free_pages(page, order);
+		__free_pages(page, order); /* __free_pages是伙伴系统的核心函数 */
 	}
 }
 
@@ -2543,7 +2543,8 @@ static int build_zonelists_node(pg_data_t *pgdat, struct zonelist *zonelist,
 	 * 而check_highest_zone()在没有开启NUMA的情况下是个空函数。由此可以看出
 	 * build_zonelists_node()实则上是按照ZONE_HIGHMEM—>ZONE_NORMAL—>ZONE_DMA的顺序去迭代排布
 	 * 到_zonerefs里面的，表示一个申请内存的代价由低廉到昂贵的顺序，这是一个分配内存时的备用
-	 * 次序。 */
+	 * 次序。
+	 */
 	do {
 		zone_type--;
 		zone = pgdat->node_zones + zone_type;
@@ -3040,7 +3041,7 @@ __build_all_zonelists(void *data)
 #endif
     /* 遍历系统中所有的活动节点 */
 	for_each_online_node(nid) {
-		pg_data_t *pgdat = NODE_DATA(nid);
+		pg_data_t *pgdat = NODE_DATA(nid); /* 暂时只考虑只有一个pg_data_t实例的情况 */
 
 		build_zonelists(pgdat);
 		build_zonelist_cache(pgdat);
@@ -4025,19 +4026,21 @@ static unsigned long __init usemap_size(unsigned long zonesize)
 
 	usemapsize = roundup(zonesize, pageblock_nr_pages);
 	usemapsize = usemapsize >> pageblock_order;
-	usemapsize *= NR_PAGEBLOCK_BITS;
+	usemapsize *= NR_PAGEBLOCK_BITS; /* 每个pageblock需要4bit */
 	usemapsize = roundup(usemapsize, 8 * sizeof(unsigned long));
 
 	return usemapsize / 8;
 }
-
+/*
+ * @param zonesize zone管理内存的大小
+ */
 static void __init setup_usemap(struct pglist_data *pgdat,
 				struct zone *zone, unsigned long zonesize)
 {
-	unsigned long usemapsize = usemap_size(zonesize);
+	unsigned long usemapsize = usemap_size(zonesize); /* 这里计算pageblock需要占用多少内存  */
 	zone->pageblock_flags = NULL;
 	if (usemapsize)
-		zone->pageblock_flags = alloc_bootmem_node(pgdat, usemapsize);
+		zone->pageblock_flags = alloc_bootmem_node(pgdat, usemapsize); /*分配内存 */
 }
 #else
 static void inline setup_usemap(struct pglist_data *pgdat,
@@ -4105,7 +4108,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 	pgdat_page_cgroup_init(pgdat);
 
 	for (j = 0; j < MAX_NR_ZONES; j++) {
-		struct zone *zone = pgdat->node_zones + j;
+		struct zone *zone = pgdat->node_zones + j; /* 遍历每一个zone */
 		unsigned long size, realsize, memmap_pages;
 		enum lru_list l;
 
@@ -4130,7 +4133,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		} else
 			printk(KERN_WARNING
 				"  %s zone: %lu pages exceeds realsize %lu\n",
-				zone_names[j], memmap_pages, realsize);
+				zone_names[j], memmap_pages, realsize); /* 这里一般不会跑到 */
 
 		/* Account for reserved pages */
 		if (j == 0 && realsize > dma_reserve) {
@@ -4145,7 +4148,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 
 		zone->spanned_pages = size;
 		zone->present_pages = realsize;
-#ifdef CONFIG_NUMA
+#ifdef CONFIG_NUMA /* 忽略 */
 		zone->node = nid;
 		zone->min_unmapped_pages = (realsize*sysctl_min_unmapped_ratio)
 						/ 100;
@@ -4183,6 +4186,9 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 	}
 }
 
+/* 初始化全局变量mem_map
+ *
+ */
 static void __init_refok
 alloc_node_mem_map(struct pglist_data *pgdat)
 {
@@ -4203,11 +4209,11 @@ alloc_node_mem_map(struct pglist_data *pgdat)
 		 */
 		start = pgdat->node_start_pfn & ~(MAX_ORDER_NR_PAGES - 1);
 		end = pgdat->node_start_pfn + pgdat->node_spanned_pages;
-		end = ALIGN(end, MAX_ORDER_NR_PAGES);
-		size =  (end - start) * sizeof(struct page);
+		end = ALIGN(end, MAX_ORDER_NR_PAGES); /* 对齐 */
+		size =  (end - start) * sizeof(struct page); /* 计算出需要page实例需要占用的空间 */
 		map = alloc_remap(pgdat->node_id, size);
 		if (!map)
-			map = alloc_bootmem_node(pgdat, size);
+			map = alloc_bootmem_node(pgdat, size); /* 通过bootmem分配内存 */
 		pgdat->node_mem_map = map + (pgdat->node_start_pfn - start);
 	}
 #ifndef CONFIG_NEED_MULTIPLE_NODES
@@ -4215,7 +4221,7 @@ alloc_node_mem_map(struct pglist_data *pgdat)
 	 * With no DISCONTIG, the global mem_map is just set as node 0's
 	 */
 	if (pgdat == NODE_DATA(0)) {
-		mem_map = NODE_DATA(0)->node_mem_map;
+		mem_map = NODE_DATA(0)->node_mem_map; /* 如果仅有一个实例 */
 #ifdef CONFIG_ARCH_POPULATES_NODE_MAP
 		if (page_to_pfn(mem_map) != pgdat->node_start_pfn)
 			mem_map -= (pgdat->node_start_pfn - ARCH_PFN_OFFSET);
@@ -4228,7 +4234,7 @@ alloc_node_mem_map(struct pglist_data *pgdat)
 void __paginginit free_area_init_node(int nid, unsigned long *zones_size,
 		unsigned long node_start_pfn, unsigned long *zholes_size)
 {
-	pg_data_t *pgdat = NODE_DATA(nid);
+	pg_data_t *pgdat = NODE_DATA(nid); /* 暂时只考虑仅有一个pg_data_t实例的情况 */
 
 	pgdat->node_id = nid;
 	pgdat->node_start_pfn = node_start_pfn; /* 起始页帧 */

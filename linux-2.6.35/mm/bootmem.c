@@ -183,7 +183,11 @@ void __init free_bootmem_late(unsigned long addr, unsigned long size)
 	}
 }
 
-#ifdef CONFIG_NO_BOOTMEM
+#ifdef CONFIG_NO_BOOTMEM /* 在没有启用bootmem内存分配器的情况下 */
+
+/* 将内存加入伙伴系统
+ * @param start,end 起始页帧号
+ */
 static void __init __free_pages_memory(unsigned long start, unsigned long end)
 {
 	int i;
@@ -194,8 +198,8 @@ static void __init __free_pages_memory(unsigned long start, unsigned long end)
 	end_aligned = end & ~(BITS_PER_LONG - 1);
 
 	if (end_aligned <= start_aligned) {
-		for (i = start; i < end; i++)
-			__free_pages_bootmem(pfn_to_page(i), 0);
+		for (i = start; i < end; i++) /* 一个页一个页的进行加入操作 */
+			__free_pages_bootmem(pfn_to_page(i), 0); /* 这个函数很重要,将内存加入伙伴系统 */
 
 		return;
 	}

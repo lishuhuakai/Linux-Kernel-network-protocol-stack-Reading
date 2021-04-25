@@ -7,12 +7,12 @@
  * modify it under the terms of the GNU General Public License as
  * published by the Free Software Foundation; either version 2, or (at
  * your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful, but
  * WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
@@ -29,11 +29,13 @@
  * An indirect pointer (root->rnode pointing to a radix_tree_node, rather
  * than a data item) is signalled by the low bit set in the root->rnode
  * pointer.
- *
+ * 一个直接的指针(root->rnode指向一个radix_tree_node,而不是一个数据项(data item)),它被root->rnode的低比特位
+ * 所标识
  * In this case root->height is > 0, but the indirect pointer tests are
  * needed for RCU lookups (because root->height is unreliable). The only
  * time callers need worry about this is when doing a lookup_slot under
  * RCU.
+ * 在这种情况下,root->height > 0
  */
 #define RADIX_TREE_INDIRECT_PTR	1
 #define RADIX_TREE_RETRY ((void *)-1UL)
@@ -48,6 +50,7 @@ static inline void *radix_tree_indirect_to_ptr(void *ptr)
 	return (void *)((unsigned long)ptr & ~RADIX_TREE_INDIRECT_PTR);
 }
 
+/* 这里其实只有两个返回值0或者1 */
 static inline int radix_tree_is_indirect_ptr(void *ptr)
 {
 	return (int)((unsigned long)ptr & RADIX_TREE_INDIRECT_PTR);
@@ -59,9 +62,9 @@ static inline int radix_tree_is_indirect_ptr(void *ptr)
 
 /* root tags are stored in gfp_mask, shifted by __GFP_BITS_SHIFT */
 struct radix_tree_root {
-	unsigned int		height;
-	gfp_t			gfp_mask;
-	struct radix_tree_node	*rnode;
+	unsigned int		height; /* 从叶节点向上计算出的树高度 */
+	gfp_t			gfp_mask; /* 内存分配标识符 */
+	struct radix_tree_node	*rnode; /* 子节点指针 */
 };
 
 #define RADIX_TREE_INIT(mask)	{					\

@@ -620,19 +620,29 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 				struct page *page, void *fsdata);
 
 struct backing_dev_info;
+/* 地址空间 */
 struct address_space {
+    /* 所有者,inode或者块设备 */
 	struct inode		*host;		/* owner: inode, block_device */
+    /* 所有页的基数树 */
 	struct radix_tree_root	page_tree;	/* radix tree of all pages */
+
 	spinlock_t		tree_lock;	/* and lock protecting it */
+    /* VM_SHARED映射的计数 */
 	unsigned int		i_mmap_writable;/* count VM_SHARED mappings */
+    /* 私有和共享映射的树 */
 	struct prio_tree_root	i_mmap;		/* tree of private and shared mappings */
+    /* VM_NONLINEAR映射的链表元素 */
 	struct list_head	i_mmap_nonlinear;/*list VM_NONLINEAR mappings */
 	spinlock_t		i_mmap_lock;	/* protect tree, count, list */
 	unsigned int		truncate_count;	/* Cover race condition with truncate */
+    /* 页的总数 */
 	unsigned long		nrpages;	/* number of total pages */
 	pgoff_t			writeback_index;/* writeback starts here */
+    /* gfp掩码 */
 	const struct address_space_operations *a_ops;	/* methods */
 	unsigned long		flags;		/* error bits/gfp mask */
+    /* 指向后备存储器--地址空间中信息的来源 */
 	struct backing_dev_info *backing_dev_info; /* device readahead, etc */
 	spinlock_t		private_lock;	/* for use by the address_space */
 	struct list_head	private_list;	/* ditto */

@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  linux/mm/vmscan.c
  *
  *  Copyright (C) 1991, 1992, 1993, 1994  Linus Torvalds
@@ -2351,6 +2351,7 @@ void wakeup_kswapd(struct zone *zone, int order)
 
 /*
  * The reclaimable count would be mostly accurate.
+ * 可回收的内存
  * The less reclaimable pages may be
  * - mlocked pages, which will be moved to unevictable list when encountered
  * - mapped pages, which may require several travels to be reclaimed

@@ -1,4 +1,4 @@
-
+﻿
 #include <linux/wait.h>
 #include <linux/backing-dev.h>
 #include <linux/kthread.h>
@@ -410,11 +410,11 @@ static int bdi_forker_task(void *ptr)
 		 * Check if any existing bdi's have dirty data without
 		 * a thread registered. If so, set that up.
 		 */
-		list_for_each_entry_safe(bdi, tmp, &bdi_list, bdi_list) {
+		list_for_each_entry_safe(bdi, tmp, &bdi_list, bdi_list) { /* 遍历所有的后备设备 */
 			if (bdi->wb.task)
 				continue;
 			if (list_empty(&bdi->work_list) &&
-			    !bdi_has_dirty_io(bdi))
+			    !bdi_has_dirty_io(bdi)) /* 有脏的inode或者回写任务才继续执行 */
 				continue;
 
 			bdi_add_default_flusher_task(bdi);
@@ -447,6 +447,7 @@ static int bdi_forker_task(void *ptr)
 		spin_unlock_bh(&bdi_lock);
 
 		wb = &bdi->wb;
+        /* 构建一个内核线程 */
 		wb->task = kthread_run(bdi_start_fn, wb, "flush-%s",
 					dev_name(bdi->dev));
 		/*
@@ -455,7 +456,7 @@ static int bdi_forker_task(void *ptr)
 		 * from this forker thread. That will free some memory
 		 * and we can try again.
 		 */
-		if (IS_ERR(wb->task)) {
+		if (IS_ERR(wb->task)) { /* 线程创建失败 */
 			wb->task = NULL;
 
 			/*

@@ -356,6 +356,7 @@ EXPORT_SYMBOL(drop_super);
  * hold up the sync while mounting a device. (The newly
  * mounted device won't need syncing.)
  */
+ /* 辅助函数,周期性地将超级块写回 */
 void sync_supers(void)
 {
 	struct super_block *sb, *n;

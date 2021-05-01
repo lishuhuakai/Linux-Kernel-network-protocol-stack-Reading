@@ -1,4 +1,4 @@
-/*
+﻿/*
  *  linux/fs/fat/inode.c
  *
  *  Written 1992,1993 by Werner Almesberger
@@ -1539,6 +1539,7 @@ EXPORT_SYMBOL_GPL(fat_fill_super);
  * the start of the call.  It does not wait for any io started
  * during the call
  */
+/* 将inode节点刷回 */
 static int writeback_inode(struct inode *inode)
 {
 

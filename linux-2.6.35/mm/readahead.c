@@ -111,14 +111,14 @@ static int read_pages(struct address_space *mapping, struct file *filp,
 {
 	unsigned page_idx;
 	int ret;
-
+    /* 一次性读取多个页面 */
 	if (mapping->a_ops->readpages) {
 		ret = mapping->a_ops->readpages(filp, mapping, pages, nr_pages);
 		/* Clean up the remaining pages */
 		put_pages_list(pages);
 		goto out;
 	}
-
+    /* 一页一页进行读取 */
 	for (page_idx = 0; page_idx < nr_pages; page_idx++) {
 		struct page *page = list_to_page(pages);
 		list_del(&page->lru);
@@ -141,6 +141,13 @@ out:
  *
  * Returns the number of pages requested, or the maximum amount of I/O allowed.
  */
+/* 进行预读操作
+ * @param mapping 文件拥有者的address_space对象
+ * @param file文件对象
+ * @param offset 页面在文件内的偏移
+ * @param nr_to_read 完成当前读操作需要的页面数
+ * @param lookahead_size 异步预读大小
+ */
 static int
 __do_page_cache_readahead(struct address_space *mapping, struct file *filp,
 			pgoff_t offset, unsigned long nr_to_read,
@@ -161,6 +168,7 @@ __do_page_cache_readahead(struct address_space *mapping, struct file *filp,
 
 	/*
 	 * Preallocate as many pages as we will need.
+	 * 预分配page
 	 */
 	for (page_idx = 0; page_idx < nr_to_read; page_idx++) {
 		pgoff_t page_offset = offset + page_idx;
@@ -179,6 +187,8 @@ __do_page_cache_readahead(struct address_space *mapping, struct file *filp,
 			break;
 		page->index = page_offset;
 		list_add(&page->lru, &page_pool);
+        /* 当分配到第nr_to_read ‐ lookahead_size个页面时,
+         * 就设置该页面标志PG_readahead,以让下次进行异步预读 */
 		if (page_idx == nr_to_read - lookahead_size)
 			SetPageReadahead(page);
 		ret++;
@@ -397,9 +407,9 @@ ondemand_readahead(struct address_space *mapping,
 	/*
 	 * start of file
 	 */
-	if (!offset)
+	if (!offset) /* offset为0表示从文件头部开始读取 */
 		goto initial_readahead;
-
+    /* 如果不是文件头,则判断是否连续的请求 */
 	/*
 	 * It's the expected callback offset, assume sequential access.
 	 * Ramp up sizes, and push forward the readahead window.
@@ -407,7 +417,7 @@ ondemand_readahead(struct address_space *mapping,
 	if ((offset == (ra->start + ra->size - ra->async_size) ||
 	     offset == (ra->start + ra->size))) {
 		ra->start += ra->size;
-		ra->size = get_next_ra_size(ra, max);
+		ra->size = get_next_ra_size(ra, max); /* 扩大预读数量,一般是上次预读数量*2 */
 		ra->async_size = ra->size;
 		goto readit;
 	}
@@ -477,7 +487,7 @@ readit:
 		ra->size += ra->async_size;
 	}
 
-	return ra_submit(ra, mapping, filp);
+	return ra_submit(ra, mapping, filp); /* 提交读取请求 */
 }
 
 /**
@@ -493,6 +503,13 @@ readit:
  * it will submit the read.  The readahead logic may decide to piggyback more
  * pages onto the read request if access patterns suggest it will improve
  * performance.
+ */
+/* 同步预读一些页面到内存中
+ * @param mapping 文件拥有者的address_space对象
+ * @param ra 包含此页面的文件file_ra_state描述符
+ * @param filp 文件对象
+ * @param offset 页面在文件中的偏移量
+ * @param req_size 完成当前读操作需要的页面数
  */
 void page_cache_sync_readahead(struct address_space *mapping,
 			       struct file_ra_state *ra, struct file *filp,
@@ -527,6 +544,8 @@ EXPORT_SYMBOL_GPL(page_cache_sync_readahead);
  * has the PG_readahead flag; this is a marker to suggest that the application
  * has used up enough of the readahead window that we should start pulling in
  * more pages.
+ */
+/* 执行预读操作
  */
 void
 page_cache_async_readahead(struct address_space *mapping,

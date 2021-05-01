@@ -10,7 +10,7 @@
  * 10Apr2002	Andrew Morton
  *		Initial version
  */
-
+/* 将脏页写回 */
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/spinlock.h>
@@ -46,6 +46,7 @@ static long ratelimit_pages = 32;
  * non-background writeback, this is how many pages it will attempt to write.
  * It should be somewhat larger than dirtied pages to ensure that reasonably
  * large amounts of I/O are submitted.
+ * 需要执行多少同步写
  */
 static inline long sync_writeback_pages(unsigned long dirtied)
 {
@@ -87,6 +88,7 @@ unsigned long vm_dirty_bytes;
 
 /*
  * The interval between `kupdate'-style writebacks
+ * 周期写回时间间隔
  */
 unsigned int dirty_writeback_interval = 5 * 100; /* centiseconds */
 
@@ -400,6 +402,7 @@ static unsigned long highmem_dirtyable_memory(unsigned long total)
 
 /**
  * determine_dirtyable_memory - amount of memory that may be used
+ *                            - 已经使用了的内存
  *
  * Returns the numebr of pages that can currently be freed and used
  * by the kernel for direct mappings.
@@ -416,6 +419,9 @@ unsigned long determine_dirtyable_memory(void)
 	return x + 1;	/* Ensure that we never return 0 */
 }
 
+/* 计算阈值
+ *
+ */
 void
 get_dirty_limits(unsigned long *pbackground, unsigned long *pdirty,
 		 unsigned long *pbdi_dirty, struct backing_dev_info *bdi)
@@ -480,6 +486,10 @@ get_dirty_limits(unsigned long *pbackground, unsigned long *pdirty,
  * If we're over `background_thresh' then the writeback threads are woken to
  * perform some writeout.
  */
+ /* 生成脏数据的进程必须调用balance_dirty_pages, 它查看机器中脏页的数量,
+  * 如果系统脏页超过“ vm_dirty_ratio”,它将强制调用者执行写回操作.
+  * 如果我们超过了“ background_thresh”，那么唤醒写回线程以执行一些写出操作.
+  */
 static void balance_dirty_pages(struct address_space *mapping,
 				unsigned long write_chunk)
 {
@@ -503,14 +513,15 @@ static void balance_dirty_pages(struct address_space *mapping,
 
 		get_dirty_limits(&background_thresh, &dirty_thresh,
 				&bdi_thresh, bdi);
-
+        /* 可回收的页的数目 */
 		nr_reclaimable = global_page_state(NR_FILE_DIRTY) +
 					global_page_state(NR_UNSTABLE_NFS);
+        /* 要写回的页的数目 */
 		nr_writeback = global_page_state(NR_WRITEBACK);
-
+        /* 设备中可回收的页的数目 */
 		bdi_nr_reclaimable = bdi_stat(bdi, BDI_RECLAIMABLE);
 		bdi_nr_writeback = bdi_stat(bdi, BDI_WRITEBACK);
-
+        /* 没有达到thresh */
 		if (bdi_nr_reclaimable + bdi_nr_writeback <= bdi_thresh)
 			break;
 
@@ -1021,6 +1032,9 @@ int generic_writepages(struct address_space *mapping,
 
 EXPORT_SYMBOL(generic_writepages);
 
+/* 将页回写到存储器
+ *
+ */
 int do_writepages(struct address_space *mapping, struct writeback_control *wbc)
 {
 	int ret;
@@ -1028,7 +1042,7 @@ int do_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	if (wbc->nr_to_write <= 0)
 		return 0;
 	if (mapping->a_ops->writepages)
-		ret = mapping->a_ops->writepages(mapping, wbc);
+		ret = mapping->a_ops->writepages(mapping, wbc); /* 调用回调函数 */
 	else
 		ret = generic_writepages(mapping, wbc);
 	return ret;

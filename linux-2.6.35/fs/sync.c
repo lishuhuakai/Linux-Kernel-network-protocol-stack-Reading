@@ -1,4 +1,4 @@
-/*
+﻿/*
  * High-level sync()-related operations
  */
 
@@ -17,6 +17,7 @@
 #include <linux/backing-dev.h>
 #include "internal.h"
 
+/* 文件系统的同步 */
 #define VALID_FLAGS (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE| \
 			SYNC_FILE_RANGE_WAIT_AFTER)
 
@@ -168,7 +169,7 @@ int vfs_fsync_range(struct file *file, loff_t start, loff_t end, int datasync)
 {
 	struct address_space *mapping = file->f_mapping;
 	int err, ret;
-
+    /* 参数信息检查 */
 	if (!file->f_op || !file->f_op->fsync) {
 		ret = -EINVAL;
 		goto out;
@@ -205,6 +206,7 @@ int vfs_fsync(struct file *file, int datasync)
 }
 EXPORT_SYMBOL(vfs_fsync);
 
+/* 执行文件同步操作 */
 static int do_fsync(unsigned int fd, int datasync)
 {
 	struct file *file;

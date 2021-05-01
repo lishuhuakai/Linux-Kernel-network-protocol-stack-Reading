@@ -1,4 +1,4 @@
-/*
+﻿/*
  * include/linux/pagevec.h
  *
  * In many places it is efficient to batch an operation up against multiple
@@ -14,10 +14,11 @@
 struct page;
 struct address_space;
 
+/* 页数组 */
 struct pagevec {
-	unsigned long nr;
+	unsigned long nr; /* 页的个数 */
 	unsigned long cold;
-	struct page *pages[PAGEVEC_SIZE];
+	struct page *pages[PAGEVEC_SIZE]; /* 记录所有的页 */
 };
 
 void __pagevec_release(struct pagevec *pvec);

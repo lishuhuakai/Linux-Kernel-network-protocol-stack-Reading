@@ -208,6 +208,7 @@ static inline struct page *__page_cache_alloc(gfp_t gfp)
 }
 #endif
 
+/* 分配page */
 static inline struct page *page_cache_alloc(struct address_space *x)
 {
 	return __page_cache_alloc(mapping_gfp_mask(x));
@@ -342,14 +343,14 @@ static inline void lock_page_nosync(struct page *page)
 	if (!trylock_page(page))
 		__lock_page_nosync(page);
 }
-	
+
 /*
  * This is exported only for wait_on_page_locked/wait_on_page_writeback.
  * Never use this directly!
  */
 extern void wait_on_page_bit(struct page *page, int bit_nr);
 
-/* 
+/*
  * Wait for a page to be unlocked.
  *
  * This must be called with the caller "holding" the page,
@@ -362,7 +363,7 @@ static inline void wait_on_page_locked(struct page *page)
 		wait_on_page_bit(page, PG_locked);
 }
 
-/* 
+/*
  * Wait for a page to complete writeback
  */
 static inline void wait_on_page_writeback(struct page *page)
@@ -439,6 +440,11 @@ extern void __remove_from_page_cache(struct page *page);
 /*
  * Like add_to_page_cache_locked, but used to add newly allocated pages:
  * the page is new, so we can just run __set_page_locked() against it.
+ * 将一个新的page加入cache
+ * @param page 页面描述符指针,该页面有文件数据
+ * @param mapping address_space对象指针
+ * @param offset 表示该页在文件的页面索引
+ * @param gfp_mask 为基数树分配新节点时使用的分配标志
  */
 static inline int add_to_page_cache(struct page *page,
 		struct address_space *mapping, pgoff_t offset, gfp_t gfp_mask)

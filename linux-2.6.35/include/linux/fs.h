@@ -568,8 +568,9 @@ typedef struct {
 
 typedef int (*read_actor_t)(read_descriptor_t *, struct page *,
 		unsigned long, unsigned long);
-
+/* 地址空间的操作函数 */
 struct address_space_operations {
+    /* 将地址空间的一页或者多页写回到底层块设备 */
 	int (*writepage)(struct page *page, struct writeback_control *wbc);
 	int (*readpage)(struct file *, struct page *);
 	void (*sync_page)(struct page *);
@@ -578,7 +579,7 @@ struct address_space_operations {
 	int (*writepages)(struct address_space *, struct writeback_control *);
 
 	/* Set a page dirty.  Return true if this dirtied it */
-	int (*set_page_dirty)(struct page *page);
+	int (*set_page_dirty)(struct page *page); /* 将一页设置为dirty */
 
 	int (*readpages)(struct file *filp, struct address_space *mapping,
 			struct list_head *pages, unsigned nr_pages);
@@ -901,14 +902,20 @@ struct fown_struct {
 /*
  * Track a single file's readahead state
  */
+/* 文件预读 */
 struct file_ra_state {
+    /* 当前窗口的第一个页面索引 */
 	pgoff_t start;			/* where readahead started */
+    /* 当前窗口的页面数量 */
 	unsigned int size;		/* # of readahead pages */
+    /* 异步预读页面数量 */
 	unsigned int async_size;	/* do asynchronous readahead when
 					   there are only # of pages ahead */
-
+    /* 预读窗口的最大页面数量 */
 	unsigned int ra_pages;		/* Maximum readahead window */
+    /* 预读失效计数 */
 	unsigned int mmap_miss;		/* Cache miss stat for mmap accesses */
+    /* cache中最近一次预读位置 */
 	loff_t prev_pos;		/* Cache last read() position */
 };
 

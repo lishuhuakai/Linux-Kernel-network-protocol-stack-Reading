@@ -140,6 +140,9 @@ void __remove_from_page_cache(struct page *page)
 	}
 }
 
+/* 从页面cache中删除某个页
+ *
+ */
 void remove_from_page_cache(struct page *page)
 {
 	struct address_space *mapping = page->mapping;
@@ -215,7 +218,7 @@ int __filemap_fdatawrite_range(struct address_space *mapping, loff_t start,
 {
 	int ret;
 	struct writeback_control wbc = {
-		.sync_mode = sync_mode,
+		.sync_mode = sync_mode, /* 回写模式 */
 		.nr_to_write = LONG_MAX,
 		.range_start = start,
 		.range_end = end,
@@ -262,6 +265,7 @@ EXPORT_SYMBOL(filemap_flush);
 
 /**
  * filemap_fdatawait_range - wait for writeback to complete
+ *   等待写操作完成
  * @mapping:		address space structure to wait for
  * @start_byte:		offset in bytes where the range starts
  * @end_byte:		offset in bytes where the range ends (inclusive)
@@ -272,8 +276,8 @@ EXPORT_SYMBOL(filemap_flush);
 int filemap_fdatawait_range(struct address_space *mapping, loff_t start_byte,
 			    loff_t end_byte)
 {
-	pgoff_t index = start_byte >> PAGE_CACHE_SHIFT;
-	pgoff_t end = end_byte >> PAGE_CACHE_SHIFT;
+	pgoff_t index = start_byte >> PAGE_CACHE_SHIFT; /* 起始页 */
+	pgoff_t end = end_byte >> PAGE_CACHE_SHIFT;  /* 终止页 */
 	struct pagevec pvec;
 	int nr_pages;
 	int ret = 0;
@@ -284,7 +288,7 @@ int filemap_fdatawait_range(struct address_space *mapping, loff_t start_byte,
 	pagevec_init(&pvec, 0);
 	while ((index <= end) &&
 			(nr_pages = pagevec_lookup_tag(&pvec, mapping, &index,
-			PAGECACHE_TAG_WRITEBACK,
+			PAGECACHE_TAG_WRITEBACK, /* 这里是找到需要写回的页 */
 			min(end - index, (pgoff_t)PAGEVEC_SIZE-1) + 1)) != 0) {
 		unsigned i;
 
@@ -295,7 +299,7 @@ int filemap_fdatawait_range(struct address_space *mapping, loff_t start_byte,
 			if (page->index > end)
 				continue;
 
-			wait_on_page_writeback(page);
+			wait_on_page_writeback(page); /* 将一页的数据写回 */
 			if (PageError(page))
 				ret = -EIO;
 		}
@@ -319,6 +323,9 @@ EXPORT_SYMBOL(filemap_fdatawait_range);
  *
  * Walk the list of under-writeback pages of the given address space
  * and wait for all of them.
+ */
+/* filemap_fdatawait - 等待所有的under-writeback页完成
+ * @mapping 等待的地址空间结构体
  */
 int filemap_fdatawait(struct address_space *mapping)
 {
@@ -410,12 +417,12 @@ int add_to_page_cache_locked(struct page *page, struct address_space *mapping,
 	if (error == 0) {
 		page_cache_get(page);
 		page->mapping = mapping;
-		page->index = offset;
+		page->index = offset;  /* 索引值 */
 
 		spin_lock_irq(&mapping->tree_lock);
-		error = radix_tree_insert(&mapping->page_tree, offset, page);
+		error = radix_tree_insert(&mapping->page_tree, offset, page); /* 将page插入 */
 		if (likely(!error)) {
-			mapping->nrpages++;
+			mapping->nrpages++; /* 计数+1 */
 			__inc_zone_page_state(page, NR_FILE_PAGES);
 			if (PageSwapBacked(page))
 				__inc_zone_page_state(page, NR_SHMEM);
@@ -847,7 +854,8 @@ EXPORT_SYMBOL(find_get_pages_contig);
 
 /**
  * find_get_pages_tag - find and return pages that match @tag
- * @mapping:	the address_space to search
+ * find_get_pages_tag - 找到匹配@tag的页
+ * @mapping:	the address_space to search -- 待查找的地址空间
  * @index:	the starting page index
  * @tag:	the tag index
  * @nr_pages:	the maximum number of pages
@@ -865,6 +873,7 @@ unsigned find_get_pages_tag(struct address_space *mapping, pgoff_t *index,
 
 	rcu_read_lock();
 restart:
+    /* 在基数树中查找 */
 	nr_found = radix_tree_gang_lookup_tag_slot(&mapping->page_tree,
 				(void ***)pages, *index, nr_pages, tag);
 	ret = 0;
@@ -958,8 +967,8 @@ static void shrink_readahead_size_eio(struct file *filp,
 
 /**
  * do_generic_file_read - generic file read routine
- * @filp:	the file to read
- * @ppos:	current file position
+ * @filp:	the file to read 要读取的文件
+ * @ppos:	current file position 位置
  * @desc:	read_descriptor
  * @actor:	read method
  *
@@ -974,7 +983,7 @@ static void do_generic_file_read(struct file *filp, loff_t *ppos,
 {
 	struct address_space *mapping = filp->f_mapping;
 	struct inode *inode = mapping->host;
-	struct file_ra_state *ra = &filp->f_ra;
+	struct file_ra_state *ra = &filp->f_ra; /* 预读结构体 */
 	pgoff_t index;
 	pgoff_t last_index;
 	pgoff_t prev_index;
@@ -996,8 +1005,9 @@ static void do_generic_file_read(struct file *filp, loff_t *ppos,
 
 		cond_resched();
 find_page:
-		page = find_get_page(mapping, index);
+		page = find_get_page(mapping, index); /* 首先检查页缓存中是否存在 */
 		if (!page) {
+            /* 发出一个同步预读请求 */
 			page_cache_sync_readahead(mapping,
 					ra, filp,
 					index, last_index - index);
@@ -1152,7 +1162,7 @@ readpage_error:
 		page_cache_release(page);
 		goto out;
 
-no_cached_page:
+no_cached_page: /* 如果cache中不存在 */
 		/*
 		 * Ok, it wasn't cached, so we need to create a new
 		 * page..
@@ -1411,7 +1421,7 @@ SYSCALL_ALIAS(sys_readahead, SyS_readahead);
 static int page_cache_read(struct file *file, pgoff_t offset)
 {
 	struct address_space *mapping = file->f_mapping;
-	struct page *page; 
+	struct page *page;
 	int ret;
 
 	do {
@@ -1428,7 +1438,7 @@ static int page_cache_read(struct file *file, pgoff_t offset)
 		page_cache_release(page);
 
 	} while (ret == AOP_TRUNCATED_PAGE);
-		
+
 	return ret;
 }
 
@@ -2328,7 +2338,7 @@ generic_file_buffered_write(struct kiocb *iocb, const struct iovec *iov,
 		written += status;
 		*ppos = pos + status;
   	}
-	
+
 	return written ? written : status;
 }
 EXPORT_SYMBOL(generic_file_buffered_write);

@@ -1,4 +1,4 @@
-/*
+﻿/*
  * include/linux/writeback.h
  */
 #ifndef WRITEBACK_H
@@ -26,6 +26,7 @@ enum writeback_sync_modes {
  * always on the stack, and hence need no locking.  They are always initialised
  * in a manner such that unspecified fields are set to zero.
  */
+/* 写控制结构,上层使用该结构,将如何进行回写的相关信息传递给底层 */
 struct writeback_control {
 	enum writeback_sync_modes sync_mode;
 	unsigned long *older_than_this;	/* If !NULL, only write back inodes
@@ -56,7 +57,7 @@ struct writeback_control {
 
 /*
  * fs/fs-writeback.c
- */	
+ */
 struct bdi_writeback;
 int inode_wait(void *);
 void writeback_inodes_sb(struct super_block *);

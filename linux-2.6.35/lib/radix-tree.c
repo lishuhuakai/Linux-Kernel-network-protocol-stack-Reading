@@ -467,6 +467,9 @@ EXPORT_SYMBOL(radix_tree_lookup);
  *	Returns the address of the tagged item.   Setting a tag on a not-present
  *	item is a bug.
  */
+/* 对一个特定的节点设置tag
+ *
+ */
 void *radix_tree_tag_set(struct radix_tree_root *root,
 			unsigned long index, unsigned int tag)
 {
@@ -1215,6 +1218,7 @@ EXPORT_SYMBOL(radix_tree_delete);
  *	radix_tree_tagged - test whether any items in the tree are tagged
  *	@root:		radix tree root
  *	@tag:		tag to test
+ * 检查树中是否存在item打上了标记
  */
 int radix_tree_tagged(struct radix_tree_root *root, unsigned int tag)
 {

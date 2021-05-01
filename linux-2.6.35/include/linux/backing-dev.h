@@ -1,4 +1,4 @@
-/*
+﻿/*
  * include/linux/backing-dev.h
  *
  * low-level device information and state which is propagated up through
@@ -46,20 +46,24 @@ enum bdi_stat_item {
 
 struct bdi_writeback {
 	struct list_head list;			/* hangs off the bdi */
-
+    /* 指向设备结构体 */
 	struct backing_dev_info *bdi;		/* our parent bdi */
 	unsigned int nr;
-
+    /* 上一次刷新的时间,这个用于周期性写回 */
 	unsigned long last_old_flush;		/* last old data flush */
 
 	struct task_struct	*task;		/* writeback task */
+    /* 脏inode链表,每当一个文件被弄脏时,都会将其inode添加到所在设备的b_dirty链表中 */
 	struct list_head	b_dirty;	/* dirty inodes */
+    /* 等待io的inode节点 */
 	struct list_head	b_io;		/* parked for writeback */
 	struct list_head	b_more_io;	/* parked for more writeback */
 };
-
+/* 备用设备信息描述
+ *
+ */
 struct backing_dev_info {
-	struct list_head bdi_list;
+	struct list_head bdi_list; /* 所有设备的bdi_list构成链表 */
 	struct rcu_head rcu_head;
 	unsigned long ra_pages;	/* max readahead in PAGE_CACHE_SIZE units */
 	unsigned long state;	/* Always use atomic bitops on this */
@@ -78,12 +82,12 @@ struct backing_dev_info {
 
 	unsigned int min_ratio;
 	unsigned int max_ratio, max_prop_frac;
-
+    /* 脏页回写控制块 */
 	struct bdi_writeback wb;  /* default writeback info for this bdi */
 	spinlock_t wb_lock;	  /* protects update side of wb_list */
 	struct list_head wb_list; /* the flusher threads hanging off this bdi */
 
-	struct list_head work_list;
+	struct list_head work_list; /* 设备上所有任务的链表 */
 
 	struct device *dev;
 

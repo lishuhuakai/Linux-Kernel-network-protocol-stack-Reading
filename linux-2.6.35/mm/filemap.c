@@ -1296,7 +1296,7 @@ generic_file_aio_read(struct kiocb *iocb, const struct iovec *iov,
 		return retval;
 
 	/* coalesce the iovecs and go direct-to-BIO for O_DIRECT */
-	if (filp->f_flags & O_DIRECT) {
+	if (filp->f_flags & O_DIRECT) { /* 直接进行读取操作 */
 		loff_t size;
 		struct address_space *mapping;
 		struct inode *inode;

@@ -28,6 +28,7 @@ static inline swp_entry_t swp_entry(unsigned long type, pgoff_t offset)
  * Extract the `type' field from a swp_entry_t.  The swp_entry_t is in
  * arch-independent format
  */
+/* 提取出swp_entry_t中的type信息 */
 static inline unsigned swp_type(swp_entry_t entry)
 {
 	return (entry.val >> SWP_TYPE_SHIFT(entry));
@@ -37,6 +38,7 @@ static inline unsigned swp_type(swp_entry_t entry)
  * Extract the `offset' field from a swp_entry_t.  The swp_entry_t is in
  * arch-independent format
  */
+/* 提取出swp_entry_t中的偏移信息 */
 static inline pgoff_t swp_offset(swp_entry_t entry)
 {
 	return entry.val & SWP_OFFSET_MASK(entry);
@@ -54,6 +56,7 @@ static inline int is_swap_pte(pte_t pte)
  * Convert the arch-dependent pte representation of a swp_entry_t into an
  * arch-independent swp_entry_t.
  */
+/* 将页表项转换为swp_entry_t */
 static inline swp_entry_t pte_to_swp_entry(pte_t pte)
 {
 	swp_entry_t arch_entry;

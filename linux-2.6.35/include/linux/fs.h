@@ -557,13 +557,13 @@ static inline size_t iov_iter_count(struct iov_iter *i)
  * mode.
  */
 typedef struct {
-	size_t written;
-	size_t count;
+	size_t written; /* 已经拷贝到用户缓冲区的字节数 */
+	size_t count; /* 已经传输的字节数 */
 	union {
 		char __user *buf;
 		void *data;
 	} arg;
-	int error;
+	int error; /* 读操作的错误码 */
 } read_descriptor_t;
 
 typedef int (*read_actor_t)(read_descriptor_t *, struct page *,

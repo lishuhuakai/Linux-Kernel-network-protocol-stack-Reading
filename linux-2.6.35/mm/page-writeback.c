@@ -880,14 +880,14 @@ retry:
 	done_index = index;
 	while (!done && (index <= end)) {
 		int i;
-
+        /* 这里其实是到基数树上查找那些dirty的page */
 		nr_pages = pagevec_lookup_tag(&pvec, mapping, &index,
 			      PAGECACHE_TAG_DIRTY,
 			      min(end - index, (pgoff_t)PAGEVEC_SIZE-1) + 1);
 		if (nr_pages == 0)
 			break;
 
-		for (i = 0; i < nr_pages; i++) {
+		for (i = 0; i < nr_pages; i++) { /* 然后对每一个page都执行回写操作 */
 			struct page *page = pvec.pages[i];
 
 			/*
@@ -940,7 +940,7 @@ continue_unlock:
 			if (!clear_page_dirty_for_io(page))
 				goto continue_unlock;
 
-			ret = (*writepage)(page, wbc, data);
+			ret = (*writepage)(page, wbc, data); /* 执行回写操作 */
 			if (unlikely(ret)) {
 				if (ret == AOP_WRITEPAGE_ACTIVATE) {
 					unlock_page(page);

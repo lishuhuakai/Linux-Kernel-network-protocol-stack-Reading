@@ -205,10 +205,10 @@ void activate_page(struct page *page)
 void mark_page_accessed(struct page *page)
 {
 	if (!PageActive(page) && !PageUnevictable(page) &&
-			PageReferenced(page) && PageLRU(page)) {
+			PageReferenced(page) && PageLRU(page)) { /* inactive, referenced -> active, unreferenced */
 		activate_page(page);
 		ClearPageReferenced(page);
-	} else if (!PageReferenced(page)) {
+	} else if (!PageReferenced(page)) { /* unreferenced -> refenrenced */
 		SetPageReferenced(page);
 	}
 }

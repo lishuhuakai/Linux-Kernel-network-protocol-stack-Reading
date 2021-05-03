@@ -127,24 +127,27 @@ enum zone_stat_item {
 #define LRU_ACTIVE 1
 #define LRU_FILE 2
 
+/* 匿名页,如堆,栈,数据
+ * 文件页,顾名思义,就是文件对应的页面
+ */
 enum lru_list {
-	LRU_INACTIVE_ANON = LRU_BASE,
-	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE,
-	LRU_INACTIVE_FILE = LRU_BASE + LRU_FILE,
+	LRU_INACTIVE_ANON = LRU_BASE, /* 不活跃的匿名页面链表 */
+	LRU_ACTIVE_ANON = LRU_BASE + LRU_ACTIVE, /* 活跃的匿名页面链表 */
+	LRU_INACTIVE_FILE = LRU_BASE + LRU_FILE, /* 活跃的文件页面链表 */
 	LRU_ACTIVE_FILE = LRU_BASE + LRU_FILE + LRU_ACTIVE,
-	LRU_UNEVICTABLE,
+	LRU_UNEVICTABLE, /* 不可回收的页面链表 */
 	NR_LRU_LISTS
 };
 
 #define for_each_lru(l) for (l = 0; l < NR_LRU_LISTS; l++)
 
 #define for_each_evictable_lru(l) for (l = 0; l <= LRU_ACTIVE_FILE; l++)
-
+/* 判断类型是否为文件 */
 static inline int is_file_lru(enum lru_list l)
 {
 	return (l == LRU_INACTIVE_FILE || l == LRU_ACTIVE_FILE);
 }
-
+/* 是否活跃 */
 static inline int is_active_lru(enum lru_list l)
 {
 	return (l == LRU_ACTIVE_ANON || l == LRU_ACTIVE_FILE);
@@ -265,7 +268,7 @@ enum zone_type {
 #else
 #error ZONES_SHIFT -- too many zones configured adjust calculation
 #endif
-
+/* 内存回收统计 */
 struct zone_reclaim_stat {
 	/*
 	 * The pageout code in vmscan.c keeps track of how many of the
@@ -345,10 +348,10 @@ struct zone {
 	/* Fields commonly accessed by the page reclaim scanner */
 	spinlock_t		lru_lock;
 	struct zone_lru {
-		struct list_head list;
+		struct list_head list; /* 这里的链表很重要,活跃页,非活跃页,内存回收的核心数据结构 */
 	} lru[NR_LRU_LISTS];
 
-	struct zone_reclaim_stat reclaim_stat;
+	struct zone_reclaim_stat reclaim_stat; /* 内存回收统计信息 */
 
 	unsigned long		pages_scanned;	   /* since last reclaim */
 	unsigned long		flags;		   /* zone flags, see below */

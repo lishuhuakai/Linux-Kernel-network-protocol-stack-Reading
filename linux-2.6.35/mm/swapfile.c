@@ -210,6 +210,9 @@ static int wait_for_discard(void *word)
 #define SWAPFILE_CLUSTER	256
 #define LATENCY_LIMIT		256
 
+/* 扫描交换区槽位位图
+ * @param si 交换区描述
+ */
 static inline unsigned long scan_swap_map(struct swap_info_struct *si,
 					  unsigned char usage)
 {
@@ -233,7 +236,7 @@ static inline unsigned long scan_swap_map(struct swap_info_struct *si,
 	si->flags += SWP_SCANNING;
 	scan_base = offset = si->cluster_next;
 
-	if (unlikely(!si->cluster_nr--)) {
+	if (unlikely(!si->cluster_nr--)) { /* 已经无可用的页用于分配 */
 		if (si->pages - si->inuse_pages < SWAPFILE_CLUSTER) {
 			si->cluster_nr = SWAPFILE_CLUSTER - 1;
 			goto checks;
@@ -265,11 +268,13 @@ static inline unsigned long scan_swap_map(struct swap_info_struct *si,
 			scan_base = offset = si->lowest_bit;
 		last_in_cluster = offset + SWAPFILE_CLUSTER - 1;
 
-		/* Locate the first empty (unaligned) cluster */
+		/* Locate the first empty (unaligned) cluster
+         * 定位第一个空闲的簇
+         */
 		for (; last_in_cluster <= si->highest_bit; offset++) {
-			if (si->swap_map[offset])
+			if (si->swap_map[offset]) /* offset这个slot已经被使用了 */
 				last_in_cluster = offset + SWAPFILE_CLUSTER;
-			else if (offset == last_in_cluster) {
+			else if (offset == last_in_cluster) { /* 到这里说明没有了空闲 */
 				spin_lock(&swap_lock);
 				offset -= SWAPFILE_CLUSTER - 1;
 				si->cluster_next = offset;
@@ -313,7 +318,7 @@ static inline unsigned long scan_swap_map(struct swap_info_struct *si,
 checks:
 	if (!(si->flags & SWP_WRITEOK))
 		goto no_page;
-	if (!si->highest_bit)
+	if (!si->highest_bit) /* highest_bit = 0 */
 		goto no_page;
 	if (offset > si->highest_bit)
 		scan_base = offset = si->lowest_bit;
@@ -322,7 +327,7 @@ checks:
 	if (vm_swap_full() && si->swap_map[offset] == SWAP_HAS_CACHE) {
 		int swap_was_freed;
 		spin_unlock(&swap_lock);
-		swap_was_freed = __try_to_reclaim_swap(si, offset);
+		swap_was_freed = __try_to_reclaim_swap(si, offset); /* 回收 */
 		spin_lock(&swap_lock);
 		/* entry was freed successfully, try to use this again */
 		if (swap_was_freed)
@@ -332,18 +337,18 @@ checks:
 
 	if (si->swap_map[offset])
 		goto scan;
-
+    /* si->swap_map[offset] == 0 */
 	if (offset == si->lowest_bit)
 		si->lowest_bit++;
 	if (offset == si->highest_bit)
 		si->highest_bit--;
 	si->inuse_pages++;
-	if (si->inuse_pages == si->pages) {
+	if (si->inuse_pages == si->pages) { /* 表示已经没有页面可供分配了 */
 		si->lowest_bit = si->max;
 		si->highest_bit = 0;
 	}
 	si->swap_map[offset] = usage;
-	si->cluster_next = offset + 1;
+	si->cluster_next = offset + 1; /* 下一次要从offset+1的位置开始搜索 */
 	si->flags -= SWP_SCANNING;
 
 	if (si->lowest_alloc) {
@@ -376,7 +381,8 @@ checks:
 			smp_mb();	/* wake_up_bit advises this */
 			wake_up_bit(&si->flags, ilog2(SWP_DISCARDING));
 
-		} else if (si->flags & SWP_DISCARDING) {
+		}
+        else if (si->flags & SWP_DISCARDING) {
 			/*
 			 * Delay using pages allocated by racing tasks
 			 * until the whole discard has been issued. We
@@ -387,7 +393,8 @@ checks:
 			wait_on_bit(&si->flags, ilog2(SWP_DISCARDING),
 				wait_for_discard, TASK_UNINTERRUPTIBLE);
 			spin_lock(&swap_lock);
-		} else {
+		}
+        else {
 			/*
 			 * Note pages allocated by racing tasks while
 			 * scan for a free cluster is in progress, so
@@ -404,7 +411,7 @@ checks:
 scan:
 	spin_unlock(&swap_lock);
 	while (++offset <= si->highest_bit) {
-		if (!si->swap_map[offset]) {
+		if (!si->swap_map[offset]) { /* 如果找到了空闲的slot */
 			spin_lock(&swap_lock);
 			goto checks;
 		}
@@ -417,9 +424,9 @@ scan:
 			latency_ration = LATENCY_LIMIT;
 		}
 	}
-	offset = si->lowest_bit;
+	offset = si->lowest_bit; /* 从最低的slot开始搜索 */
 	while (++offset < scan_base) {
-		if (!si->swap_map[offset]) {
+		if (!si->swap_map[offset]) { /* 如果存在空闲的slot,就去检查 */
 			spin_lock(&swap_lock);
 			goto checks;
 		}
@@ -439,6 +446,8 @@ no_page:
 	return 0;
 }
 
+/* 在交换区中分配槽位
+ */
 swp_entry_t get_swap_page(void)
 {
 	struct swap_info_struct *si;
@@ -451,8 +460,8 @@ swp_entry_t get_swap_page(void)
 		goto noswap;
 	nr_swap_pages--;
 
-	for (type = swap_list.next; type >= 0 && wrapped < 2; type = next) {
-		si = swap_info[type];
+	for (type = swap_list.next; type >= 0 && wrapped < 2; type = next) { /* 遍历链表 */
+		si = swap_info[type]; /* 获取对应的交换分区/文件 */
 		next = si->next;
 		if (next < 0 ||
 		    (!wrapped && si->prio != swap_info[next]->prio)) {
@@ -503,6 +512,9 @@ swp_entry_t get_swap_page_of_type(int type)
 	return (swp_entry_t) {0};
 }
 
+/* 通过entry来获取对应的swap_info_struct实例
+ * @param entry 交换页的key
+ */
 static struct swap_info_struct *swap_info_get(swp_entry_t entry)
 {
 	struct swap_info_struct *p;
@@ -510,13 +522,13 @@ static struct swap_info_struct *swap_info_get(swp_entry_t entry)
 
 	if (!entry.val)
 		goto out;
-	type = swp_type(entry);
+	type = swp_type(entry); /* entry中包含type */
 	if (type >= nr_swapfiles)
 		goto bad_nofile;
 	p = swap_info[type];
 	if (!(p->flags & SWP_USED))
 		goto bad_device;
-	offset = swp_offset(entry);
+	offset = swp_offset(entry); /* entry中也包含offset */
 	if (offset >= p->max)
 		goto bad_offset;
 	if (!p->swap_map[offset])
@@ -632,6 +644,7 @@ void swapcache_free(swp_entry_t entry, struct page *page)
  * This does not give an exact answer when swap count is continued,
  * but does include the high COUNT_CONTINUED flag to allow for that.
  */
+/* 获取引用计数 */
 static inline int page_swapcount(struct page *page)
 {
 	int count = 0;
@@ -674,6 +687,8 @@ int reuse_swap_page(struct page *page)
 /*
  * If swap is getting full, or if there are no more mappings of this page,
  * then try_to_free_swap is called to free its swap space.
+ * 如果交换区满了,或者
+ * 尝试释放交换
  */
 int try_to_free_swap(struct page *page)
 {
@@ -685,7 +700,7 @@ int try_to_free_swap(struct page *page)
 		return 0;
 	if (page_swapcount(page))
 		return 0;
-
+    /* 可以正常释放 */
 	delete_from_swap_cache(page);
 	SetPageDirty(page);
 	return 1;
@@ -1312,8 +1327,8 @@ static sector_t map_swap_entry(swp_entry_t entry, struct block_device **bdev)
 	sis = swap_info[swp_type(entry)];
 	*bdev = sis->bdev;
 
-	offset = swp_offset(entry);
-	start_se = sis->curr_swap_extent;
+	offset = swp_offset(entry); /* 偏移量 */
+	start_se = sis->curr_swap_extent; /* 搜索不是从链表头部开始,而是开始于上一次使用的链表元素 */
 	se = start_se;
 
 	for ( ; ; ) {
@@ -1323,9 +1338,9 @@ static sector_t map_swap_entry(swp_entry_t entry, struct block_device **bdev)
 				offset < (se->start_page + se->nr_pages)) {
 			return se->start_block + (offset - se->start_page);
 		}
-		lh = se->list.next;
+		lh = se->list.next; /* 获取下一个swap_extent */
 		se = list_entry(lh, struct swap_extent, list);
-		sis->curr_swap_extent = se;
+		sis->curr_swap_extent = se; /* 记录下当前得到swap_extent */
 		BUG_ON(se == start_se);		/* It *must* be present */
 	}
 }
@@ -1376,13 +1391,14 @@ add_swap_extent(struct swap_info_struct *sis, unsigned long start_page,
 		se->nr_pages = nr_pages;
 		se->start_block = start_block;
 		return 1;
-	} else {
+	}
+    else {
 		lh = sis->first_swap_extent.list.prev;	/* Highest extent */
 		se = list_entry(lh, struct swap_extent, list);
 		BUG_ON(se->start_page + se->nr_pages != start_page);
 		if (se->start_block + se->nr_pages == start_block) {
 			/* Merge it */
-			se->nr_pages += nr_pages;
+			se->nr_pages += nr_pages; /* 恰好可以合并 */
 			return 0;
 		}
 	}
@@ -1397,7 +1413,7 @@ add_swap_extent(struct swap_info_struct *sis, unsigned long start_page,
 	new_se->nr_pages = nr_pages;
 	new_se->start_block = start_block;
 
-	list_add_tail(&new_se->list, &sis->first_swap_extent.list);
+	list_add_tail(&new_se->list, &sis->first_swap_extent.list); /* 添加到链表之中 */
 	return 1;
 }
 
@@ -1432,6 +1448,10 @@ add_swap_extent(struct swap_info_struct *sis, unsigned long start_page,
  * This is extremely effective.  The average number of iterations in
  * map_swap_page() has been measured at about 0.3 per page.  - akpm.
  */
+ /* 创建区间链表
+  * @param
+  * @param span
+  */
 static int setup_swap_extents(struct swap_info_struct *sis, sector_t *span)
 {
 	struct inode *inode;
@@ -1446,7 +1466,7 @@ static int setup_swap_extents(struct swap_info_struct *sis, sector_t *span)
 	int ret;
 
 	inode = sis->swap_file->f_mapping->host;
-	if (S_ISBLK(inode->i_mode)) {
+	if (S_ISBLK(inode->i_mode)) { /* 块设备用作交换区 */
 		ret = add_swap_extent(sis, 0, sis->max, 0);
 		*span = sis->pages;
 		goto out;
@@ -1482,7 +1502,7 @@ static int setup_swap_extents(struct swap_info_struct *sis, sector_t *span)
 		for (block_in_page = 1; block_in_page < blocks_per_page;
 					block_in_page++) {
 			sector_t block;
-
+            /* block为给定块号的硬盘扇区编号 */
 			block = bmap(inode, probe_block + block_in_page);
 			if (block == 0)
 				goto bad_bmap;
@@ -1492,7 +1512,7 @@ static int setup_swap_extents(struct swap_info_struct *sis, sector_t *span)
 				goto reprobe;
 			}
 		}
-
+        /* first_block表示区间的开始块号(磁盘) */
 		first_block >>= (PAGE_SHIFT - blkbits);
 		if (page_no) {	/* exclude the header page */
 			if (first_block < lowest_block)
@@ -1504,6 +1524,7 @@ static int setup_swap_extents(struct swap_info_struct *sis, sector_t *span)
 		/*
 		 * We found a PAGE_SIZE-length, PAGE_SIZE-aligned run of blocks
 		 */
+		/* 大小为1页 */
 		ret = add_swap_extent(sis, page_no, 1, first_block);
 		if (ret < 0)
 			goto out;
@@ -1787,6 +1808,7 @@ late_initcall(max_swapfiles_check);
  * Written 01/25/92 by Simmule Turner, heavily changed by Linus.
  *
  * The swapon system call
+ * swapon系统调用,用于激活交换区
  */
 SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 {
@@ -1812,12 +1834,12 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
-	p = kzalloc(sizeof(*p), GFP_KERNEL);
+	p = kzalloc(sizeof(*p), GFP_KERNEL); /* 分配一个交换分区描述 */
 	if (!p)
 		return -ENOMEM;
 
 	spin_lock(&swap_lock);
-	for (type = 0; type < nr_swapfiles; type++) {
+	for (type = 0; type < nr_swapfiles; type++) { /* 在swap_info数组中查找一个空闲数组项 */
 		if (!(swap_info[type]->flags & SWP_USED))
 			break;
 	}
@@ -1829,7 +1851,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	}
 	if (type >= nr_swapfiles) {
 		p->type = type;
-		swap_info[type] = p;
+		swap_info[type] = p; /* 将其记录下来 */
 		/*
 		 * Write swap_info[type] before nr_swapfiles, in case a
 		 * racing procfs swap_start() or swap_next() is reading them.
@@ -1863,7 +1885,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		goto bad_swap_2;
 	}
 
-	p->swap_file = swap_file;
+	p->swap_file = swap_file; /* 记录下交换文件 */
 	mapping = swap_file->f_mapping;
 	inode = mapping->host;
 
@@ -1913,6 +1935,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 		error = -EINVAL;
 		goto bad_swap;
 	}
+    /* 读取一个页 */
 	page = read_mapping_page(mapping, 0, swap_file);
 	if (IS_ERR(page)) {
 		error = PTR_ERR(page);
@@ -1961,6 +1984,11 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	 * the swp_entry_t or the architecture definition of a
 	 * swap pte.
 	 */
+	/* 计算出,单个swap device允许分配多少page,有两个限制条件:
+     * 1. swp_entry_t中swap offset所占用的bit位
+     * 2.
+	 */
+	/* 一个swap最多只能分配maxpages个页面 */
 	maxpages = swp_offset(pte_to_swp_entry(
 			swp_entry_to_pte(swp_entry(0, ~0UL)))) + 1;
 	if (maxpages > swap_header->info.last_page) {
@@ -2001,7 +2029,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 			goto bad_swap;
 		}
 		if (page_nr < maxpages) {
-			swap_map[page_nr] = SWAP_MAP_BAD;
+			swap_map[page_nr] = SWAP_MAP_BAD; /* 打上标记,表明这一页不能被分配 */
 			nr_good_pages--;
 		}
 	}
@@ -2009,7 +2037,7 @@ SYSCALL_DEFINE2(swapon, const char __user *, specialfile, int, swap_flags)
 	error = swap_cgroup_swapon(type, maxpages);
 	if (error)
 		goto bad_swap;
-
+    /* 如果存在可供交换的页面 */
 	if (nr_good_pages) {
 		swap_map[0] = SWAP_MAP_BAD;
 		p->max = maxpages;

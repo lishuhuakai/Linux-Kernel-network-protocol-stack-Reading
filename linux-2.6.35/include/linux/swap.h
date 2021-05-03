@@ -85,8 +85,8 @@ union swap_header {
 	struct {
 		char		bootbits[1024];	/* Space for disklabel etc. */
 		__u32		version;
-		__u32		last_page;
-		__u32		nr_badpages;
+		__u32		last_page; /* 最后一页的编号 */
+		__u32		nr_badpages; /* 不可用页的数目 */
 		unsigned char	sws_uuid[16];
 		unsigned char	sws_volume[16];
 		__u32		padding[117];
@@ -98,6 +98,7 @@ union swap_header {
   * the entry is hidden in the "index" field of the
   * swapper address space.
   */
+/* 用于标识换出的页 */
 typedef struct {
 	unsigned long val;
 } swp_entry_t;
@@ -125,11 +126,12 @@ struct zone;
  *
  * We always assume that blocks are of size PAGE_SIZE.
  */
+/* 交换区间 */
 struct swap_extent {
 	struct list_head list;
 	pgoff_t start_page;
 	pgoff_t nr_pages;
-	sector_t start_block;
+	sector_t start_block; /* 硬盘上的块号 */
 };
 
 /*
@@ -164,24 +166,41 @@ enum {
 /*
  * The in-memory structure used to track swap areas.
  */
+/* 交换区 */
 struct swap_info_struct {
+    /* 交换区的状态,SWP_USED表明当前项在交换数组中处于使用状态
+     * SWP_WRITEOK指定当前项对应的交换区可写
+     */
 	unsigned long	flags;		/* SWP_USED etc: see above */
+    /* 交换区的优先级 */
 	signed short	prio;		/* swap priority of this type */
 	signed char	type;		/* strange name for an index */
 	signed char	next;		/* next type on the swap list */
 	unsigned int	max;		/* extent of the swap_map */
+    /* swap_map是一个数组,每一项都是一个slot
+     *
+     */
 	unsigned char *swap_map;	/* vmalloc'ed array of usage counts */
+    /*
+     * lowest_bit slot的索引,低于这个索引的slot中不可能有空闲
+     * highest_bit slot的索引,高于这个索引的slot中不可能有空闲
+     */
 	unsigned int lowest_bit;	/* index of first free in swap_map */
 	unsigned int highest_bit;	/* index of last free in swap_map */
+    /* swap中所有可用的页的数目 */
 	unsigned int pages;		/* total of usable pages of swap */
+    /* swap中正在被使用的页的数目 */
 	unsigned int inuse_pages;	/* number of those currently in use */
 	unsigned int cluster_next;	/* likely index for next allocation */
+    /* cluster_nr表示可供分配的slot的数目 */
 	unsigned int cluster_nr;	/* countdown to next cluster search */
 	unsigned int lowest_alloc;	/* while preparing discard cluster */
 	unsigned int highest_alloc;	/* while preparing discard cluster */
 	struct swap_extent *curr_swap_extent;
 	struct swap_extent first_swap_extent;
+    /* bdev指向文件/分区所在底层块设备的block_device结构 */
 	struct block_device *bdev;	/* swap device or bdev of swap file */
+    /* 与该交换分区关联的file结构 */
 	struct file *swap_file;		/* seldom referenced */
 	unsigned int old_block_size;	/* seldom referenced */
 };

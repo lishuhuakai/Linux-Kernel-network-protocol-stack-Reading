@@ -40,6 +40,7 @@ static struct backing_dev_info swap_backing_dev_info = {
 	.unplug_io_fn	= swap_unplug_io_fn,
 };
 
+/* 这个结构体非常重要,对于实现交换缓存十分重要 */
 struct address_space swapper_space = {
 	.page_tree	= RADIX_TREE_INIT(GFP_ATOMIC|__GFP_NOWARN),
 	.tree_lock	= __SPIN_LOCK_UNLOCKED(swapper_space.tree_lock),
@@ -84,6 +85,7 @@ static int __add_to_swap_cache(struct page *page, swp_entry_t entry)
 	set_page_private(page, entry.val);
 
 	spin_lock_irq(&swapper_space.tree_lock);
+    /* 将page插入到基数树 */
 	error = radix_tree_insert(&swapper_space.page_tree, entry.val, page);
 	if (likely(!error)) {
 		total_swapcache_pages++;
@@ -107,7 +109,10 @@ static int __add_to_swap_cache(struct page *page, swp_entry_t entry)
 	return error;
 }
 
-
+/* 将一个页加入交换
+ * @param page 待操作的页
+ * @param entry 槽位
+ */
 int add_to_swap_cache(struct page *page, swp_entry_t entry, gfp_t gfp_mask)
 {
 	int error;
@@ -140,10 +145,11 @@ void __delete_from_swap_cache(struct page *page)
 
 /**
  * add_to_swap - allocate swap space for a page
+ * 为一个页分配交换空间, page一般都是匿名页
  * @page: page we want to move to swap
  *
  * Allocate swap space for the page and add the page to the
- * swap cache.  Caller needs to hold the page lock. 
+ * swap cache.  Caller needs to hold the page lock.
  */
 int add_to_swap(struct page *page)
 {
@@ -153,7 +159,7 @@ int add_to_swap(struct page *page)
 	VM_BUG_ON(!PageLocked(page));
 	VM_BUG_ON(!PageUptodate(page));
 
-	entry = get_swap_page();
+	entry = get_swap_page(); /* 首先获得一个槽位 */
 	if (!entry.val)
 		return 0;
 
@@ -172,7 +178,7 @@ int add_to_swap(struct page *page)
 			__GFP_HIGH|__GFP_NOMEMALLOC|__GFP_NOWARN);
 
 	if (!err) {	/* Success */
-		SetPageDirty(page);
+		SetPageDirty(page); /* 将页设置为脏 */
 		return 1;
 	} else {	/* -ENOMEM radix-tree allocation failure */
 		/*
@@ -204,9 +210,9 @@ void delete_from_swap_cache(struct page *page)
 	page_cache_release(page);
 }
 
-/* 
- * If we are the only user, then try to free up the swap cache. 
- * 
+/*
+ * If we are the only user, then try to free up the swap cache.
+ *
  * Its ok to check for PageSwapCache without the page lock
  * here because we are going to recheck again inside
  * try_to_free_swap() _with_ the lock.
@@ -220,7 +226,7 @@ static inline void free_swap_cache(struct page *page)
 	}
 }
 
-/* 
+/*
  * Perform a free_page(), also freeing any swap cache associated with
  * this page if it is the last user of the page.
  */
@@ -257,6 +263,7 @@ void free_pages_and_swap_cache(struct page **pages, int nr)
  * lock getting page table operations atomic even if we drop the page
  * lock before returning.
  */
+/* 查找页 */
 struct page * lookup_swap_cache(swp_entry_t entry)
 {
 	struct page *page;
@@ -270,7 +277,7 @@ struct page * lookup_swap_cache(swp_entry_t entry)
 	return page;
 }
 
-/* 
+/*
  * Locate a page of swap in physical memory, reserving swap cache space
  * and reading the disk if it is not already cached.
  * A failure return means that either the page allocation failed or that
@@ -331,6 +338,7 @@ struct page *read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
 			 * Initiate read into locked page and return.
 			 */
 			lru_cache_add_anon(new_page);
+            /* 从磁盘上读取 */
 			swap_readpage(new_page);
 			return new_page;
 		}
@@ -367,6 +375,9 @@ struct page *read_swap_cache_async(swp_entry_t entry, gfp_t gfp_mask,
  * the readahead.
  *
  * Caller must hold down_read on the vma->vm_mm if vma is not NULL.
+ */
+/* 交换预读
+ *
  */
 struct page *swapin_readahead(swp_entry_t entry, gfp_t gfp_mask,
 			struct vm_area_struct *vma, unsigned long addr)

@@ -3,7 +3,7 @@
  *
  *  Copyright (C) 1991, 1992, 1993, 1994  Linus Torvalds
  *
- *  Swap reorganised 29.12.95, 
+ *  Swap reorganised 29.12.95,
  *  Asynchronous swapping added 30.12.95. Stephen Tweedie
  *  Removed race in async swapping. 14.4.1996. Bruno Haible
  *  Add swap of shared pages through the page cache. 20.2.1998. Stephen Tweedie
@@ -88,6 +88,9 @@ void end_swap_bio_read(struct bio *bio, int err)
 /*
  * We may have stale swap cache pages in memory: notice
  * them here and get rid of the unnecessary final write.
+ */
+/* 将数据写回交换分区中
+ *
  */
 int swap_writepage(struct page *page, struct writeback_control *wbc)
 {

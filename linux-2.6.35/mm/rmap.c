@@ -594,6 +594,9 @@ static int page_referenced_file(struct page *page,
  * Quick test_and_clear_referenced for all mappings to a page,
  * returns the number of ptes which referenced the page.
  */
+/* 检测page是否被访问引用过,返回访问引用的pte的个数,即访问和引用这个页面的用户进程空间虚拟页面的个数
+ * @param page 待检测的页面
+ */
 int page_referenced(struct page *page,
 		    int is_locked,
 		    struct mem_cgroup *mem_cont,

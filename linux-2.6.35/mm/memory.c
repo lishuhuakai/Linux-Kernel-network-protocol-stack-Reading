@@ -2629,6 +2629,9 @@ int vmtruncate_range(struct inode *inode, loff_t offset, loff_t end)
  * but allow concurrent faults), and pte mapped but not yet locked.
  * We return with mmap_sem still held, but pte unmapped and unlocked.
  */
+/* 缺页中断的时候,试图从交换分区中获得换出的页
+ *
+ */
 static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
 		unsigned int flags, pte_t orig_pte)
@@ -2656,11 +2659,11 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		goto out;
 	}
 	delayacct_set_flag(DELAYACCT_PF_SWAPIN);
-	page = lookup_swap_cache(entry);
+	page = lookup_swap_cache(entry); /* 首先在swap_cache中查找 */
 	if (!page) {
 		grab_swap_token(mm); /* Contend for token _before_ read-in */
 		page = swapin_readahead(entry,
-					GFP_HIGHUSER_MOVABLE, vma, address);
+					GFP_HIGHUSER_MOVABLE, vma, address); /* 进行预读 */
 		if (!page) {
 			/*
 			 * Back out if somebody else faulted in this pte

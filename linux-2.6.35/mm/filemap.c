@@ -1015,12 +1015,12 @@ find_page:
 			if (unlikely(page == NULL))
 				goto no_cached_page;
 		}
-		if (PageReadahead(page)) {
+		if (PageReadahead(page)) { /* 如果是readahead页,也就是预读出来的页 */
 			page_cache_async_readahead(mapping,
 					ra, filp, page,
 					index, last_index - index);
 		}
-		if (!PageUptodate(page)) {
+		if (!PageUptodate(page)) { /* 如果不是最新的页 */
 			if (inode->i_blkbits == PAGE_CACHE_SHIFT ||
 					!mapping->a_ops->is_partially_uptodate)
 				goto page_not_up_to_date;
@@ -1041,7 +1041,8 @@ page_ok:
 		 * another truncate extends the file - this is desired though).
 		 */
 
-		isize = i_size_read(inode);
+		isize = i_size_read(inode); /* isize是文件的大小 */
+        /*  */
 		end_index = (isize - 1) >> PAGE_CACHE_SHIFT;
 		if (unlikely(!isize || index > end_index)) {
 			page_cache_release(page);
@@ -1084,7 +1085,7 @@ page_ok:
 		 * "pos" here (the actor routine has to update the user buffer
 		 * pointers and the remaining count).
 		 */
-		ret = actor(desc, page, offset, nr);
+		ret = actor(desc, page, offset, nr); /* 多数情况,这里调用file_read_actor */
 		offset += ret;
 		index += offset >> PAGE_CACHE_SHIFT;
 		offset &= ~PAGE_CACHE_MASK;
@@ -1193,6 +1194,10 @@ out:
 	file_accessed(filp);
 }
 
+/* 将内核缓冲区的数据拷贝到用户缓冲区中
+ * @param offset 偏移
+ * @param size 大小
+ */
 int file_read_actor(read_descriptor_t *desc, struct page *page,
 			unsigned long offset, unsigned long size)
 {
@@ -1217,6 +1222,7 @@ int file_read_actor(read_descriptor_t *desc, struct page *page,
 
 	/* Do it the slow way */
 	kaddr = kmap(page);
+    /* 拷贝到用户空间 */
 	left = __copy_to_user(desc->arg.buf, kaddr + offset, size);
 	kunmap(page);
 
@@ -1918,7 +1924,7 @@ size_t iov_iter_copy_from_user_atomic(struct page *page,
 	size_t copied;
 
 	BUG_ON(!in_atomic());
-	kaddr = kmap_atomic(page, KM_USER0);
+	kaddr = kmap_atomic(page, KM_USER0); /* page的首地址 */
 	if (likely(i->nr_segs == 1)) {
 		int left;
 		char __user *buf = i->iov->iov_base + i->iov_offset;
@@ -2231,6 +2237,9 @@ repeat:
 }
 EXPORT_SYMBOL(grab_cache_page_write_begin);
 
+/* 执行写文件的操作
+ *
+ */
 static ssize_t generic_perform_write(struct file *file,
 				struct iov_iter *i, loff_t pos)
 {
@@ -2244,7 +2253,7 @@ static ssize_t generic_perform_write(struct file *file,
 	 * Copies from kernel address space cannot fail (NFSD is a big user).
 	 */
 	if (segment_eq(get_fs(), KERNEL_DS))
-		flags |= AOP_FLAG_UNINTERRUPTIBLE;
+		flags |= AOP_FLAG_UNINTERRUPTIBLE; /* 当前I/O操作是属于在内核中进行,不能中断 */
 
 	do {
 		struct page *page;
@@ -2254,8 +2263,8 @@ static ssize_t generic_perform_write(struct file *file,
 		size_t copied;		/* Bytes copied from user */
 		void *fsdata;
 
-		offset = (pos & (PAGE_CACHE_SIZE - 1));
-		index = pos >> PAGE_CACHE_SHIFT;
+		offset = (pos & (PAGE_CACHE_SIZE - 1)); /* 在页面内的偏移 */
+		index = pos >> PAGE_CACHE_SHIFT; /* 当前pos位置在pagecache的索引 */
 		bytes = min_t(unsigned long, PAGE_CACHE_SIZE - offset,
 						iov_iter_count(i));
 
@@ -2285,6 +2294,7 @@ again:
 			flush_dcache_page(page);
 
 		pagefault_disable();
+        /* 将数据从用户空间拷贝到内核空间 */
 		copied = iov_iter_copy_from_user_atomic(page, i, offset, bytes);
 		pagefault_enable();
 		flush_dcache_page(page);

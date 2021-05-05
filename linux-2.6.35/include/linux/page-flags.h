@@ -308,6 +308,7 @@ static inline void __SetPageUptodate(struct page *page)
 	__set_bit(PG_uptodate, &(page)->flags);
 }
 
+/* 给page打上一个标记,说page是最新的 */
 static inline void SetPageUptodate(struct page *page)
 {
 #ifdef CONFIG_S390

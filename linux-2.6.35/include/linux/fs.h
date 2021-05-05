@@ -836,6 +836,7 @@ enum inode_i_mutex_lock_class
  * cmpxchg8b without the need of the lock prefix). For SMP compiles
  * and 64bit archs it makes no difference if preempt is enabled or not.
  */
+/* 获取文件的大小 */
 static inline loff_t i_size_read(const struct inode *inode)
 {
 #if BITS_PER_LONG==32 && defined(CONFIG_SMP)
@@ -864,6 +865,7 @@ static inline loff_t i_size_read(const struct inode *inode)
  * (normally i_mutex), otherwise on 32bit/SMP an update of i_size_seqcount
  * can be lost, resulting in subsequent i_size_read() calls spinning forever.
  */
+/* 更新文件的大小 */
 static inline void i_size_write(struct inode *inode, loff_t i_size)
 {
 #if BITS_PER_LONG==32 && defined(CONFIG_SMP)

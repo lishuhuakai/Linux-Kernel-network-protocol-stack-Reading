@@ -415,10 +415,10 @@ struct zone {
 	/*
 	 * Discontig memory support fields.
 	 */
-	struct pglist_data	*zone_pgdat;
+	struct pglist_data	*zone_pgdat; /* 指向内存节点 */
 	/* zone_start_pfn == zone_start_paddr >> PAGE_SHIFT */
    /* 指向内存域的第一个页帧 */
-	unsigned long		zone_start_pfn;
+	unsigned long		zone_start_pfn; /* zone中开始页面的页帧号 */
 
 	/*
 	 * zone_start_pfn, spanned_pages and present_pages are all
@@ -564,8 +564,10 @@ struct zonelist_cache;
  * This struct contains information about a zone in a zonelist. It is stored
  * here to avoid dereferences into large structures and lookups of tables
  */
+/* 这个结构用于引用zone */
 struct zoneref {
 	struct zone *zone;	/* Pointer to actual zone */
+    /* 被引用的zone的索引值 */
 	int zone_idx;		/* zone_idx(zoneref->zone) */
 };
 

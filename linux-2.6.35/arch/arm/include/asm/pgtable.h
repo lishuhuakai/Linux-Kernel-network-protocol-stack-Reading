@@ -263,6 +263,8 @@ extern struct page *empty_zero_page;
 
 #define pte_none(pte)		(!pte_val(pte))
 #define pte_clear(mm,addr,ptep)	set_pte_ext(ptep, __pte(0), 0)
+
+/* 获取pte对应的page实例的地址 */
 #define pte_page(pte)		(pfn_to_page(pte_pfn(pte)))
 #define pte_offset_kernel(dir,addr)	(pmd_page_vaddr(*(dir)) + __pte_index(addr))
 
@@ -289,9 +291,13 @@ extern struct page *empty_zero_page;
  * The following only work if pte_present() is true.
  * Undefined behaviour if not..
  */
+/* 页在内存中吗? */
 #define pte_present(pte)	(pte_val(pte) & L_PTE_PRESENT)
+/* 从用户空间可以读取该页吗? */
 #define pte_write(pte)		(pte_val(pte) & L_PTE_WRITE)
+/* 页是脏的吗? */
 #define pte_dirty(pte)		(pte_val(pte) & L_PTE_DIRTY)
+/* 访问位设置了吗? */
 #define pte_young(pte)		(pte_val(pte) & L_PTE_YOUNG)
 #define pte_special(pte)	(0)
 
@@ -359,6 +365,10 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
  * Conversion functions: convert a page and protection to a page entry,
  * and a page entry and page directory to the page they refer to.
  */
+/* 创建一个页表项
+ * @param page 页描述符
+ * @param prot 访问权限
+ */
 #define mk_pte(page,prot)	pfn_pte(page_to_pfn(page),prot)
 
 /*
@@ -373,7 +383,9 @@ static inline pte_t *pmd_page_vaddr(pmd_t pmd)
 #define set_pgd(pgd,pgdp)	do { } while (0)
 
 /* to find an entry in a page-table-directory */
-/* 查找线性地址addr对应的目录项在页全局目录中的索引 */
+/* 查找线性地址addr对应的目录项在页全局目录中的索引
+ * PGDIR_SHIFT -- 21
+ */
 #define pgd_index(addr)		((addr) >> PGDIR_SHIFT)
 /* 接收内存描述符地址mm和线性地址addr作为参数。这个宏产生地址addr
  * 在页全局目录中相应表项的线性地址；通过内存描述符mm内的一个指针

@@ -612,7 +612,7 @@ static void __init create_36bit_mapping(struct map_desc *md,
  * supersections.
  */
 /* 记录下映射关系,实际是将映射关系信息写入页表
- *
+ * @param md 内存信息描述
  */
 static void __init create_mapping(struct map_desc *md)
 {
@@ -815,7 +815,9 @@ sanity_check_meminfo(void)
 	meminfo.nr_banks = j;
 }
 
-/* 清空映射关系 */
+/* 清空映射关系
+ *
+ */
 static inline void prepare_page_table(void)
 {
 	unsigned long addr;
@@ -832,7 +834,7 @@ static inline void prepare_page_table(void)
 	addr = ((unsigned long)_etext + PGDIR_SIZE - 1) & PGDIR_MASK;
 #endif
 	/* 清除MODULES_VADDR~PAGE_OFFSSET地址段的一级页表 */
-	for ( ; addr < PAGE_OFFSET; addr += PGDIR_SIZE) 
+	for ( ; addr < PAGE_OFFSET; addr += PGDIR_SIZE)
 		pmd_clear(pmd_off_k(addr));
 
 	/*
@@ -1041,7 +1043,7 @@ static inline void map_memory_bank(struct membank *bank)
 {
 	struct map_desc map;
 
-	map.pfn = bank_pfn_start(bank);
+	map.pfn = bank_pfn_start(bank); /* 起始页框号 */
 	map.virtual = __phys_to_virt(bank_phys_start(bank)); /* 虚拟地址 */
 	map.length = bank_phys_size(bank); /* 长度信息 */
 	map.type = MT_MEMORY;

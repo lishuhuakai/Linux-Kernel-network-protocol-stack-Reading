@@ -55,6 +55,9 @@ static inline unsigned pagevec_space(struct pagevec *pvec)
 /*
  * Add a page to a pagevec.  Returns the number of slots still available.
  */
+/* 将一个page加入到pagevec之中
+ * 返回可用的空间数
+ */
 static inline unsigned pagevec_add(struct pagevec *pvec, struct page *page)
 {
 	pvec->pages[pvec->nr++] = page;

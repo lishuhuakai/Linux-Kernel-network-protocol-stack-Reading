@@ -129,6 +129,11 @@ void show_mem(void)
 }
 
 
+/*
+ * min 内存块开始地址的页帧号
+ * max_low normal区域的结束页帧号
+ * max_high 内存块结束地址的页帧号
+ */
 static void __init
 find_node_limits(int node, struct meminfo *mi,
 	unsigned long *min, unsigned long *max_low, unsigned long *max_high)
@@ -153,6 +158,7 @@ find_node_limits(int node, struct meminfo *mi,
 			*max_high = end;
 		if (bank->highmem)
 			continue;
+        /* 过滤掉highmemory */
 		if (*max_low < end)
 			*max_low = end;
 	}
@@ -164,7 +170,8 @@ find_node_limits(int node, struct meminfo *mi,
  * the start of a bank, so if we allocate the bootmap bitmap at
  * the end, we won't clash.
  */
- /* @param mi 内存信息
+ /* 在内存信息描述中找到一块长度合适的内存来存储bootmem的位图信息
+  * @param mi 内存信息
   * @param bootmap_pages 需要分配的页数
   */
 static unsigned int __init
@@ -180,7 +187,7 @@ find_bootmap_pfn(int node, struct meminfo *mi, unsigned int bootmap_pages)
 		unsigned int start, end;
 
 		start = bank_pfn_start(bank); /* 起始页帧 */
-		end   = bank_pfn_end(bank);   /* 终止页帧 */
+		end   = bank_pfn_end(bank);    /* 终止页帧 */
 
 		if (end < start_pfn)
 			continue;
@@ -238,6 +245,7 @@ static int __init check_initrd(struct meminfo *mi)
 }
 
 /* 构建bootmem节点
+ * @param mi 内存块描述信息
  * @param start_pfn 起始页帧
  * @param end_pfn 终止页帧
  */
@@ -253,7 +261,7 @@ bootmem_init_node(int node, struct meminfo *mi,
 	/*
 	 * Allocate the bootmem bitmap page.
 	 */
-	boot_pages = bootmem_bootmap_pages(end_pfn - start_pfn);
+	boot_pages = bootmem_bootmap_pages(end_pfn - start_pfn); /* 位图需要的页数 */
 	boot_pfn = find_bootmap_pfn(node, mi, boot_pages); /* 在mi中寻找地址来分配位图 */
 
 	/*
@@ -266,11 +274,11 @@ bootmem_init_node(int node, struct meminfo *mi,
 	init_bootmem_node(pgdat, boot_pfn, start_pfn, end_pfn); /* 初始化内存节点 */
 
 	for_each_nodebank(i, mi, node) {
-		struct membank *bank = &mi->bank[i];
+		struct membank *bank = &mi->bank[i]; /* 遍历每一个bank,将内存放入pgdat之中 */
 		if (!bank->highmem)
 			free_bootmem_node(pgdat, bank_phys_start(bank), bank_phys_size(bank));
 	}
-
+    /* 下面保留了位图占用的内存,非常重要 */
 	/*
 	 * Reserve the bootmem bitmap for this node.
 	 */
@@ -300,13 +308,18 @@ static void __init bootmem_reserve_initrd(int node)
 }
 
 /* 此函数被bootmem_init调用
+ *
  */
 static void __init bootmem_free_node(int node, struct meminfo *mi)
 {
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
 	unsigned long min, max_low, max_high;
 	int i;
-
+    /*
+     * min 内存块开始地址的页帧号
+     * max_low normal区域的结束页帧号
+     * max_high 内存块结束地址的页帧号
+     */
 	find_node_limits(node, mi, &min, &max_low, &max_high);
 
 	/*
@@ -321,7 +334,7 @@ static void __init bootmem_free_node(int node, struct meminfo *mi)
 	 */
 	zone_size[0] = max_low - min; /* 计算每一个zone的大小 */
 #ifdef CONFIG_HIGHMEM
-	zone_size[ZONE_HIGHMEM] = max_high - max_low;
+	zone_size[ZONE_HIGHMEM] = max_high - max_low; /* 高端内存大小 */
 #endif
 
 	/*
@@ -404,7 +417,10 @@ void __init bootmem_init(void)
 	 */
 	for_each_node(node) {
 		unsigned long node_low, node_high;
-
+        /* min 内存块开始地址的页帧号
+         * max_low normal区域的结束页帧号
+         * max_high 内存块的结束地址的页帧号
+         */
 		find_node_limits(node, mi, &min, &node_low, &node_high);
         /* 获取最高地址,最低地址 */
 		if (node_low > max_low)
@@ -464,7 +480,7 @@ void __init bootmem_init(void)
 	 * the system, not the maximum PFN.
 	 */
 	max_low_pfn = max_low - PHYS_PFN_OFFSET; /* 高端内存的页号 */
-	max_pfn = max_high - PHYS_PFN_OFFSET; 
+	max_pfn = max_high - PHYS_PFN_OFFSET;
 }
 
 static inline int free_area(unsigned long pfn, unsigned long end, char *s)
@@ -567,11 +583,11 @@ void __init mem_init(void)
 	max_mapnr   = pfn_to_page(max_pfn + PHYS_PFN_OFFSET) - mem_map;
 #endif
 
-	/* this will put all unused low memory onto the freelists 
+	/* this will put all unused low memory onto the freelists
      * 将所有未使用的低端内存放入freelists
  	 */
 	for_each_online_node(node) {
-		pg_data_t *pgdat = NODE_DATA(node);
+		pg_data_t *pgdat = NODE_DATA(node); /* 只考虑整个系统仅有一个pg_data_t实例的情况 */
 
 		free_unused_memmap_node(node, &meminfo);
 

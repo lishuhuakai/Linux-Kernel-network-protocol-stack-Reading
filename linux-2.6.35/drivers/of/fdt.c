@@ -460,6 +460,12 @@ u64 __init dt_mem_next_cell(int s, __be32 **cellp)
 
 /**
  * early_init_dt_scan_memory - Look for an parse memory nodes
+ * 待解析的字符串类似于下面:
+ * 内存起始地址为0x600000000,大小为0x40000000
+ * memory@60000000 {
+ *    device_type = "memory";
+ *    reg = <0x60000000 0x40000000>;
+ * }
  */
 int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 				     int depth, void *data)
@@ -493,15 +499,15 @@ int __init early_init_dt_scan_memory(unsigned long node, const char *uname,
 	while ((endp - reg) >= (dt_root_addr_cells + dt_root_size_cells)) {
 		u64 base, size;
 
-		base = dt_mem_next_cell(dt_root_addr_cells, &reg);
-		size = dt_mem_next_cell(dt_root_size_cells, &reg);
+		base = dt_mem_next_cell(dt_root_addr_cells, &reg); /* 起始地址 */
+		size = dt_mem_next_cell(dt_root_size_cells, &reg); /* 大小 */
 
 		if (size == 0)
 			continue;
 		pr_debug(" - %llx ,  %llx\n", (unsigned long long)base,
 		    (unsigned long long)size);
 
-		early_init_dt_add_memory_arch(base, size);
+		early_init_dt_add_memory_arch(base, size); /* 将内存添加到memblock子系统 */
 	}
 
 	return 0;

@@ -142,7 +142,12 @@ static inline void ptep_set_wrprotect(struct mm_struct *mm, unsigned long addres
  * or the end address of the range if that comes earlier.  Although no
  * vma end wraps to 0, rounded up __boundary may wrap to 0 throughout.
  */
-
+/* 关于pgd_addr_end, addr是起始地址,end是终止地址,addr有一个对应的pgd,
+ * __boundary=(addr+PGDIR_SIZE)&PGDIR_MASK 下一个pgd对应区间的首地址
+ * __boundary-1 本pgd对应地址区间的尾地址
+ * 因此此函数的意思是,如果end比addr对应的pgd的区间大,就返回区间的尾地址
+ * 否则就返回end
+ */
 #define pgd_addr_end(addr, end)						\
 ({	unsigned long __boundary = ((addr) + PGDIR_SIZE) & PGDIR_MASK;	\
 	(__boundary - 1 < (end) - 1)? __boundary: (end);		\

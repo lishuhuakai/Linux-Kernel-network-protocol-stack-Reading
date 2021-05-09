@@ -256,7 +256,7 @@ static void anon_vma_unlink(struct anon_vma_chain *anon_vma_chain)
 	if (empty)
 		anon_vma_free(anon_vma);
 }
-
+/* 移除掉匿名页 */
 void unlink_anon_vmas(struct vm_area_struct *vma)
 {
 	struct anon_vma_chain *avc, *next;

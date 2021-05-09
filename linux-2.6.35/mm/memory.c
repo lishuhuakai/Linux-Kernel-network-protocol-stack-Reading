@@ -230,6 +230,9 @@ static void free_pte_range(struct mmu_gather *tlb, pmd_t *pmd,
 	tlb->mm->nr_ptes--;
 }
 
+/* 到pmd层来释放页表
+ * @param addr,end 起始,终止地址
+ */
 static inline void free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 				unsigned long addr, unsigned long end,
 				unsigned long floor, unsigned long ceiling)
@@ -263,6 +266,10 @@ static inline void free_pmd_range(struct mmu_gather *tlb, pud_t *pud,
 	pmd_free_tlb(tlb, pmd, start);
 }
 
+/* 到PUD这一层来进行释放操作页表
+ * @param pgd 页全局表中的项
+ * @param addr,end 起始和终止地址
+ */
 static inline void free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,
 				unsigned long addr, unsigned long end,
 				unsigned long floor, unsigned long ceiling)
@@ -300,6 +307,9 @@ static inline void free_pud_range(struct mmu_gather *tlb, pgd_t *pgd,
  * This function frees user-level page tables of a process.
  *
  * Must be called with pagetable lock held.
+ */
+/* 移除进程的页表
+ * @param addr,end 起始地址和终止地址
  */
 void free_pgd_range(struct mmu_gather *tlb,
 			unsigned long addr, unsigned long end,
@@ -352,7 +362,7 @@ void free_pgd_range(struct mmu_gather *tlb,
 		return;
 
 	start = addr;
-	pgd = pgd_offset(tlb->mm, addr);
+	pgd = pgd_offset(tlb->mm, addr); /* pgd的地址 */
 	do {
 		next = pgd_addr_end(addr, end);
 		if (pgd_none_or_clear_bad(pgd))
@@ -361,6 +371,9 @@ void free_pgd_range(struct mmu_gather *tlb,
 	} while (pgd++, addr = next, addr != end);
 }
 
+/* 从页表中移除映射关系
+ * @param vma 待移除的vma
+ */
 void free_pgtables(struct mmu_gather *tlb, struct vm_area_struct *vma,
 		unsigned long floor, unsigned long ceiling)
 {
@@ -1112,13 +1125,14 @@ unsigned long unmap_vmas(struct mmu_gather **tlbp,
 	struct mm_struct *mm = vma->vm_mm;
 
 	mmu_notifier_invalidate_range_start(mm, start_addr, end_addr);
+    /* 遍历每一块vma */
 	for ( ; vma && vma->vm_start < end_addr; vma = vma->vm_next) {
 		unsigned long end;
 
-		start = max(vma->vm_start, start_addr);
+		start = max(vma->vm_start, start_addr); /* 起始地址 */
 		if (start >= vma->vm_end)
 			continue;
-		end = min(vma->vm_end, end_addr);
+		end = min(vma->vm_end, end_addr); /* 终止地址 */
 		if (end <= vma->vm_start)
 			continue;
 

@@ -568,7 +568,7 @@ enum page_references {
 	PAGEREF_RECLAIM,  /* 页面可以被尝试回收 */
 	PAGEREF_RECLAIM_CLEAN, /* 页面可以被尝试回收 */
 	PAGEREF_KEEP,       /* 该页面会继续保留在不活跃链表中 */
-	PAGEREF_ACTIVATE, /* 该页面会迁移到活跃里链表中 */
+	PAGEREF_ACTIVATE, /* 该页面会迁移到活跃链表中 */
 };
 
 static enum page_references page_check_references(struct page *page,

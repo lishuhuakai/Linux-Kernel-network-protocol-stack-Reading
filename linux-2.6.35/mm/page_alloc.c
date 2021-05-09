@@ -391,6 +391,7 @@ static inline void prep_zero_page(struct page *page, int order, gfp_t gfp_flags)
 		clear_highpage(page + i);
 }
 
+/* 设置页的order */
 static inline void set_page_order(struct page *page, int order)
 {
 	set_page_private(page, order);
@@ -709,6 +710,9 @@ static void __free_pages_ok(struct page *page, unsigned int order)
 
 /*
  * permit the bootmem allocator to evade page validation on high-order frees
+ * 将bootmem内存分配器管理的页释放到伙伴管理器中
+ * @param page 待释放的页
+ * @param order
  */
 void __meminit __free_pages_bootmem(struct page *page, unsigned int order)
 {
@@ -1678,6 +1682,7 @@ zonelist_scan:
 	 * Scan zonelist, looking for a zone with enough free.
 	 * See also cpuset_zone_allowed() comment in kernel/cpuset.c.
 	 */
+	/* 扫描zonelist查找合适分配内存的zone */
 	for_each_zone_zonelist_nodemask(zone, z, zonelist,
 						high_zoneidx, nodemask) {
 		if (NUMA_BUILD && zlc_active &&
@@ -1699,7 +1704,7 @@ zonelist_scan:
 
 			if (zone_reclaim_mode == 0)
 				goto this_zone_full;
-
+            /* 执行内存回收操作 */
 			ret = zone_reclaim(zone, gfp_mask, order);
 			switch (ret) {
 			case ZONE_RECLAIM_NOSCAN:
@@ -2149,7 +2154,7 @@ struct page *
 __alloc_pages_nodemask(gfp_t gfp_mask, unsigned int order,
 			struct zonelist *zonelist, nodemask_t *nodemask)
 {
-	enum zone_type high_zoneidx = gfp_zone(gfp_mask);
+	enum zone_type high_zoneidx = gfp_zone(gfp_mask); /* 到哪一个区域分配内存 */
 	struct zone *preferred_zone;
 	struct page *page;
 	int migratetype = allocflags_to_migratetype(gfp_mask);
@@ -2870,6 +2875,7 @@ static void build_zonelists(pg_data_t *pgdat)
 
 	/* initialize zonelists */
 	for (i = 0; i < MAX_ZONELISTS; i++) {
+        /* 关于zonelist,linux会优先根据zonelist的顺序来获取内存 */
 		zonelist = pgdat->node_zonelists + i;
 		zonelist->_zonerefs[0].zone = NULL;
 		zonelist->_zonerefs[0].zone_idx = 0;
@@ -3555,7 +3561,7 @@ __meminit int init_currently_empty_zone(struct zone *zone,
 		return ret;
 	pgdat->nr_zones = zone_idx(zone) + 1;
 
-	zone->zone_start_pfn = zone_start_pfn;
+	zone->zone_start_pfn = zone_start_pfn; /* 起始页帧号 */
 
 	mminit_dprintk(MMINIT_TRACE, "memmap_init",
 			"Initialising map node %d zone %lu pfns %lu -> %lu\n",
@@ -3990,7 +3996,10 @@ static inline unsigned long __meminit zone_absent_pages_in_node(int nid,
 
 #endif
 
-/* 计算总的页数 */
+/* 计算总的页数
+ * @param zones_size 每个zone的大小(以页为单位)
+ * @param zholes_size 每个zone的空洞大小
+ */
 static void __meminit calculate_node_totalpages(struct pglist_data *pgdat,
 		unsigned long *zones_size, unsigned long *zholes_size)
 {
@@ -4093,6 +4102,9 @@ static inline int pageblock_default_order(unsigned int order)
  *   - mark all memory queues empty
  *   - clear the memory bitmaps
  */
+/*
+ * @param pgdat 我们暂时只考虑linux全局仅有一个pglist_data的情况
+ */
 static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 		unsigned long *zones_size, unsigned long *zholes_size)
 {
@@ -4146,7 +4158,7 @@ static void __paginginit free_area_init_core(struct pglist_data *pgdat,
 			nr_kernel_pages += realsize;
 		nr_all_pages += realsize;
 
-		zone->spanned_pages = size;
+		zone->spanned_pages = size; /* 包含空洞在内的页的数目 */
 		zone->present_pages = realsize;
 #ifdef CONFIG_NUMA /* 忽略 */
 		zone->node = nid;

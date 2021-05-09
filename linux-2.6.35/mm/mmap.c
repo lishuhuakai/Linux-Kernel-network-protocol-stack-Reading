@@ -1623,6 +1623,9 @@ struct vm_area_struct *find_vma(struct mm_struct *mm, unsigned long addr)
 
 				if (vma_tmp->vm_end > addr) {
 					vma = vma_tmp;
+                    /* break说明 vma_tmp->vm_start <= addr < vma_tmp->vm_end
+                     * 也就是说addr恰好位于vma_tmp的区间内
+                     */
 					if (vma_tmp->vm_start <= addr)
 						break;
 					rb_node = rb_node->rb_left;
@@ -1641,6 +1644,7 @@ EXPORT_SYMBOL(find_vma);
 /* Same as find_vma, but also return a pointer to the previous VMA in *pprev.
  * 查找vma
  * @param addr 虚拟地址
+ * @param mm 进程的内存描述
  */
 struct vm_area_struct *
 find_vma_prev(struct mm_struct *mm, unsigned long addr,
@@ -1652,7 +1656,7 @@ find_vma_prev(struct mm_struct *mm, unsigned long addr,
 		goto out;
 
 	/* Guard against addr being lower than the first VMA */
-	vma = mm->mmap;
+	vma = mm->mmap; /* 获取vma列表 */
 
 	/* Go through the RB tree quickly. */
 	rb_node = mm->mm_rb.rb_node;
@@ -1661,7 +1665,7 @@ find_vma_prev(struct mm_struct *mm, unsigned long addr,
 		struct vm_area_struct *vma_tmp;
 		vma_tmp = rb_entry(rb_node, struct vm_area_struct, vm_rb);
 
-		if (addr < vma_tmp->vm_end) {
+		if (addr < vma_tmp->vm_end) { /* addr偏小 */
 			rb_node = rb_node->rb_left;
 		} else {
 			prev = vma_tmp;
@@ -1906,7 +1910,7 @@ static void remove_vma_list(struct mm_struct *mm, struct vm_area_struct *vma)
  * Get rid of page table information in the indicated region.
  *
  * Called with the mm semaphore held.
- * 从页表中删除与映射相关的所有表项.
+ * 从进程页表中删除与映射相关的所有表项.
  * @param start 起始地址
  * @param end 结束地址
  */
@@ -2079,7 +2083,7 @@ int do_munmap(struct mm_struct *mm, unsigned long start, size_t len)
 	end = start + len;
 	if (vma->vm_start >= end)
 		return 0;
-
+    /* vma->vm_start < end */
 	/*
 	 * If we need to split any vma, do it now to save pain later.
 	 *

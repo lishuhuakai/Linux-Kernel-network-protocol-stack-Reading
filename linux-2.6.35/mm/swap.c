@@ -202,6 +202,9 @@ void activate_page(struct page *page)
  * inactive,referenced		->	active,unreferenced
  * active,unreferenced		->	active,referenced
  */
+/* 将页面标记为访问过
+ *
+ */
 void mark_page_accessed(struct page *page)
 {
 	if (!PageActive(page) && !PageUnevictable(page) &&
@@ -215,6 +218,10 @@ void mark_page_accessed(struct page *page)
 
 EXPORT_SYMBOL(mark_page_accessed);
 
+/* 将页面加入lru链表
+ * @param page 待操作的页面
+ * @param lru 链表类型
+ */
 void __lru_cache_add(struct page *page, enum lru_list lru)
 {
 	struct pagevec *pvec = &get_cpu_var(lru_add_pvecs)[lru];
@@ -401,6 +408,9 @@ EXPORT_SYMBOL(__pagevec_release);
 /*
  * Add the passed pages to the LRU, then drop the caller's refcount
  * on them.  Reinitialises the caller's pagevec.
+ */
+/* 将pagevec中的页面加入lru链表
+ *
  */
 void ____pagevec_lru_add(struct pagevec *pvec, enum lru_list lru)
 {

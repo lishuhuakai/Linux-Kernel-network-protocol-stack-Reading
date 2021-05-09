@@ -36,12 +36,14 @@
 /*
  * These are used to make use of C type-checking..
  */
+/* pte_t直接页表项 */
 typedef struct {
 	unsigned long pte;
 } pte_t;
 typedef struct {
 	unsigned long pmd[16];
 } pmd_t;
+/* pgd_t用于描述全局页目录项 */
 typedef struct {
 	unsigned long pgd;
 } pgd_t;
@@ -76,10 +78,13 @@ extern unsigned long memory_end;
 #define __va(x) ((void *)((unsigned long)(x) + PAGE_OFFSET))
 #define __pa(x) ((unsigned long) (x) - PAGE_OFFSET)
 
+/* 将虚拟地址转换为页框号 */
 #define virt_to_pfn(kaddr)	(__pa(kaddr) >> PAGE_SHIFT)
+/* 将页框号转换为对应的虚拟地址 */
 #define pfn_to_virt(pfn)	__va((pfn) << PAGE_SHIFT)
-
+/* 给定一个虚拟地址,获得对应的页描述符 */
 #define virt_to_page(addr)	(mem_map + (((unsigned long)(addr)-PAGE_OFFSET) >> PAGE_SHIFT))
+/* 给定一个页描述符,获得对应的虚拟地址 */
 #define page_to_virt(page)	((((page) - mem_map) << PAGE_SHIFT) + PAGE_OFFSET)
 
 #ifndef page_to_phys

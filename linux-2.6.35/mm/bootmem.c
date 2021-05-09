@@ -121,7 +121,7 @@ static unsigned long __init init_bootmem_core(bootmem_data_t *bdata,
 	 * register free RAM areas explicitly.
 	 */
 	mapsize = bootmap_bytes(end - start);
-	memset(bdata->node_bootmem_map, 0xff, mapsize);
+	memset(bdata->node_bootmem_map, 0xff, mapsize); /* 这里操作实际内存 */
 
 	bdebug("nid=%td start=%lx map=%lx end=%lx mapsize=%lx\n",
 		bdata - bootmem_node_data, start, mapstart, end, mapsize);
@@ -305,6 +305,8 @@ static unsigned long __init free_all_bootmem_core(bootmem_data_t *bdata)
  *
  * Returns the number of pages actually released.
  */
+ /* 将所有的bootmem内存节点释放
+  */
 unsigned long __init free_all_bootmem_node(pg_data_t *pgdat)
 {
 	register_page_bootmem_info_node(pgdat);
@@ -323,7 +325,7 @@ unsigned long __init free_all_bootmem_node(pg_data_t *pgdat)
  */
 unsigned long __init free_all_bootmem(void)
 {
-#ifdef CONFIG_NO_BOOTMEM
+#ifdef CONFIG_NO_BOOTMEM  /* 如果说没有使用bootmem内存分配器 */
 	/*
 	 * We need to use MAX_NUMNODES instead of NODE_DATA(0)->node_id
 	 *  because in some case like Node0 doesnt have RAM installed
@@ -357,7 +359,7 @@ static void __init __free(bootmem_data_t *bdata,
 		bdata->hint_idx = sidx;
 
 	for (idx = sidx; idx < eidx; idx++)
-		if (!test_and_clear_bit(idx, bdata->node_bootmem_map))
+		if (!test_and_clear_bit(idx, bdata->node_bootmem_map)) /* 这里只是将对应的bit位清空了 */
 			BUG();
 }
 
@@ -385,6 +387,10 @@ static int __init __reserve(bootmem_data_t *bdata, unsigned long sidx,
 	return 0;
 }
 
+/*
+ * @param start 起始页页帧
+ * @param end 终止页页帧
+ */
 static int __init mark_bootmem_node(bootmem_data_t *bdata,
 				unsigned long start, unsigned long end,
 				int reserve, int flags)
@@ -461,7 +467,7 @@ void __init free_bootmem_node(pg_data_t *pgdat, unsigned long physaddr,
 	kmemleak_free_part(__va(physaddr), size);
 
 	start = PFN_UP(physaddr);
-	end = PFN_DOWN(physaddr + size);
+	end = PFN_DOWN(physaddr + size); /* 终止页页帧 */
 
 	mark_bootmem_node(pgdat->bdata, start, end, 0, 0);
 #endif

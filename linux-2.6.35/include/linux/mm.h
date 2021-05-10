@@ -312,6 +312,7 @@ static inline int page_count(struct page *page)
 	return atomic_read(&compound_head(page)->_count);
 }
 
+/* 引用一个页 */
 static inline void get_page(struct page *page)
 {
 	page = compound_head(page);
@@ -551,8 +552,12 @@ static inline int page_to_nid(struct page *page)
 }
 #endif
 
+/* 获取page所属的区域(zone)
+ *
+ */
 static inline struct zone *page_zone(struct page *page)
 {
+    /* 等价于 contig_page_data.node_zones[page_zonenum(page)] */
 	return &NODE_DATA(page_to_nid(page))->node_zones[page_zonenum(page)];
 }
 
@@ -562,7 +567,10 @@ static inline unsigned long page_to_section(struct page *page)
 	return (page->flags >> SECTIONS_PGSHIFT) & SECTIONS_MASK;
 }
 #endif
-
+/* 设置page所属的zone
+ * @param page 代操作的页
+ * @param zone zone类型
+ */
 static inline void set_page_zone(struct page *page, enum zone_type zone)
 {
 	page->flags &= ~(ZONES_MASK << ZONES_PGSHIFT);
@@ -663,6 +671,9 @@ static inline void *page_rmapping(struct page *page)
 	return (void *)((unsigned long)page->mapping & ~PAGE_MAPPING_FLAGS);
 }
 
+/* 判断文件是否为匿名页
+ *
+ */
 static inline int PageAnon(struct page *page)
 {
 	return ((unsigned long)page->mapping & PAGE_MAPPING_ANON) != 0;

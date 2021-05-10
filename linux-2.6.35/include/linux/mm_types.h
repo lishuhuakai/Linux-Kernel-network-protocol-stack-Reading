@@ -35,10 +35,17 @@ struct page {
     /* 描述page的状态和其他信息 */
 	unsigned long flags;		/* Atomic flags, some possibly
 					 * updated asynchronously */
-	atomic_t _count;		/* Usage count, see below. */
+	atomic_t _count;		/* 内核中引用该页面的次数,_count为0时,该page页面为空闲或者即将要被释放
+	                         * _count > 0时,表示该页面已经被分配且内核正在使用,暂时不会被释放.
+                             */
 	union {
         /* 内存管理子系统中映射的页表项计数,用于表示页是否已经映射,还用于限制
          * 逆向映射搜索
+         */
+        /* _mapcount表示这个页面被进程映射的个数,即已经映射了多少个用户pte页表
+         * _mapcount==-1,表示没有pte映射到页面中
+         * _mapcount==0,表示只有父进程映射了页面.
+         * _mapcount>0,表示除了父进程还有其他进程映射了这个页面
          */
 		atomic_t _mapcount;	/* Count of ptes mapped in mms,
 					 * to show when page is mapped
@@ -58,6 +65,11 @@ struct page {
 						 * indicates order in the buddy
 						 * system if PG_buddy is set.
 						 */
+		/* mapping表示页面所指向的地址空间,内核中的地址空间通常有两个不同的地址空间
+         * 一个用于文件映射页面,另一个用于匿名映射.内核使用了一个简单直接的方式实现了一个指针,两种用途.
+         * mapping指针地址的最低两位用于判断是否执行匿名映射或者ksm页面的地址空间,如果是匿名页面,那么
+         * mapping指向匿名页面的地址空间数据结构struct anon_vma.(可以参看__page_set_anon_rmap)
+		 */
 		struct address_space *mapping;	/* If low bit clear, points to
 						 * inode address_space, or NULL.
 						 * If page mapped as anonymous

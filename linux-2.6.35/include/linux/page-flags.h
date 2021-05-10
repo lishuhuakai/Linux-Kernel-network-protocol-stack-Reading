@@ -73,32 +73,32 @@
  * SPARSEMEM_EXTREME with !SPARSEMEM_VMEMMAP).
  */
 enum pageflags {
-	PG_locked,		/* Page is locked. Don't touch. */
-	PG_error,
-	PG_referenced,
-	PG_uptodate,
-	PG_dirty,
-	PG_lru,
-	PG_active,
-	PG_slab,
-	PG_owner_priv_1,	/* Owner use. If pagecache, fs may use*/
-	PG_arch_1,
-	PG_reserved,
+	PG_locked,		/* page已经上锁,不要访问 */
+	PG_error,     /* 表示页面发生了IO错误 */
+	PG_referenced, /* 该标志用来实现LRU算法中的第二次机会法 */
+	PG_uptodate, /* 表示页面是有效的,当该页面上的读操作完成后,设置该标志位 */
+	PG_dirty,  /* 页面被修改过,为脏页 */
+	PG_lru, /* 表示该页在lru链表中 */
+	PG_active, /* 表示该页在活跃lru链表之中 */
+	PG_slab, /* 表示该页属于由slab分配器创建的slab */
+	PG_owner_priv_1,	/* 页面的所有者使用,如果是pagecache页面,文件系统可能使用 */
+	PG_arch_1, /* 与结构体系相关的页面状态位 */
+	PG_reserved, /* 表示该页不可以被换出 */
 	PG_private,		/* If pagecache, has fs-private data */
-	PG_private_2,		/* If pagecache, has fs aux data */
-	PG_writeback,		/* Page is under writeback */
+	PG_private_2,		/* 如果是pagecache,可能包含fs aux data */
+	PG_writeback,		/* 页面正在回写 */
 #ifdef CONFIG_PAGEFLAGS_EXTENDED
 	PG_head,		/* A head page */
 	PG_tail,		/* A tail page */
 #else
-	PG_compound,		/* A compound page */
+	PG_compound,		/* 一个混合页面 */
 #endif
-	PG_swapcache,		/* Swap page: swp_entry_t in private */
-	PG_mappedtodisk,	/* Has blocks allocated on-disk */
-	PG_reclaim,		/* To be reclaimed asap */
+	PG_swapcache,		/* Swap page: swp_entry_t in private 这是交换页面 */
+	PG_mappedtodisk,	/* Has blocks allocated on-disk 在磁盘中分配了blocks */
+	PG_reclaim,		/* 马上要被回收了 */
 	PG_buddy,		/* Page is free, on buddy lists */
-	PG_swapbacked,		/* Page is backed by RAM/swap */
-	PG_unevictable,		/* Page is "unevictable"  */
+	PG_swapbacked,		/* Page is backed by RAM/swap 页面支持RAM/swap */
+	PG_unevictable,		/* 页面不可回收   */
 #ifdef CONFIG_MMU
 	PG_mlocked,		/* Page is vma mlocked */
 #endif
@@ -133,6 +133,7 @@ enum pageflags {
 
 #ifndef __GENERATING_BOUNDS_H
 
+/* 下面的这些宏非常常用 */
 /*
  * Macros to create function definitions for page flags
  */

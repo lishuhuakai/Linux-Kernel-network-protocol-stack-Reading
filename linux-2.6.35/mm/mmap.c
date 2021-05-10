@@ -868,7 +868,9 @@ static int anon_vma_compatible(struct vm_area_struct *a, struct vm_area_struct *
  * and with the same memory policies). That's all stable, even with just
  * a read lock on the mm_sem.
  */
-static struct anon_vma *reusable_anon_vma(struct vm_area_struct *old, struct vm_area_struct *a, struct vm_area_struct *b)
+/* 判断是否可以复用anon_vma */
+static struct anon_vma *reusable_anon_vma(struct vm_area_struct *old,
+            struct vm_area_struct *a, struct vm_area_struct *b)
 {
 	if (anon_vma_compatible(a, b)) {
 		struct anon_vma *anon_vma = ACCESS_ONCE(old->anon_vma);
@@ -891,7 +893,7 @@ struct anon_vma *find_mergeable_anon_vma(struct vm_area_struct *vma)
 {
 	struct anon_vma *anon_vma;
 	struct vm_area_struct *near;
-
+    /* 后一个vma */
 	near = vma->vm_next;
 	if (!near)
 		goto try_prev;
@@ -910,7 +912,7 @@ try_prev:
 	BUG_ON(find_vma_prev(vma->vm_mm, vma->vm_start, &near) != vma);
 	if (!near)
 		goto none;
-
+    /* 前一个vma */
 	anon_vma = reusable_anon_vma(near, near, vma);
 	if (anon_vma)
 		return anon_vma;

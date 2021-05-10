@@ -124,7 +124,7 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		avc = anon_vma_chain_alloc();
 		if (!avc)
 			goto out_enomem;
-
+        /* 检查是否可以复用当前vma的前继者near_vma和后继者prev_vma */
 		anon_vma = find_mergeable_anon_vma(vma);
 		allocated = NULL;
 		if (!anon_vma) {
@@ -139,13 +139,20 @@ int anon_vma_prepare(struct vm_area_struct *vma)
 		spin_lock(&mm->page_table_lock);
 		if (likely(!vma->anon_vma)) {
 			vma->anon_vma = anon_vma;
+            /* avc指向anon_vma也指向vma */
 			avc->anon_vma = anon_vma;
 			avc->vma = vma;
+            /* 加入到对应的链表之中 */
 			list_add(&avc->same_vma, &vma->anon_vma_chain);
 			list_add(&avc->same_anon_vma, &anon_vma->head);
 			allocated = NULL;
 			avc = NULL;
 		}
+        /* 通过page->mapping获取到anon_vma
+         * anon_vma->head是一个链表,每一个元素都是avc
+         * 通过avc->vma可以获取进程的vma结构
+         * 这样就实现了反向引用,可以查看try_to_unmap_anon
+         */
 		spin_unlock(&mm->page_table_lock);
 		spin_unlock(&anon_vma->lock);
 
@@ -179,14 +186,22 @@ static void anon_vma_chain_link(struct vm_area_struct *vma,
  * Attach the anon_vmas from src to dst.
  * Returns 0 on success, -ENOMEM on failure.
  */
+/* anon_vma的拷贝
+ * @param dst 子进程的vma
+ * @param src 父进程的vma
+ */
 int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
 {
 	struct anon_vma_chain *avc, *pavc;
 
 	list_for_each_entry_reverse(pavc, &src->anon_vma_chain, same_vma) {
-		avc = anon_vma_chain_alloc();
+		avc = anon_vma_chain_alloc(); /* 分配一个avc结构 */
 		if (!avc)
 			goto enomem_failure;
+        /*
+         * avc->vma = dst
+         * avc->anon_vma = pavc->anon_vma ==> anon_vma在父子进程间共享
+         */
 		anon_vma_chain_link(dst, avc, pavc->anon_vma);
 	}
 	return 0;
@@ -200,6 +215,11 @@ int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
  * Attach vma to its own anon_vma, as well as to the anon_vmas that
  * the corresponding VMA in the parent process is attached to.
  * Returns 0 on success, non-zero on failure.
+ */
+/*
+ * 拷贝父进程的vma
+ * @param vma 目的vma
+ * @param pvam 源vma
  */
 int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
 {
@@ -224,6 +244,10 @@ int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
 	avc = anon_vma_chain_alloc();
 	if (!avc)
 		goto out_error_free_anon_vma;
+    /*
+     * avc->vma = vma
+     * avc->anon_vma = anon_vma
+     */
 	anon_vma_chain_link(vma, avc, anon_vma);
 	/* Mark this anon_vma as the one where our new (COWed) pages go. */
 	vma->anon_vma = anon_vma;
@@ -756,9 +780,9 @@ static void __page_set_anon_rmap(struct page *page,
 		anon_vma = avc->anon_vma;
 	}
 
-	anon_vma = (void *) anon_vma + PAGE_MAPPING_ANON;
+	anon_vma = (void *) anon_vma + PAGE_MAPPING_ANON; /* 这个标志表示是匿名页面的地址空间 */
 	page->mapping = (struct address_space *) anon_vma;
-	page->index = linear_page_index(vma, address);
+	page->index = linear_page_index(vma, address); /* 计算地址addr在vma中属于第几个页面 */
 }
 
 /**
@@ -818,6 +842,7 @@ void page_add_anon_rmap(struct page *page,
 /**
  * page_add_new_anon_rmap - add pte mapping to a new anonymous page
  * @page:	the page to add the mapping to
+ *          待映射的页
  * @vma:	the vm area in which the mapping is added
  * @address:	the user virtual address mapped
  *
@@ -829,7 +854,7 @@ void page_add_new_anon_rmap(struct page *page,
 	struct vm_area_struct *vma, unsigned long address)
 {
 	VM_BUG_ON(address < vma->vm_start || address >= vma->vm_end);
-	SetPageSwapBacked(page);
+	SetPageSwapBacked(page); /* 设置page的PG_SwapBacked,表示这个页面可以swap到磁盘 */
 	atomic_set(&page->_mapcount, 0); /* increment count (starts at -1) */
 	__inc_zone_page_state(page, NR_ANON_PAGES);
 	__page_set_anon_rmap(page, vma, address, 1);
@@ -1164,18 +1189,21 @@ static bool is_vma_temporary_stack(struct vm_area_struct *vma)
  * vm_flags for that VMA.  That should be OK, because that vma shouldn't be
  * 'LOCKED.
  */
+/* 尝试断开匿名页的映射
+ *
+ */
 static int try_to_unmap_anon(struct page *page, enum ttu_flags flags)
 {
 	struct anon_vma *anon_vma;
 	struct anon_vma_chain *avc;
 	int ret = SWAP_AGAIN;
 
-	anon_vma = page_lock_anon_vma(page);
+	anon_vma = page_lock_anon_vma(page); /* 获取page->mapping字段中的anon_vma */
 	if (!anon_vma)
 		return ret;
-
+    /* 遍历每一个anon_vma_chain */
 	list_for_each_entry(avc, &anon_vma->head, same_anon_vma) {
-		struct vm_area_struct *vma = avc->vma;
+		struct vm_area_struct *vma = avc->vma; /* 获得vma */
 		unsigned long address;
 
 		/*
@@ -1190,9 +1218,10 @@ static int try_to_unmap_anon(struct page *page, enum ttu_flags flags)
 				is_vma_temporary_stack(vma))
 			continue;
 
-		address = vma_address(page, vma);
+		address = vma_address(page, vma); /* 虚拟地址 */
 		if (address == -EFAULT)
 			continue;
+        /* 断开用户pte页表项 */
 		ret = try_to_unmap_one(page, vma, address, flags);
 		if (ret != SWAP_AGAIN || !page_mapped(page))
 			break;

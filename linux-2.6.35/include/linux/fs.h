@@ -621,7 +621,11 @@ int pagecache_write_end(struct file *, struct address_space *mapping,
 				struct page *page, void *fsdata);
 
 struct backing_dev_info;
-/* 地址空间 */
+/* 地址空间
+ * 用于管理文件(struct inode)映射到内存的页面(struct page)的:与之对应,
+ * address_space_operations 就是用来操作该文件映射到内存的页面,比如把内存中的修改写回文件,
+ * 从文件中读入数据到页面缓冲等.
+ */
 struct address_space {
     /* 所有者,inode或者块设备 */
 	struct inode		*host;		/* owner: inode, block_device */

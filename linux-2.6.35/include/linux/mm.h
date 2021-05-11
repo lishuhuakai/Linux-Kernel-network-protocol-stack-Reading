@@ -653,12 +653,19 @@ void page_address_init(void);
 #define PAGE_MAPPING_FLAGS	(PAGE_MAPPING_ANON | PAGE_MAPPING_KSM)
 
 extern struct address_space swapper_space;
+/* 获取操作句柄
+ *
+ */
 static inline struct address_space *page_mapping(struct page *page)
 {
+    /*
+     * 如果page拥有自己的address_space,就使用自己的address_space
+     * 文件页一般都拥有自己的address_space
+     */
 	struct address_space *mapping = page->mapping;
 
 	VM_BUG_ON(PageSlab(page));
-	if (unlikely(PageSwapCache(page)))
+	if (unlikely(PageSwapCache(page))) /* 如果page位于swapcache之中 */
 		mapping = &swapper_space;
 	else if (unlikely((unsigned long)mapping & PAGE_MAPPING_ANON))
 		mapping = NULL;

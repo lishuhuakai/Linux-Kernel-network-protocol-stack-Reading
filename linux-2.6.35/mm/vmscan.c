@@ -331,6 +331,8 @@ typedef enum {
  * pageout is called by shrink_page_list() for each dirty page.
  * Calls ->writepage().
  */
+/* 将脏页写回
+ */
 static pageout_t pageout(struct page *page, struct address_space *mapping,
 						enum pageout_io sync_writeback)
 {
@@ -571,6 +573,10 @@ enum page_references {
 	PAGEREF_ACTIVATE, /* 该页面会迁移到活跃链表中 */
 };
 
+/* 根据页面的状态来决定如何处理页面
+ * @param page 待操作的页面
+ * @param sc 扫描控制结构
+ */
 static enum page_references page_check_references(struct page *page,
 						  struct scan_control *sc)
 {
@@ -592,7 +598,7 @@ static enum page_references page_check_references(struct page *page,
 	if (vm_flags & VM_LOCKED)
 		return PAGEREF_RECLAIM;
 
-	if (referenced_ptes) { /* 页面被pte引用 */
+	if (referenced_ptes) { /* 页面被pte引用,也就是被进程映射了 */
 		if (PageAnon(page))
 			return PAGEREF_ACTIVATE; /* 匿名页面,加入活跃链表 */
 		/*
@@ -616,7 +622,7 @@ static enum page_references page_check_references(struct page *page,
 
 		return PAGEREF_KEEP;
 	}
-
+    /* 到这里说明没有被其他进程映射,可以尝试回收 */
 	/* Reclaim if clean, defer dirty pages to writeback */
 	if (referenced_page)
 		return PAGEREF_RECLAIM_CLEAN;
@@ -626,6 +632,8 @@ static enum page_references page_check_references(struct page *page,
 
 /*
  * shrink_page_list() returns the number of reclaimed pages
+ * @param page_list 待回收的页构成的链表
+ * @param sc 回收参数
  * 返回被回收的页的个数
  */
 static unsigned long shrink_page_list(struct list_head *page_list,
@@ -648,7 +656,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 		cond_resched();
 
-		page = lru_to_page(page_list);
+		page = lru_to_page(page_list); /* 取出一个页 */
 		list_del(&page->lru);
 
 		if (!trylock_page(page))
@@ -688,11 +696,11 @@ static unsigned long shrink_page_list(struct list_head *page_list,
 
 		references = page_check_references(page, sc);
 		switch (references) {
-		case PAGEREF_ACTIVATE:
+		case PAGEREF_ACTIVATE: /* 迁移到活跃lru中 */
 			goto activate_locked;
 		case PAGEREF_KEEP:
 			goto keep_locked;
-		case PAGEREF_RECLAIM:
+		case PAGEREF_RECLAIM: /* 可交换 */
 		case PAGEREF_RECLAIM_CLEAN:
 			; /* try to reclaim the page below */
 		}
@@ -712,7 +720,7 @@ static unsigned long shrink_page_list(struct list_head *page_list,
           * 真的是绝妙的设计.
           * 进程访问到了时候,恰好页可以触发缺页中断,从磁盘中将页读出来.
           */
-		if (PageAnon(page) && !PageSwapCache(page)) {
+		if (PageAnon(page) && !PageSwapCache(page)) { /* 匿名页,而且并不位于swapcache之中 */
              /* 如果本次回收禁止io操作，则跳转到keep_locked，让此匿名页继续在非活动lru链表中 */
 			if (!(sc->gfp_mask & __GFP_IO))
 				goto keep_locked;
@@ -952,9 +960,11 @@ int __isolate_lru_page(struct page *page, int mode, int file)
  * Appropriate locks must be held before calling this function.
  *
  * @nr_to_scan:	The number of pages to look through on the list.
+ *             要分离的页的个数
  * @src:	The LRU list to pull pages off.
  * @dst:	The temp list to put pages on to.
  * @scanned:	The number of pages that were scanned.
+ *             已经扫描的页的个数
  * @order:	The caller's attempted allocation order
  * @mode:	One of the LRU isolation modes
  * @file:	True [1] if isolating file [!anon] pages
@@ -975,13 +985,13 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 		unsigned long page_pfn;
 		int zone_id;
 
-		page = lru_to_page(src);
+		page = lru_to_page(src); /* 取出一个page */
 		prefetchw_prev_lru_page(page, src, flags);
 
 		VM_BUG_ON(!PageLRU(page));
-
+        /* __isolate_lru_page */
 		switch (__isolate_lru_page(page, mode, file)) {
-		case 0:
+		case 0: /* 0表示成功,可以加入dst链表 */
 			list_move(&page->lru, dst);
 			mem_cgroup_del_lru(page);
 			nr_taken++;
@@ -1052,6 +1062,9 @@ static unsigned long isolate_lru_pages(unsigned long nr_to_scan,
 	return nr_taken;
 }
 
+/* 批量地从LRU链表中分离nr个页到dst链表之中
+ *
+ */
 static unsigned long isolate_pages_global(unsigned long nr,
 					struct list_head *dst,
 					unsigned long *scanned, int order,
@@ -1202,6 +1215,7 @@ static unsigned long shrink_inactive_list(unsigned long max_scan,
 		unsigned long nr_file;
 
 		if (scanning_global_lru(sc)) {
+            /* 将不活跃链表的页面分离放入page_list */
 			nr_taken = isolate_pages_global(SWAP_CLUSTER_MAX,
 							&page_list, &nr_scan,
 							sc->order, mode,
@@ -1387,6 +1401,7 @@ static void move_active_pages_to_lru(struct zone *zone,
 
 /* 看看有哪些活跃页面可以迁移到不活跃页面链表中
  * @param file 是否为文件页构成的lru
+ * @param nr_pages 要处理的页的个数
  */
 static void shrink_active_list(unsigned long nr_pages, struct zone *zone,
 			struct scan_control *sc, int priority, int file)
@@ -1443,7 +1458,8 @@ static void shrink_active_list(unsigned long nr_pages, struct zone *zone,
 			putback_lru_page(page);
 			continue;
 		}
-        /* 检查此页面最近是否有被访问过,通过映射了此页的页表项Accessed进行检查,并且会清除页表项的Accessed标记
+        /* 检查此页面最近是否有被访问过,通过映射了此页的页表项Accessed进行检查,
+         * 并且会清除页表项的Accessed标记
          */
 		if (page_referenced(page, 0, sc->mem_cgroup, &vm_flags)) {
 			nr_rotated++;
@@ -2081,6 +2097,9 @@ static int sleeping_prematurely(pg_data_t *pgdat, int order, long remaining)
  * lower zones regardless of the number of free pages in the lower zones. This
  * interoperates with the page allocator fallback scheme to ensure that aging
  * of pages is balanced across the zones.
+ */
+/* kswapd进行内存交换
+ *
  */
 static unsigned long balance_pgdat(pg_data_t *pgdat, int order)
 {

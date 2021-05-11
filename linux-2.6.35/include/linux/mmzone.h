@@ -659,8 +659,9 @@ typedef struct pglist_data {
 	unsigned long node_spanned_pages; /* total size of physical page
 					     range, including holes */
 	int node_id; /* 全局节点id */
-	wait_queue_head_t kswapd_wait;
-	struct task_struct *kswapd; /* 守护进程的等待队列 */
+	wait_queue_head_t kswapd_wait;/* 守护进程的等待队列,如果在低水位(ALLOC_WMARK_LOW)的情况下无法成功分配
+	                                * 内存,那么会通过wakeup_kswapd()来唤醒kswapd进程来回收页面 */
+	struct task_struct *kswapd;
 	int kswapd_max_order;
 } pg_data_t;
 

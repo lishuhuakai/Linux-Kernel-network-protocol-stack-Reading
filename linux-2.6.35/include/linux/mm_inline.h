@@ -19,6 +19,11 @@ static inline int page_is_file_cache(struct page *page)
 	return !PageSwapBacked(page);
 }
 
+/* 将页面加入lru列表中
+ * @param zone 区域,每一个区域都有lru列表
+ * @param page 待操作的页
+ * @param l lru的类型
+ */
 static inline void
 add_page_to_lru_list(struct zone *zone, struct page *page, enum lru_list l)
 {

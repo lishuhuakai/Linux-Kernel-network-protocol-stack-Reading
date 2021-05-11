@@ -175,18 +175,22 @@ static void update_page_reclaim_stat(struct zone *zone, struct page *page,
 /*
  * FIXME: speed this up?
  */
+/*
+ * 将page从不活跃链表中移除,加入活跃链表
+ */
 void activate_page(struct page *page)
 {
 	struct zone *zone = page_zone(page);
 
 	spin_lock_irq(&zone->lru_lock);
+    /* page位于lru链表中,page不处于active, page可以回收 */
 	if (PageLRU(page) && !PageActive(page) && !PageUnevictable(page)) {
 		int file = page_is_file_cache(page);
 		int lru = page_lru_base_type(page);
 		del_page_from_lru_list(zone, page, lru);
-
+        /* pageactive标志表示page位于活跃链表之中 */
 		SetPageActive(page);
-		lru += LRU_ACTIVE;
+		lru += LRU_ACTIVE; /* 将page加入active lru */
 		add_page_to_lru_list(zone, page, lru);
 		__count_vm_event(PGACTIVATE);
 
@@ -434,7 +438,7 @@ void ____pagevec_lru_add(struct pagevec *pvec, enum lru_list lru)
 		VM_BUG_ON(PageActive(page));
 		VM_BUG_ON(PageUnevictable(page));
 		VM_BUG_ON(PageLRU(page));
-		SetPageLRU(page);
+		SetPageLRU(page); /* 页位于lru之中 */
 		active = is_active_lru(lru);
 		file = is_file_lru(lru);
 		if (active)

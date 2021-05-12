@@ -931,7 +931,7 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 	pte_t pteval;
 	spinlock_t *ptl;
 	int ret = SWAP_AGAIN;
-
+    /* 获取页表 */
 	pte = page_check_address(page, mm, address, &ptl, 0);
 	if (!pte)
 		goto out;
@@ -973,10 +973,10 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			dec_mm_counter(mm, MM_FILEPAGES);
 		set_pte_at(mm, address, pte,
 				swp_entry_to_pte(make_hwpoison_entry(page)));
-	} else if (PageAnon(page)) {
+	} else if (PageAnon(page)) { /* 如果是匿名页 */
 		swp_entry_t entry = { .val = page_private(page) };
 
-		if (PageSwapCache(page)) {
+		if (PageSwapCache(page)) { /* page处于swapcache之中 */
 			/*
 			 * Store the swap location in the pte.
 			 * See handle_pte_fault() ...
@@ -1003,6 +1003,8 @@ int try_to_unmap_one(struct page *page, struct vm_area_struct *vma,
 			BUG_ON(TTU_ACTION(flags) != TTU_MIGRATION);
 			entry = make_migration_entry(page, pte_write(pteval));
 		}
+        /* 这里设置的是交换页的swp_entry_t
+         */
 		set_pte_at(mm, address, pte, swp_entry_to_pte(entry));
 		BUG_ON(pte_file(*pte));
 	} else if (PAGE_MIGRATION && (TTU_ACTION(flags) == TTU_MIGRATION)) {
@@ -1356,6 +1358,8 @@ out:
  * SWAP_FAIL	- the page is unswappable
  * SWAP_MLOCK	- page is mlocked.
  */
+ /* 在进程中解除页的映射关系
+  */
 int try_to_unmap(struct page *page, enum ttu_flags flags)
 {
 	int ret;
@@ -1364,9 +1368,9 @@ int try_to_unmap(struct page *page, enum ttu_flags flags)
 
 	if (unlikely(PageKsm(page)))
 		ret = try_to_unmap_ksm(page, flags);
-	else if (PageAnon(page))
+	else if (PageAnon(page)) /* 匿名页 */
 		ret = try_to_unmap_anon(page, flags);
-	else
+	else /* 文件页 */
 		ret = try_to_unmap_file(page, flags);
 	if (ret != SWAP_MLOCK && !page_mapped(page))
 		ret = SWAP_SUCCESS;

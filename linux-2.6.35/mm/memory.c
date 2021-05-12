@@ -2751,6 +2751,7 @@ static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		flags &= ~FAULT_FLAG_WRITE;
 	}
 	flush_icache_page(vma, page);
+    /* 重新设置页表 */
 	set_pte_at(mm, address, page_table, pte);
 	page_add_anon_rmap(page, vma, address);
 	/* It's better to call commit-charge after rmap is established */

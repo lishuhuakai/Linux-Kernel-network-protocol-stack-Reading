@@ -1299,7 +1299,7 @@ static unsigned long shrink_inactive_list(unsigned long max_scan,
 		/*
 		 * Put back any unfreeable pages.
 		 */
-		while (!list_empty(&page_list)) {
+		while (!list_empty(&page_list)) { /* 将没有交换的页放入lru */
 			int lru;
 			page = lru_to_page(&page_list);
 			VM_BUG_ON(PageLRU(page));

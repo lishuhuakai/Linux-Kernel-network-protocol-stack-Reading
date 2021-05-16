@@ -67,9 +67,9 @@ extern unsigned int kobjsize(const void *objp);
  * vm_flags in vm_area_struct, see mm_types.h.
  */
 #define VM_READ		0x00000001	/* currently active flags */
-#define VM_WRITE	0x00000002
-#define VM_EXEC		0x00000004
-#define VM_SHARED	0x00000008
+#define VM_WRITE	0x00000002  /* 虚拟地址可写 */
+#define VM_EXEC		0x00000004  /* 虚拟地址可执行 */
+#define VM_SHARED	0x00000008  /* 虚拟地址共享 */
 
 /* mprotect() hardcodes VM_MAYREAD >> 4 == VM_READ, and so for r/w/x bits. */
 #define VM_MAYREAD	0x00000010	/* limits for mprotect() etc */

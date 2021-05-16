@@ -31,9 +31,12 @@
 /* Fork a new task - this creates a new program thread.
  * This is called indirectly via a small wrapper
  */
+/* 系统函数fork
+ */
 asmlinkage int sys_fork(struct pt_regs *regs)
 {
 #ifdef CONFIG_MMU
+    /* 子进程终止之后,要发送SIGCHLD信号通知父进程 */
 	return do_fork(SIGCHLD, regs->ARM_sp, regs, 0, NULL, NULL);
 #else
 	/* can not support in nommu mode */
@@ -56,6 +59,9 @@ asmlinkage int sys_clone(unsigned long clone_flags, unsigned long newsp,
 
 asmlinkage int sys_vfork(struct pt_regs *regs)
 {
+    /* CLONE_VFORK父进程将会被挂起
+     * CLONE_VM 父子进程运行在相同的内存空间
+     */
 	return do_fork(CLONE_VFORK | CLONE_VM | SIGCHLD, regs->ARM_sp, regs, 0, NULL, NULL);
 }
 

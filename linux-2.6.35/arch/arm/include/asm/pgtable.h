@@ -283,6 +283,11 @@ extern struct page *empty_zero_page;
 
 #define set_pte_ext(ptep,pte,ext) cpu_set_pte_ext(ptep,pte,ext)
 
+/* 设置页表项的值
+ * @param ptep 待设置的pte页表项
+ * @param pteval 页表项的值
+ * @param addr 虚拟地址
+ */
 #define set_pte_at(mm,addr,ptep,pteval) do { \
 	set_pte_ext(ptep, pteval, (addr) >= TASK_SIZE ? 0 : PTE_EXT_NG); \
  } while (0)

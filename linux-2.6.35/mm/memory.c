@@ -409,6 +409,9 @@ void free_pgtables(struct mmu_gather *tlb, struct vm_area_struct *vma,
 	}
 }
 
+/* 页表分配
+ * @param pmd 页表所属的pmd项
+ */
 int __pte_alloc(struct mm_struct *mm, pmd_t *pmd, unsigned long address)
 {
 	pgtable_t new = pte_alloc_one(mm, address);
@@ -433,6 +436,7 @@ int __pte_alloc(struct mm_struct *mm, pmd_t *pmd, unsigned long address)
 	spin_lock(&mm->page_table_lock);
 	if (!pmd_present(*pmd)) {	/* Has another populated it ? */
 		mm->nr_ptes++;
+        /* 将页的偏移地址放入pmd之中 */
 		pmd_populate(mm, pmd, new);
 		new = NULL;
 	}
@@ -664,6 +668,10 @@ out:
  * covered by this vma.
  */
 
+/* 页表的拷贝
+ * @param dst_pte 目的页表
+ * @param src_pte 源页表
+ */
 static inline unsigned long
 copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		pte_t *dst_pte, pte_t *src_pte, struct vm_area_struct *vma,
@@ -674,8 +682,10 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	struct page *page;
 
 	/* pte contains position in swap or file, so copy. */
+    /* 首先判断父进程pte对应的页面是否在内存中 */
 	if (unlikely(!pte_present(pte))) {
 		if (!pte_file(pte)) {
+            /* 可能被交换到磁盘上去了 */
 			swp_entry_t entry = pte_to_swp_entry(pte);
 
 			if (swap_duplicate(entry) < 0)
@@ -709,7 +719,9 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	 * If it's a COW mapping, write protect it both
 	 * in the parent and the child
 	 */
+	 /* 如果父进程vma属性是一个写时复制映射,即不是共享的进程地址空间 */
 	if (is_cow_mapping(vm_flags)) {
+        /* 父进程和子进程对应的pte页表都要设置成写保护 */
 		ptep_set_wrprotect(src_mm, addr, src_pte);
 		pte = pte_wrprotect(pte);
 	}
@@ -719,8 +731,8 @@ copy_one_pte(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 	 * the child
 	 */
 	if (vm_flags & VM_SHARED)
-		pte = pte_mkclean(pte);
-	pte = pte_mkold(pte);
+		pte = pte_mkclean(pte); /* 清除pte页表项的Dirty标志位 */
+	pte = pte_mkold(pte); /* 清除pte页表项的L_PTE_YOUNG比特位 */
 
 	page = vm_normal_page(vma, addr, pte);
 	if (page) {
@@ -737,6 +749,10 @@ out_set_pte:
 	return 0;
 }
 
+/* 页表的拷贝
+ * @param dst_mm, src_mm 子进程,父进程的内存描述
+ *
+ */
 static int copy_pte_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		pmd_t *dst_pmd, pmd_t *src_pmd, struct vm_area_struct *vma,
 		unsigned long addr, unsigned long end)
@@ -750,7 +766,7 @@ static int copy_pte_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 
 again:
 	init_rss_vec(rss);
-
+    /* 为dst_pmd分配页,用于存储pte页表项 */
 	dst_pte = pte_alloc_map_lock(dst_mm, dst_pmd, addr, &dst_ptl);
 	if (!dst_pte)
 		return -ENOMEM;
@@ -822,13 +838,16 @@ static inline int copy_pmd_range(struct mm_struct *dst_mm, struct mm_struct *src
 	return 0;
 }
 
+/* pud的拷贝
+ *
+ */
 static inline int copy_pud_range(struct mm_struct *dst_mm, struct mm_struct *src_mm,
 		pgd_t *dst_pgd, pgd_t *src_pgd, struct vm_area_struct *vma,
 		unsigned long addr, unsigned long end)
 {
 	pud_t *src_pud, *dst_pud;
 	unsigned long next;
-
+    /* 为dst_pgd分配一页,用于防止pmd项 */
 	dst_pud = pud_alloc(dst_mm, dst_pgd, addr);
 	if (!dst_pud)
 		return -ENOMEM;
@@ -2129,6 +2148,10 @@ static inline void cow_user_page(struct page *dst, struct page *src, unsigned lo
  * but allow concurrent faults), with pte both mapped and locked.
  * We return with mmap_sem still held, but pte unmapped and unlocked.
  */
+/* 此函数处理这种情况: 当用户尝试去写一个共享页,我们的做法是将共享页的内容
+ * 拷贝到一个新页上,减少对共享页的引用.
+ * @param orig_pte 原本的页表
+ */
 static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
 		spinlock_t *ptl, pte_t orig_pte)
@@ -2138,7 +2161,7 @@ static int do_wp_page(struct mm_struct *mm, struct vm_area_struct *vma,
 	int reuse = 0, ret = 0;
 	int page_mkwrite = 0;
 	struct page *dirty_page = NULL;
-
+    /* 获取原来的页 */
 	old_page = vm_normal_page(vma, address, orig_pte);
 	if (!old_page) {
 		/*
@@ -2275,6 +2298,7 @@ gotten:
 		new_page = alloc_page_vma(GFP_HIGHUSER_MOVABLE, vma, address);
 		if (!new_page)
 			goto oom;
+        /* 这里应该是写时复制,将old_page的内容拷贝到new_page之中 */
 		cow_user_page(new_page, old_page, address, vma);
 	}
 	__SetPageUptodate(new_page);
@@ -2320,6 +2344,7 @@ gotten:
 		 * mmu page tables (such as kvm shadow page tables), we want the
 		 * new page to be mapped directly into the secondary page table.
 		 */
+		/* 重新设置页表 */
 		set_pte_at_notify(mm, address, page_table, entry);
 		update_mmu_cache(vma, address, page_table);
 		if (old_page) {
@@ -2644,7 +2669,7 @@ int vmtruncate_range(struct inode *inode, loff_t offset, loff_t end)
  * We return with mmap_sem still held, but pte unmapped and unlocked.
  */
 /* 缺页中断的时候,试图从交换分区中获得换出的页
- *
+ * @param orig_pte 原始的页表
  */
 static int do_swap_page(struct mm_struct *mm, struct vm_area_struct *vma,
 		unsigned long address, pte_t *page_table, pmd_t *pmd,
@@ -2836,6 +2861,7 @@ static int do_anonymous_page(struct mm_struct *mm, struct vm_area_struct *vma,
     /* 非常重要的函数 */
 	page_add_new_anon_rmap(page, vma, address);
 setpte:
+    /* 设置页表,建立映射 */
 	set_pte_at(mm, address, page_table, entry);
 
 	/* No need to invalidate - it was non-present before */

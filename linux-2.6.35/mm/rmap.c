@@ -201,6 +201,8 @@ int anon_vma_clone(struct vm_area_struct *dst, struct vm_area_struct *src)
         /*
          * avc->vma = dst
          * avc->anon_vma = pavc->anon_vma ==> anon_vma在父子进程间共享
+         * 同时avc也加入了pavc->anon_vma的head链表
+         * avc页加入了vma的anon_vma_chain链表
          */
 		anon_vma_chain_link(dst, avc, pavc->anon_vma);
 	}
@@ -230,14 +232,23 @@ int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
 	if (!pvma->anon_vma)
 		return 0;
 
+    /* 其实我有一些不太明白,为什么要分配两个avc
+     * 一个avc用于在父子进程之间共享页
+     * 另外一个avc干什么呢?
+     */
+
 	/*
 	 * First, attach the new VMA to the parent VMA's anon_vmas,
 	 * so rmap can find non-COWed pages in child processes.
+	 */
+	/* 第一步,让新的vma指向父进程vma的anon_vma,这样一来,反向映射(rmap)
+	 * 可以让我们在子进程中找到非写时复制的页
 	 */
 	if (anon_vma_clone(vma, pvma))
 		return -ENOMEM;
 
 	/* Then add our own anon_vma. */
+    /* 然后分配自己的anon_vma */
 	anon_vma = anon_vma_alloc();
 	if (!anon_vma)
 		goto out_error;
@@ -247,6 +258,8 @@ int anon_vma_fork(struct vm_area_struct *vma, struct vm_area_struct *pvma)
     /*
      * avc->vma = vma
      * avc->anon_vma = anon_vma
+     * avc被加入了anon_vma的head链表
+     * avc被加入了vma的anon_vma_chain
      */
 	anon_vma_chain_link(vma, avc, anon_vma);
 	/* Mark this anon_vma as the one where our new (COWed) pages go. */
@@ -755,10 +768,16 @@ void page_move_anon_rmap(struct page *page,
 /**
  * __page_set_anon_rmap - setup new anonymous rmap
  * @page:	the page to add the mapping to
+ *          待映射的页
  * @vma:	the vm area in which the mapping is added
+ *          映射需要添加到的vma结构
  * @address:	the user virtual address mapped
+ *               待映射的虚拟地址
  * @exclusive:	the page is exclusively owned by the current process
  */
+ /* 这个函数其实就是要建立anno_vma和page之间的联系,通过page可以快速定位到
+  * page被哪些vma引用了.
+  */
 static void __page_set_anon_rmap(struct page *page,
 	struct vm_area_struct *vma, unsigned long address, int exclusive)
 {
@@ -1199,7 +1218,7 @@ static int try_to_unmap_anon(struct page *page, enum ttu_flags flags)
 	struct anon_vma *anon_vma;
 	struct anon_vma_chain *avc;
 	int ret = SWAP_AGAIN;
-
+    /* 对应的函数为page_add_new_anon_rmap */
 	anon_vma = page_lock_anon_vma(page); /* 获取page->mapping字段中的anon_vma */
 	if (!anon_vma)
 		return ret;

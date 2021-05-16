@@ -240,6 +240,9 @@ int __attribute__((weak)) arch_dup_task_struct(struct task_struct *dst,
 	return 0;
 }
 
+/* 分配一个task_struct实例
+ *
+ */
 static struct task_struct *dup_task_struct(struct task_struct *orig)
 {
 	struct task_struct *tsk;
@@ -298,6 +301,11 @@ out:
 }
 
 #ifdef CONFIG_MMU
+/* 遍历父进程中所有的vmas,然后复制父进程vma中对应的pte页表项到对应子进程相应vma对应的pte中,注意只是复制
+ * pte页表项,并没有复制vma对应页面的内容,
+ * @param mm 子进程的内存描述
+ * @param oldmm 父进程的内存描述
+ */
 static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 {
 	struct vm_area_struct *mpnt, *tmp, **pprev;
@@ -327,11 +335,11 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 	retval = ksm_fork(mm, oldmm);
 	if (retval)
 		goto out;
-
+    /* 遍历父进程vma */
 	for (mpnt = oldmm->mmap; mpnt; mpnt = mpnt->vm_next) {
 		struct file *file;
 
-		if (mpnt->vm_flags & VM_DONTCOPY) {
+		if (mpnt->vm_flags & VM_DONTCOPY) { /* 不允许拷贝的页面 */
 			long pages = vma_pages(mpnt);
 			mm->total_vm -= pages;
 			vm_stat_account(mm, mpnt->vm_flags, mpnt->vm_file,
@@ -345,7 +353,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 				goto fail_nomem;
 			charge = len;
 		}
-		tmp = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL);
+		tmp = kmem_cache_alloc(vm_area_cachep, GFP_KERNEL); /* 创建一个vma */
 		if (!tmp)
 			goto fail_nomem;
 		*tmp = *mpnt;
@@ -356,6 +364,7 @@ static int dup_mmap(struct mm_struct *mm, struct mm_struct *oldmm)
 		if (IS_ERR(pol))
 			goto fail_nomem_policy;
 		vma_set_policy(tmp, pol);
+        /* 匿名页的拷贝 */
 		if (anon_vma_fork(tmp, mpnt))
 			goto fail_nomem_anon_vma_fork;
 		tmp->vm_flags &= ~VM_LOCKED;
@@ -487,7 +496,7 @@ static struct mm_struct * mm_init(struct mm_struct * mm, struct task_struct *p)
 	mm->cached_hole_size = ~0UL;
 	mm_init_aio(mm);
 	mm_init_owner(mm, p);
-
+    /* 分配页表 */
 	if (likely(!mm_alloc_pgd(mm))) {
 		mm->def_flags = 0;
 		mmu_notifier_mm_init(mm);
@@ -645,6 +654,8 @@ void mm_release(struct task_struct *tsk, struct mm_struct *mm)
 /*
  * Allocate a new mm structure and copy contents from the
  * mm structure of the passed in task structure.
+ */
+/* 拷贝父进程的内存空间
  */
 struct mm_struct *dup_mm(struct task_struct *tsk)
 {
@@ -960,6 +971,9 @@ static void posix_cpu_timers_init(struct task_struct *tsk)
  * parts of the process environment (as per the clone
  * flags). The actual kick-off is left to the caller.
  */
+/* 拷贝一个进程
+ *
+ */
 static struct task_struct *copy_process(unsigned long clone_flags,
 					unsigned long stack_start,
 					struct pt_regs *regs,
@@ -979,6 +993,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * Thread groups must share signals as well, and detached threads
 	 * can only be started up within the thread group.
 	 */
+	/* CLONE_THREAD表示父子进程在同一个线程组里面, 也就是线程? */
 	if ((clone_flags & CLONE_THREAD) && !(clone_flags & CLONE_SIGHAND))
 		return ERR_PTR(-EINVAL);
 
@@ -1024,7 +1039,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		    p->real_cred->user != INIT_USER)
 			goto bad_fork_free;
 	}
-
+    /* 复制父进程的证书 */
 	retval = copy_creds(p, clone_flags);
 	if (retval < 0)
 		goto bad_fork_free;
@@ -1035,6 +1050,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	 * to stop root fork bombs.
 	 */
 	retval = -EAGAIN;
+    /* 检查已有进程的数目 */
 	if (nr_threads >= max_threads)
 		goto bad_fork_cleanup_count;
 
@@ -1122,6 +1138,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 #endif
 
 	/* Perform scheduler related setup. Assign this task to a CPU. */
+    /* 核心部分 */
 	sched_fork(p, clone_flags);
 
 	retval = perf_event_init_task(p);
@@ -1133,6 +1150,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 	/* copy all the process information */
 	if ((retval = copy_semundo(clone_flags, p)))
 		goto bad_fork_cleanup_audit;
+    /* 复制父进程打开的文件等信息 */
 	if ((retval = copy_files(clone_flags, p)))
 		goto bad_fork_cleanup_semundo;
 	if ((retval = copy_fs(clone_flags, p)))
@@ -1141,6 +1159,7 @@ static struct task_struct *copy_process(unsigned long clone_flags,
 		goto bad_fork_cleanup_fs;
 	if ((retval = copy_signal(clone_flags, p)))
 		goto bad_fork_cleanup_sighand;
+    /* 复制父进程的内存空间 */
 	if ((retval = copy_mm(clone_flags, p)))
 		goto bad_fork_cleanup_signal;
 	if ((retval = copy_namespaces(clone_flags, p)))
@@ -1366,6 +1385,12 @@ struct task_struct * __cpuinit fork_idle(int cpu)
  *
  * It copies the process, and if successful kick-starts
  * it and waits for it to finish using the VM if required.
+ */
+/* 创建进程或者线程
+ * @param clone_flags 创建进程的标志位集合
+ * @param stack_start 用户态栈的起始位置
+ * @param stack_size 用户态栈的大小,通常设置为0
+ * @param parent_tidptr, child_tidptr 指向用户空间中地址的两个指针,分别指向父子进程的PID
  */
 long do_fork(unsigned long clone_flags,
 	      unsigned long stack_start,

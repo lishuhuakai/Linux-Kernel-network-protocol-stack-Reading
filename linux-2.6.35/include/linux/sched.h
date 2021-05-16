@@ -5,13 +5,21 @@
  * cloning flags:
  */
 #define CSIGNAL		0x000000ff	/* signal mask to be sent at exit */
+/* 父子进程之间共享内存空间 */
 #define CLONE_VM	0x00000100	/* set if VM shared between processes */
+/* 父子进程之间共享相同的文件系统 */
 #define CLONE_FS	0x00000200	/* set if fs info shared between processes */
+/* 父子进程共享相同的文件描述符 */
 #define CLONE_FILES	0x00000400	/* set if open files shared between processes */
+/* 父子进程共享相同的信号处理等相关信息 */
 #define CLONE_SIGHAND	0x00000800	/* set if signal handlers and blocked signals shared */
+/* 父进程被trace,子进程也同样被trace */
 #define CLONE_PTRACE	0x00002000	/* set if we want to let tracing continue on the child too */
+/* 父进程被挂起,直到子进程释放了虚拟内存资源 */
 #define CLONE_VFORK	0x00004000	/* set if the parent wants the child to wake it up on mm_release */
+/* 新进程和创建它的进程是兄弟关系,而不是父子关系 */
 #define CLONE_PARENT	0x00008000	/* set if we want to have the same parent as the cloner */
+/* 父子进程共享相同的线程群 */
 #define CLONE_THREAD	0x00010000	/* Same thread group? */
 #define CLONE_NEWNS	0x00020000	/* New namespace group? */
 #define CLONE_SYSVSEM	0x00040000	/* share system V SEM_UNDO semantics */

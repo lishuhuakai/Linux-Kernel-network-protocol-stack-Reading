@@ -1661,7 +1661,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 	if (!pskb_may_pull(skb, sizeof(struct tcphdr)))
 		goto discard_it;
 
-	th = tcp_hdr(skb);
+	th = tcp_hdr(skb); /* 获取tcp头部 */
 
 	if (th->doff < sizeof(struct tcphdr) / 4)
 		goto bad_packet;
@@ -1676,7 +1676,7 @@ int tcp_v4_rcv(struct sk_buff *skb)
 		goto bad_packet;
 
 	th = tcp_hdr(skb);
-	iph = ip_hdr(skb);
+	iph = ip_hdr(skb); /* 获取ip头部 */
 	TCP_SKB_CB(skb)->seq = ntohl(th->seq); /* 起始序列值 */
 	TCP_SKB_CB(skb)->end_seq = (TCP_SKB_CB(skb)->seq + th->syn + th->fin +
 				    skb->len - th->doff * 4); /* 终止序列值 */

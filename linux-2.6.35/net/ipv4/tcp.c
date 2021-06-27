@@ -1472,7 +1472,7 @@ int tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 
 		/* Next get a buffer. */
 
-		skb_queue_walk(&sk->sk_receive_queue, skb) {
+		skb_queue_walk(&sk->sk_receive_queue, skb) { /* 遍历接收队列 */
 			/* Now that we have two receive queues this
 			 * shouldn't happen.
 			 */
@@ -1597,7 +1597,7 @@ int tcp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 			/* Do not sleep, just process backlog. */
 			release_sock(sk);
 			lock_sock(sk);
-		} else
+		} else /* 如果没有接收到足够的数据,启用sk_wait_data来阻塞当前进程 */
 			sk_wait_data(sk, &timeo);
 
 #ifdef CONFIG_NET_DMA

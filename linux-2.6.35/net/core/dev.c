@@ -3509,8 +3509,8 @@ EXPORT_SYMBOL(netif_napi_del);
  */
 static void net_rx_action(struct softirq_action *h)
 {
-	struct softnet_data *sd = &__get_cpu_var(softnet_data);
-	unsigned long time_limit = jiffies + 2;
+	struct softnet_data *sd = &__get_cpu_var(softnet_data); /* 获取cpu的softnet_data实例 */
+	unsigned long time_limit = jiffies + 2; /* 收包需要有时间的限制 */
 	int budget = netdev_budget;
 	void *have;
 
@@ -5947,7 +5947,7 @@ static int __init net_dev_init(void)
 {
 	int i, rc = -ENOMEM;
 
-	BUG_ON(!dev_boot_phase); // 保证只初始化一次
+	BUG_ON(!dev_boot_phase); /* 保证只初始化一次 */
 
 	if (dev_proc_init())
 		goto out;
@@ -5967,13 +5967,13 @@ static int __init net_dev_init(void)
 	 */
 
 	for_each_possible_cpu(i) {
-		struct softnet_data *sd = &per_cpu(softnet_data, i);
+		struct softnet_data *sd = &per_cpu(softnet_data, i); /* 每一个cpu都对应有一个softnet_data实例 */
 
 		memset(sd, 0, sizeof(*sd));
 		skb_queue_head_init(&sd->input_pkt_queue);
 		skb_queue_head_init(&sd->process_queue);
 		sd->completion_queue = NULL;
-		INIT_LIST_HEAD(&sd->poll_list);
+		INIT_LIST_HEAD(&sd->poll_list); /* 注意这个poll_list,用于等待驱动程序将其poll函数注册进来 */
 		sd->output_queue = NULL;
 		sd->output_queue_tailp = &sd->output_queue;
 #ifdef CONFIG_RPS

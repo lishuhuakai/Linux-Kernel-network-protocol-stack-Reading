@@ -753,6 +753,8 @@ static ssize_t inet_sendpage(struct socket *sock, struct page *page, int offset,
 	return sock_no_sendpage(sock, page, offset, size, flags);
 }
 
+/* 接收消息
+ */
 int inet_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 		 size_t size, int flags)
 {
@@ -761,7 +763,7 @@ int inet_recvmsg(struct kiocb *iocb, struct socket *sock, struct msghdr *msg,
 	int err;
 
 	sock_rps_record_flow(sk);
-
+    /* 如果是tcp协议的话,这里实际会调用tcp_recvmsg */
 	err = sk->sk_prot->recvmsg(iocb, sk, msg, size, flags & MSG_DONTWAIT,
 				   flags & ~MSG_DONTWAIT, &addr_len);
 	if (err >= 0)

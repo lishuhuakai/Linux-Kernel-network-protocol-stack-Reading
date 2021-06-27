@@ -622,7 +622,9 @@ static inline bool sk_rcvqueues_full(const struct sock *sk, const struct sk_buff
 	return qsize + skb->truesize > sk->sk_rcvbuf;
 }
 
-/* The per-socket spinlock must be held here. */
+/* The per-socket spinlock must be held here.
+ * 将skb报文添加到socket的backlog队列中
+ */
 static inline __must_check int sk_add_backlog(struct sock *sk, struct sk_buff *skb)
 {
 	if (sk_rcvqueues_full(sk, skb))

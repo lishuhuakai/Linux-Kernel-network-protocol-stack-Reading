@@ -1382,8 +1382,9 @@ int udp_queue_rcv_skb(struct sock *sk, struct sk_buff *skb)
 	rc = 0;
 
 	bh_lock_sock(sk);
+    /* sock_owned_by_user判断用户是不是正在这个socket上进行系统调用(socket被占用) */
 	if (!sock_owned_by_user(sk))
-		rc = __udp_queue_rcv_skb(sk, skb);
+		rc = __udp_queue_rcv_skb(sk, skb); /* 将skb放入socket的接收队列中 */
 	else if (sk_add_backlog(sk, skb)) {
 		bh_unlock_sock(sk);
 		goto drop;
@@ -1520,7 +1521,6 @@ static inline int udp4_csum_init(struct sk_buff *skb, struct udphdr *uh,
 /*
  *	All we need to do is get the socket, and then do a checksum.
  */
-
 int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		   int proto)
 {
@@ -1558,7 +1558,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 	if (rt->rt_flags & (RTCF_BROADCAST|RTCF_MULTICAST))
 		return __udp4_lib_mcast_deliver(net, skb, uh,
 				saddr, daddr, udptable);
-
+    /* 根据skb找到对应的socket */
 	sk = __udp4_lib_lookup_skb(skb, uh->source, uh->dest, udptable);
 
 	if (sk != NULL) {
@@ -1582,7 +1582,7 @@ int __udp4_lib_rcv(struct sk_buff *skb, struct udp_table *udptable,
 		goto csum_error;
 
 	UDP_INC_STATS_BH(net, UDP_MIB_NOPORTS, proto == IPPROTO_UDPLITE);
-	icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0);
+	icmp_send(skb, ICMP_DEST_UNREACH, ICMP_PORT_UNREACH, 0); /* 发送一个目标不可达的icmp包 */
 
 	/*
 	 * Hmm.  We got an UDP packet to a port to which we
@@ -1620,6 +1620,7 @@ drop:
 	return 0;
 }
 
+/* udp协议收包处理 */
 int udp_rcv(struct sk_buff *skb)
 {
 	return __udp4_lib_rcv(skb, &udp_table, IPPROTO_UDP);

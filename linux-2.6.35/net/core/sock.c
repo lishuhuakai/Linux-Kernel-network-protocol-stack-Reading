@@ -1598,10 +1598,13 @@ static void __release_sock(struct sock *sk)
 int sk_wait_data(struct sock *sk, long *timeo)
 {
 	int rc;
-	DEFINE_WAIT(wait);
-
+	DEFINE_WAIT(wait); /* 将当前进程(current)关联到所定义的等待队列项上 */
+    /* 调用sk_sleep获取sock对象下的wait
+     * 并准备挂起,将进程状态设置为可打断 INTERRUPTIBLE
+     */
 	prepare_to_wait(sk_sleep(sk), &wait, TASK_INTERRUPTIBLE);
 	set_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
+    /* 通过调用schedule_timeout让出cpu,然后进行睡眠 */
 	rc = sk_wait_event(sk, timeo, !skb_queue_empty(&sk->sk_receive_queue));
 	clear_bit(SOCK_ASYNC_WAITDATA, &sk->sk_socket->flags);
 	finish_wait(sk_sleep(sk), &wait);
@@ -1856,9 +1859,9 @@ static void sock_def_readable(struct sock *sk, int len)
 
 	rcu_read_lock();
 	wq = rcu_dereference(sk->sk_wq);
-	if (wq_has_sleeper(wq))
+	if (wq_has_sleeper(wq)) /* 有进程在此socket */
 		wake_up_interruptible_sync_poll(&wq->wait, POLLIN |
-						POLLRDNORM | POLLRDBAND);
+						POLLRDNORM | POLLRDBAND); /* 唤醒等待的进程 */
 	sk_wake_async(sk, SOCK_WAKE_WAITD, POLL_IN);
 	rcu_read_unlock();
 }

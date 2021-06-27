@@ -706,6 +706,9 @@ static inline int __sock_recvmsg(struct kiocb *iocb, struct socket *sock,
 	return err ?: __sock_recvmsg_nosec(iocb, sock, msg, size, flags);
 }
 
+/* 通过socket来接收数据
+ *
+ */
 int sock_recvmsg(struct socket *sock, struct msghdr *msg,
 		 size_t size, int flags)
 {

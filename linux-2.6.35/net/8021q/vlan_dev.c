@@ -19,7 +19,7 @@
  *		as published by the Free Software Foundation; either version
  *		2 of the License, or (at your option) any later version.
  */
-
+/* vlan设备 */
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/skbuff.h>
@@ -137,6 +137,8 @@ static inline void vlan_set_encap_proto(struct sk_buff *skb,
  *  		    stuff.  It has been commented out now...  --Ben
  *
  */
+
+/* 处理接收到的vlan报文 */
 int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		  struct packet_type *ptype, struct net_device *orig_dev)
 {
@@ -154,10 +156,10 @@ int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 
 	vhdr = (struct vlan_hdr *)skb->data;
 	vlan_tci = ntohs(vhdr->h_vlan_TCI);
-	vlan_id = vlan_tci & VLAN_VID_MASK;
+	vlan_id = vlan_tci & VLAN_VID_MASK; /* 12bit的vlanid */
 
 	rcu_read_lock();
-	skb->dev = __find_vlan_dev(dev, vlan_id);
+	skb->dev = __find_vlan_dev(dev, vlan_id); /* 根据vlan_id找到对应的vlan设备 */
 	if (!skb->dev) {
 		pr_debug("%s: ERROR: No net_device for VID: %u on dev: %s\n",
 			 __func__, vlan_id, dev->name);
@@ -192,7 +194,7 @@ int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		 */
 		if (!compare_ether_addr(eth_hdr(skb)->h_dest,
 					skb->dev->dev_addr))
-			skb->pkt_type = PACKET_HOST;
+			skb->pkt_type = PACKET_HOST; /* 发往其他设备 */
 		break;
 	default:
 		break;
@@ -206,7 +208,7 @@ int vlan_skb_recv(struct sk_buff *skb, struct net_device *dev,
 		goto err_unlock;
 	}
 
-	netif_rx(skb);
+	netif_rx(skb); /* 继续往协议栈送 */
 	rcu_read_unlock();
 	return NET_RX_SUCCESS;
 
@@ -243,6 +245,7 @@ vlan_dev_get_egress_qos_mask(struct net_device *dev, struct sk_buff *skb)
  *  This is called when the SKB is moving down the stack towards the
  *  physical devices.
  */
+/* 构建vlan头部 */
 static int vlan_dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 				unsigned short type,
 				const void *daddr, const void *saddr,
@@ -283,6 +286,7 @@ static int vlan_dev_hard_header(struct sk_buff *skb, struct net_device *dev,
 
 	/* Now make the underlying real hard header */
 	dev = vlan_dev_info(dev)->real_dev;
+    /* 这里接下来会调用eth_header函数,这里的长度实际包含了vlan头部 */
 	rc = dev_hard_header(skb, dev, type, daddr, saddr, len + vhdrlen);
 	if (rc > 0)
 		rc += vhdrlen;
@@ -336,6 +340,10 @@ static netdev_tx_t vlan_dev_hard_start_xmit(struct sk_buff *skb,
 	return ret;
 }
 
+/* 发送vlan报文
+ * @param skb 待发送的报文
+ * @param dev vlan设备
+ */
 static netdev_tx_t vlan_dev_hwaccel_hard_start_xmit(struct sk_buff *skb,
 						    struct net_device *dev)
 {
@@ -347,9 +355,9 @@ static netdev_tx_t vlan_dev_hwaccel_hard_start_xmit(struct sk_buff *skb,
 
 	vlan_tci = vlan_dev_info(dev)->vlan_id;
 	vlan_tci |= vlan_dev_get_egress_qos_mask(dev, skb);
-	skb = __vlan_hwaccel_put_tag(skb, vlan_tci);
+	skb = __vlan_hwaccel_put_tag(skb, vlan_tci); /* 打上vlan标记 */
 
-	skb->dev = vlan_dev_info(dev)->real_dev;
+	skb->dev = vlan_dev_info(dev)->real_dev; /* 通过真实设备进行发送 */
 	len = skb->len;
 	ret = dev_queue_xmit(skb);
 
@@ -700,6 +708,7 @@ static const struct header_ops vlan_header_ops = {
 static const struct net_device_ops vlan_netdev_ops, vlan_netdev_accel_ops,
 		    vlan_netdev_ops_sq, vlan_netdev_accel_ops_sq;
 
+/* vlan设备的初始化 */
 static int vlan_dev_init(struct net_device *dev)
 {
 	struct net_device *real_dev = vlan_dev_info(dev)->real_dev;
@@ -730,7 +739,7 @@ static int vlan_dev_init(struct net_device *dev)
 	dev->fcoe_ddp_xid = real_dev->fcoe_ddp_xid;
 #endif
 
-	if (real_dev->features & NETIF_F_HW_VLAN_TX) {
+	if (real_dev->features & NETIF_F_HW_VLAN_TX) { /* 发送硬件加速 */
 		dev->header_ops      = real_dev->header_ops;
 		dev->hard_header_len = real_dev->hard_header_len;
 		if (real_dev->netdev_ops->ndo_select_queue)
@@ -751,7 +760,7 @@ static int vlan_dev_init(struct net_device *dev)
 
 	vlan_dev_set_lockdep_class(dev, subclass);
 
-	vlan_dev_info(dev)->vlan_rx_stats = alloc_percpu(struct vlan_rx_stats);
+	vlan_dev_info(dev)->vlan_rx_stats = alloc_percpu(struct vlan_rx_stats); /* 接收统计信息 */
 	if (!vlan_dev_info(dev)->vlan_rx_stats)
 		return -ENOMEM;
 

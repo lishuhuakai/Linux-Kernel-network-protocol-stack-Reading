@@ -190,7 +190,7 @@ int vlan_check_real_dev(struct net_device *real_dev, u16 vlan_id)
 	const char *name = real_dev->name;
 	const struct net_device_ops *ops = real_dev->netdev_ops;
 
-	if (real_dev->features & NETIF_F_VLAN_CHALLENGED) {
+	if (real_dev->features & NETIF_F_VLAN_CHALLENGED) { /* 不能处理vlan设备 */
 		pr_info("8021q: VLANs not supported on %s\n", name);
 		return -EOPNOTSUPP;
 	}
@@ -212,6 +212,9 @@ int vlan_check_real_dev(struct net_device *real_dev, u16 vlan_id)
 	return 0;
 }
 
+/* 注册vlan设备
+ * @param dev 待注册的vlan设备
+ */
 int register_vlan_dev(struct net_device *dev)
 {
 	struct vlan_dev_info *vlan = vlan_dev_info(dev);
@@ -273,6 +276,10 @@ out_free_group:
 /*  Attach a VLAN device to a mac address (ie Ethernet Card).
  *  Returns 0 if the device was created or a negative error code otherwise.
  */
+/* 注册vlan设备
+ * @param real_dev vlan的父设备
+ * @param vlan_id
+ */
 static int register_vlan_device(struct net_device *real_dev, u16 vlan_id)
 {
 	struct net_device *new_dev;
@@ -313,7 +320,7 @@ static int register_vlan_device(struct net_device *real_dev, u16 vlan_id)
 	default:
 		snprintf(name, IFNAMSIZ, "vlan%.4i", vlan_id);
 	}
-
+    /* 创建vlan设备 */
 	new_dev = alloc_netdev_mq(sizeof(struct vlan_dev_info), name,
 				  vlan_setup, real_dev->num_tx_queues);
 
@@ -333,6 +340,7 @@ static int register_vlan_device(struct net_device *real_dev, u16 vlan_id)
 	vlan_dev_info(new_dev)->flags = VLAN_FLAG_REORDER_HDR;
 
 	new_dev->rtnl_link_ops = &vlan_link_ops;
+    /* 注册vlan设备 */
 	err = register_vlan_dev(new_dev);
 	if (err < 0)
 		goto out_free_newdev;
@@ -406,6 +414,9 @@ static void __vlan_device_event(struct net_device *dev, unsigned long event)
 	}
 }
 
+/* 处理vlan设备的相关事件
+ * @param event 事件类型
+ */
 static int vlan_device_event(struct notifier_block *unused, unsigned long event,
 			     void *ptr)
 {
@@ -552,6 +563,8 @@ static struct notifier_block vlan_notifier_block __read_mostly = {
  *	o execute requested action or pass command to the device driver
  *   arg is really a struct vlan_ioctl_args __user *.
  */
+
+/* 可以通过ioctl命令来操作vlan设备 */
 static int vlan_ioctl_handler(struct net *net, void __user *arg)
 {
 	int err;
@@ -630,10 +643,11 @@ static int vlan_ioctl_handler(struct net *net, void __user *arg)
 		}
 		break;
 
-	case ADD_VLAN_CMD:
+	case ADD_VLAN_CMD: /* 添加vlan接口 */
 		err = -EPERM;
 		if (!capable(CAP_NET_ADMIN))
 			break;
+        /* dev为父设备 */
 		err = register_vlan_device(dev, args.u.VID);
 		break;
 

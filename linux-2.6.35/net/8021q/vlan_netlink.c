@@ -232,6 +232,7 @@ nla_put_failure:
 	return -EMSGSIZE;
 }
 
+/* vlan_link_ops这个结构体主要提供给netlink机制使用 */
 struct rtnl_link_ops vlan_link_ops __read_mostly = {
 	.kind		= "vlan",
 	.maxtype	= IFLA_VLAN_MAX,

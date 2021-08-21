@@ -35,7 +35,7 @@
  * 	@h_vlan_TCI: priority and VLAN ID
  *	@h_vlan_encapsulated_proto: packet type ID or len
  */
-struct vlan_hdr {
+struct vlan_hdr { /* vlan头部 */
 	__be16	h_vlan_TCI;
 	__be16	h_vlan_encapsulated_proto;
 };
@@ -52,7 +52,7 @@ struct vlan_ethhdr {
 	unsigned char	h_dest[ETH_ALEN];
 	unsigned char	h_source[ETH_ALEN];
 	__be16		h_vlan_proto;
-	__be16		h_vlan_TCI;
+	__be16		h_vlan_TCI;  /* 下面这一部分属于vlan头部 */
 	__be16		h_vlan_encapsulated_proto;
 };
 
@@ -363,7 +363,7 @@ struct vlan_ioctl_args {
 		unsigned int flag; /* Matches vlan_dev_info flags */
         } u;
 
-	short vlan_qos;   
+	short vlan_qos;
 };
 
 #endif /* !(_LINUX_IF_VLAN_H_) */

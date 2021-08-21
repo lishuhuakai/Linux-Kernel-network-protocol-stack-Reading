@@ -2149,7 +2149,7 @@ static inline int skb_needs_linearize(struct sk_buff *skb,
  */
 int dev_queue_xmit(struct sk_buff *skb)
 {
-	struct net_device *dev = skb->dev; // 待传递到的设备
+	struct net_device *dev = skb->dev; /* 待传递到的设备 */
 	struct netdev_queue *txq;
 	struct Qdisc *q;
 	int rc = -ENOMEM;

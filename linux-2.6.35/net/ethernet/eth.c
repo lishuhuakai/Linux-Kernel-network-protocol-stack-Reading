@@ -76,6 +76,9 @@ __setup("ether=", netdev_boot_setup);
  * Set the protocol type. For a packet of type ETH_P_802_3/2 we put the length
  * in here instead.
  */
+/* 构建一个以太网头部
+ * @param type 以太网协议类型
+ */
 int eth_header(struct sk_buff *skb, struct net_device *dev,
 	       unsigned short type,
 	       const void *daddr, const void *saddr, unsigned len)

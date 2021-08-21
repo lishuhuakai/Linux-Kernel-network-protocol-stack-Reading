@@ -23,6 +23,10 @@
 #include "br_private.h"
 
 /* net device transmit always called with no BH (preempt_disabled) */
+/* 通过网桥来发送报文
+ * @param skb 待发送的报文
+ * @param dev 网桥设备
+ */
 netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct net_bridge *br = netdev_priv(dev);
@@ -46,7 +50,7 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	skb_reset_mac_header(skb);
 	skb_pull(skb, ETH_HLEN);
 
-	if (is_multicast_ether_addr(dest)) {
+	if (is_multicast_ether_addr(dest)) { /* 多播报文 */
 		if (br_multicast_rcv(br, NULL, skb))
 			goto out;
 
@@ -55,10 +59,10 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 			br_multicast_deliver(mdst, skb);
 		else
 			br_flood_deliver(br, skb);
-	} else if ((dst = __br_fdb_get(br, dest)) != NULL)
-		br_deliver(dst->dst, skb);
+	} else if ((dst = __br_fdb_get(br, dest)) != NULL) /* 网桥中寻找fdb */
+		br_deliver(dst->dst, skb); /* 往指定端口进行发送    */
 	else
-		br_flood_deliver(br, skb);
+		br_flood_deliver(br, skb); /* 否则进行洪泛操作 */
 
 out:
 	return NETDEV_TX_OK;
@@ -117,6 +121,7 @@ static struct net_device_stats *br_get_stats(struct net_device *dev)
 	return stats;
 }
 
+/* 更改mtu */
 static int br_change_mtu(struct net_device *dev, int new_mtu)
 {
 	struct net_bridge *br = netdev_priv(dev);

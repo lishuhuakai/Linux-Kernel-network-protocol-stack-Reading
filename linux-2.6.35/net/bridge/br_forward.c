@@ -66,7 +66,7 @@ int br_forward_finish(struct sk_buff *skb)
 
 static void __br_deliver(const struct net_bridge_port *to, struct sk_buff *skb)
 {
-	skb->dev = to->dev;
+	skb->dev = to->dev; /* 切换设备 */
 	NF_HOOK(NFPROTO_BRIDGE, NF_BR_LOCAL_OUT, skb, NULL, skb->dev,
 		br_forward_finish);
 }
@@ -87,7 +87,9 @@ static void __br_forward(const struct net_bridge_port *to, struct sk_buff *skb)
 	indev = skb->dev;
 	skb->dev = to->dev; /* 这里将报文中的dev替换为转发端口的dev */
 	skb_forward_csum(skb);
-
+    /* 到这里其实只需要关注br_forward_finish函数即可,其实最终也会调用
+     * dev_queue_xmit函数进行发送,也就是说,会再次调用dev->netdev_ops->ndo_start_xmit函数进行发送
+     */
 	NF_HOOK(NFPROTO_BRIDGE, NF_BR_FORWARD, skb, indev, skb->dev,
 		br_forward_finish);
 }

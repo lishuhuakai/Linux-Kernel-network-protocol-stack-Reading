@@ -50,8 +50,8 @@ struct Qdisc {
 	struct Qdisc_ops	*ops; /* 排队规则提供的操作接口 */
 	struct qdisc_size_table	*stab;
 	struct list_head	list;
-	u32			handle;
-	u32			parent;
+	u32			handle; /* 排队规则,类和过滤器都有一个32位的标识,称之为句柄 */
+	u32			parent; /* 父节点的句柄 */
 	atomic_t		refcnt;
 	struct gnet_stats_rate_est	rate_est;
 	int			(*reshape_fail)(struct sk_buff *skb,
@@ -72,14 +72,15 @@ struct Qdisc {
 	 */
 	unsigned long		state;
 	struct sk_buff_head	q;
-	struct gnet_stats_basic_packed bstats;
-	struct gnet_stats_queue	qstats;
+	struct gnet_stats_basic_packed bstats; /* 记录入队报文的总字节数和入队报文总数 */
+	struct gnet_stats_queue	qstats; /* 记录队列相关的统计数据 */
 	struct rcu_head     rcu_head;
 };
 
 struct Qdisc_class_ops {
 	/* Child qdisc manipulation */
 	struct netdev_queue *	(*select_queue)(struct Qdisc *, struct tcmsg *);
+    /* 将一个排队规则绑定到一个类 */
 	int			(*graft)(struct Qdisc *, unsigned long cl,
 					struct Qdisc *, struct Qdisc **);
 	struct Qdisc *		(*leaf)(struct Qdisc *, unsigned long cl);
@@ -108,11 +109,11 @@ struct Qdisc_class_ops {
 
 /* Qdisc_ops用来描述队列操作的接口 */
 struct Qdisc_ops {
-	struct Qdisc_ops	*next;
+	struct Qdisc_ops	*next; /* 用于链接已注册的各种排队规则的操作接口 */
 	const struct Qdisc_class_ops	*cl_ops;
 	char			id[IFNAMSIZ];
 	int			priv_size;
-
+    /* 将待输出数据加入到排队规则之中 */
 	int 			(*enqueue)(struct sk_buff *, struct Qdisc *);
 	struct sk_buff *	(*dequeue)(struct Qdisc *);
 	struct sk_buff *	(*peek)(struct Qdisc *);
@@ -137,7 +138,7 @@ struct tcf_result {
 };
 
 struct tcf_proto_ops {
-	struct tcf_proto_ops	*next;
+	struct tcf_proto_ops	*next; /* 指向下一个策略 */
 	char			kind[IFNAMSIZ];
 
 	int			(*classify)(struct sk_buff*, struct tcf_proto*,
@@ -162,11 +163,11 @@ struct tcf_proto_ops {
 
 struct tcf_proto {
 	/* Fast access part */
-	struct tcf_proto	*next;
+	struct tcf_proto	*next; /* 用来将多个过滤器链接在一起,形成一个链表 */
 	void			*root;
 	int			(*classify)(struct sk_buff*, struct tcf_proto*,
 					struct tcf_result *);
-	__be16			protocol;
+	__be16			protocol; /* 进行报文过滤的网络层协议号 */
 
 	/* All the rest */
 	u32			prio;
@@ -282,7 +283,7 @@ qdisc_class_find(struct Qdisc_class_hash *hash, u32 id)
 	struct hlist_node *n;
 	unsigned int h;
 
-	h = qdisc_class_hash(id, hash->hashmask);
+	h = qdisc_class_hash(id, hash->hashmask); /* 计算hash值 */
 	hlist_for_each_entry(cl, n, &hash->hash[h], hnode) {
 		if (cl->classid == id)
 			return cl;
@@ -390,6 +391,7 @@ enum net_xmit_qdisc_t {
 #define net_xmit_drop_count(e)	(1)
 #endif
 
+/* 将报文放入Qdisc的队列之中 */
 static inline int qdisc_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 {
 #ifdef CONFIG_NET_SCHED

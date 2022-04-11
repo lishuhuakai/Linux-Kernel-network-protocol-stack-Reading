@@ -143,7 +143,7 @@ int register_qdisc(struct Qdisc_ops *qops)
 	int rc = -EEXIST;
 
 	write_lock(&qdisc_mod_lock);
-	
+
 	for (qp = &qdisc_base; (q = *qp) != NULL; qp = &q->next)
 		if (!strcmp(qops->id, q->id)) /* 如果相等，表示已经注册过了 */
 			goto out;
@@ -1018,9 +1018,8 @@ static int tc_get_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 }
 
 /*
-   Create/change qdisc.
+   Create/change qdisc. 创建/修改Qdisc
  */
-
 static int tc_modify_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 {
 	struct net *net = sock_net(skb->sk);
@@ -1028,9 +1027,9 @@ static int tc_modify_qdisc(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 	struct nlattr *tca[TCA_MAX + 1];
 	struct net_device *dev;
 	u32 clid; /* 父qdisc的handle */
-	/* tc qdisc add dev eth0 parent 22:4 handle 33 prio bands 5  
+	/* tc qdisc add dev eth0 parent 22:4 handle 33 prio bands 5
 	 * p为22对应的队列规程 q为33对应的队列规程
-	 * p是父队列规程Qdisc, q是子队列规程Qdisc 
+	 * p是父队列规程Qdisc, q是子队列规程Qdisc
 	 */
 	struct Qdisc *q, *p;
 	int err;
@@ -1056,7 +1055,7 @@ replay:
 				/* 获取父队列规程p中的私有数据部分的prio_sched_data->queues[clid]
 				 * 子队列规程Qdisc
 			     */
-				q = qdisc_leaf(p, clid);
+				q = qdisc_leaf(p, clid); /* 子节点 */
 			} else { /*ingress */
 				q = dev->rx_queue.qdisc_sleeping;
 			}
@@ -1279,7 +1278,7 @@ static int tc_dump_qdisc_root(struct Qdisc *root, struct sk_buff *skb,
 			q_idx++;
 			continue;
 		}
-		if (!tc_qdisc_dump_ignore(q) && 
+		if (!tc_qdisc_dump_ignore(q) &&
 		    tc_fill_qdisc(skb, q, q->parent, NETLINK_CB(cb->skb).pid,
 				  cb->nlh->nlmsg_seq, NLM_F_MULTI, RTM_NEWQDISC) <= 0)
 			goto done;
@@ -1380,7 +1379,7 @@ static int tc_ctl_tclass(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 
 	/* Step 1. Determine qdisc handle X:0 */
 
-	if (pid != TC_H_ROOT) {
+	if (pid != TC_H_ROOT) { /* 根排队规则的类 */
 		u32 qid1 = TC_H_MAJ(pid);
 
 		if (qid && qid1) {
@@ -1627,12 +1626,13 @@ done:
 int tc_classify_compat(struct sk_buff *skb, struct tcf_proto *tp,
 		       struct tcf_result *res)
 {
-	__be16 protocol = skb->protocol;
+	__be16 protocol = skb->protocol; /* 协议 */
 	int err = 0;
 
 	for (; tp; tp = tp->next) {
 		if ((tp->protocol == protocol ||
 		     tp->protocol == htons(ETH_P_ALL)) &&
+		     /* 执行匹配操作 */
 		    (err = tp->classify(skb, tp, res)) >= 0) {
 #ifdef CONFIG_NET_CLS_ACT
 			if (err != TC_ACT_RECLASSIFY && skb->tc_verd)
@@ -1646,7 +1646,7 @@ int tc_classify_compat(struct sk_buff *skb, struct tcf_proto *tp,
 EXPORT_SYMBOL(tc_classify_compat);
 
 
- 
+
 /* 通过skb内容来匹配tc filter链表tp，找到返回对应的分类节点，匹配成功返回0
  * 并把匹配的过滤器所在的tc class分类节点信息存到res中，匹配成功返回0
  */
@@ -1760,7 +1760,7 @@ static struct pernet_operations psched_net_ops = {
 	.exit = psched_net_exit,
 };
 
-/* 系统初始化的时候会调用这个函数 
+/* 系统初始化的时候会调用这个函数
  * tc可以使用以下命令对QDisc、类和过滤器进行操作：
  * add，在一个节点里加入一个QDisc、类或者过滤器。添加时，需要传递一个祖先作为参数，
  * 传递参数时既可以使用ID也可以直接传递设备的根。如果要建立一个QDisc或者过滤器，可

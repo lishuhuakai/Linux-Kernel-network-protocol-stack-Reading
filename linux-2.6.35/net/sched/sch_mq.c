@@ -156,6 +156,7 @@ static int mq_graft(struct Qdisc *sch, unsigned long cl, struct Qdisc *new,
 	return 0;
 }
 
+/* 获取当前绑定到所在类的排队规则 */
 static struct Qdisc *mq_leaf(struct Qdisc *sch, unsigned long cl)
 {
 	struct netdev_queue *dev_queue = mq_queue_get(sch, cl);
@@ -200,6 +201,7 @@ static int mq_dump_class_stats(struct Qdisc *sch, unsigned long cl,
 	return 0;
 }
 
+/* 执行回调函数 */
 static void mq_walk(struct Qdisc *sch, struct qdisc_walker *arg)
 {
 	struct net_device *dev = qdisc_dev(sch);

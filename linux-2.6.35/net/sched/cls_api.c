@@ -116,8 +116,9 @@ static inline u32 tcf_auto_prio(struct tcf_proto *tp)
 	return first;
 }
 
-/* Add/change/delete/get a filter node */
-
+/* Add/change/delete/get a filter node
+ * 添加/更改/删除/获取一个过滤节点
+ */
 static int tc_ctl_tfilter(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 {
 	struct net *net = sock_net(skb->sk);
@@ -142,9 +143,9 @@ static int tc_ctl_tfilter(struct sk_buff *skb, struct nlmsghdr *n, void *arg)
 replay:
 	t = NLMSG_DATA(n);
 	protocol = TC_H_MIN(t->tcm_info);
-	prio = TC_H_MAJ(t->tcm_info);
+	prio = TC_H_MAJ(t->tcm_info); /* 过滤器的优先级 */
 	nprio = prio;
-	parent = t->tcm_parent;
+	parent = t->tcm_parent; /* 父节点的句柄 */
 	cl = 0;
 
 	if (prio == 0) {
@@ -176,6 +177,7 @@ replay:
 	}
 
 	/* Is it classful? */
+    /* 排队规则必须支持类操作接口,才能创建过滤器 */
 	if ((cops = q->ops->cl_ops) == NULL)
 		return -EINVAL;
 
@@ -190,7 +192,7 @@ replay:
 	}
 
 	/* And the last stroke */
-	chain = cops->tcf_chain(q, cl);
+	chain = cops->tcf_chain(q, cl); /* 过滤器链表 */
 	err = -EINVAL;
 	if (chain == NULL)
 		goto errout;
@@ -223,6 +225,7 @@ replay:
 		/* Create new proto tcf */
 
 		err = -ENOBUFS;
+        /* 创建一个新的过滤器 */
 		tp = kzalloc(sizeof(*tp), GFP_KERNEL);
 		if (tp == NULL)
 			goto errout;

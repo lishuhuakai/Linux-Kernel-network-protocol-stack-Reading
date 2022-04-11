@@ -1,5 +1,6 @@
 /*
  * net/sched/sch_htb.c	Hierarchical token bucket, feed tree version
+ *     分层令牌桶
  *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
@@ -66,12 +67,17 @@ MODULE_PARM_DESC(htb_hysteresis, "Hysteresis mode, less CPU load, less accurate"
 
 /* used internaly to keep status of single class */
 enum htb_cmode {
+    /* 没有令牌,不可借用,发送的网络包大于ceil */
 	HTB_CANT_SEND,		/* class can't send and can't borrow */
+	/* 没有令牌,但可以借用,发送的网络包大于rate小于ceil */
 	HTB_MAY_BORROW,		/* class can't send but may borrow */
+	/* 令牌充足,发送的网络包小于rate */
 	HTB_CAN_SEND		/* class can send */
 };
 
-/* interior & leaf nodes; props specific to leaves are marked L: */
+/* interior & leaf nodes; props specific to leaves are marked L:
+ * 内部/叶子节点
+ */
 struct htb_class {
 	struct Qdisc_class_common common;
 	/* general class parameters */
@@ -82,6 +88,7 @@ struct htb_class {
 	int refcnt;		/* usage count of this class */
 
 	/* topology */
+    /* 层次 */
 	int level;		/* our level (see above) */
 	unsigned int children;
 	struct htb_class *parent;	/* parent class */
@@ -94,22 +101,25 @@ struct htb_class {
 			struct Qdisc *q;
 			int deficit[TC_HTB_MAXDEPTH];
 			struct list_head drop_list;
-		} leaf;
+		} leaf; /* 叶子 */
 		struct htb_class_inner {
+            /* 每一个节点都是一棵红黑树 */
 			struct rb_root feed[TC_HTB_NUMPRIO];	/* feed trees */
 			struct rb_node *ptr[TC_HTB_NUMPRIO];	/* current class ptr */
 			/* When class changes from state 1->2 and disconnects from
 			   parent's feed then we lost ptr value and start from the
 			   first child again. Here we store classid of the
 			   last valid ptr (used when ptr is NULL). */
+			/* 当一个class从状态1->2,并且从父节点的feed断开 */
 			u32 last_ptr_id[TC_HTB_NUMPRIO];
-		} inner;
+		} inner; /* 子节点 */
 	} un;
 	struct rb_node node[TC_HTB_NUMPRIO];	/* node for self or feed tree */
 	struct rb_node pq_node;	/* node for event queue */
 	psched_time_t pq_key;
-
+	/* 用比特位表示哪一个priority上有缓存的报文(active) */
 	int prio_activity;	/* for which prios are we active */
+    /* 节点的类型 */
 	enum htb_cmode cmode;	/* current mode of the class */
 
 	/* class attached filters */
@@ -122,17 +132,19 @@ struct htb_class {
 	long buffer, cbuffer;	/* token bucket depth/rate */
 	psched_tdiff_t mbuffer;	/* max wait time */
 	long tokens, ctokens;	/* current number of tokens */
+    /* 检查时间点 */
 	psched_time_t t_c;	/* checkpoint time */
 };
 
 struct htb_sched {
-	struct Qdisc_class_hash clhash;
+	struct Qdisc_class_hash clhash; /* 全局hash表 */
 	struct list_head drops[TC_HTB_NUMPRIO];/* active leaves (for drops) */
 
 	/* self list - roots of self generating tree */
+    /* 每一层每一个priority都存在一棵红黑树,这里使用红黑树主要是为了加快查找速度 */
 	struct rb_root row[TC_HTB_MAXDEPTH][TC_HTB_NUMPRIO];
-	int row_mask[TC_HTB_MAXDEPTH];
-	struct rb_node *ptr[TC_HTB_MAXDEPTH][TC_HTB_NUMPRIO];
+	int row_mask[TC_HTB_MAXDEPTH]; /* 每一层都有一个row_mask,用于标记有哪些prio存在可发送的节点 */
+	struct rb_node *ptr[TC_HTB_MAXDEPTH][TC_HTB_NUMPRIO]; /* ptr以及last_ptr_id主要用于存储查找的结果 */
 	u32 last_ptr_id[TC_HTB_MAXDEPTH][TC_HTB_NUMPRIO];
 
 	/* self wait list - roots of wait PQs per row */
@@ -144,17 +156,17 @@ struct htb_sched {
 	int defcls;		/* class where unclassified flows go to */
 
 	/* filters for qdisc itself */
-	struct tcf_proto *filter_list;
+	struct tcf_proto *filter_list; /* 过滤器构成的链表 */
 
 	int rate2quantum;	/* quant = rate / rate2quantum */
 	psched_time_t now;	/* cached dequeue time */
 	struct qdisc_watchdog watchdog;
 
 	/* non shaped skbs; let them go directly thru */
-	struct sk_buff_head direct_queue;
+	struct sk_buff_head direct_queue; /* 无需整型skb, 直接发送 */
 	int direct_qlen;	/* max qlen of above */
 
-	long direct_pkts;
+	long direct_pkts; /* 需要直接发送的报文的个数 */
 
 #define HTB_WARN_TOOMANYEVENTS	0x1
 	unsigned int warned;	/* only one warning */
@@ -175,6 +187,7 @@ static inline struct htb_class *htb_find(u32 handle, struct Qdisc *sch)
 
 /**
  * htb_classify - classify a packet into class
+ *                将报文分类
  *
  * It returns NULL if the packet should be dropped or -1 if the packet
  * should be passed directly thru. In all other cases leaf class is returned.
@@ -184,6 +197,7 @@ static inline struct htb_class *htb_find(u32 handle, struct Qdisc *sch)
  * internal fifo (direct). These packets then go directly thru. If we still
  * have no valid leaf we try to use MAJOR:default leaf. It still unsuccessfull
  * then finish and return direct queue.
+ * 如果报文需要被丢弃,返回NULL,如果报文应当直接传递,返回-1,其他情况,leaf class被返回.
  */
 #define HTB_DIRECT (struct htb_class*)-1
 
@@ -199,8 +213,10 @@ static struct htb_class *htb_classify(struct sk_buff *skb, struct Qdisc *sch,
 	/* allow to select class by setting skb->priority to valid classid;
 	   note that nfmark can be used too by attaching filter fw with no
 	   rules in it */
+	/* 允许匹配优先级 */
 	if (skb->priority == sch->handle)
 		return HTB_DIRECT;	/* X:0 (direct flow) selected */
+    /* skb->priority作为key,查找leaf class */
 	if ((cl = htb_find(skb->priority, sch)) != NULL && cl->level == 0)
 		return cl;
 
@@ -216,16 +232,18 @@ static struct htb_class *htb_classify(struct sk_buff *skb, struct Qdisc *sch,
 			return NULL;
 		}
 #endif
-		if ((cl = (void *)res.class) == NULL) {
+		if ((cl = (void *)res.class) == NULL) { /* 没有匹配中类别 */
 			if (res.classid == sch->handle)
 				return HTB_DIRECT;	/* X:0 (direct flow) */
+            /* 使用句柄在全局hash中查找leaf class */
 			if ((cl = htb_find(res.classid, sch)) == NULL)
 				break;	/* filter selected invalid classid */
 		}
-		if (!cl->level)
+		if (!cl->level) /* 叶子节点的level为0 */
 			return cl;	/* we hit leaf; return it */
 
 		/* we have got inner class; apply inner filter chain */
+		/* 获得了内部节点,那么继续往下分类,知道获得叶子节点 */
 		tcf = cl->filter_list;
 	}
 	/* classification failed; try to use default class */
@@ -237,6 +255,7 @@ static struct htb_class *htb_classify(struct sk_buff *skb, struct Qdisc *sch,
 
 /**
  * htb_add_to_id_tree - adds class to the round robin list
+ *                      将class加入round robin链表(轮询链表)
  *
  * Routine adds class to the list (actually tree) sorted by classid.
  * Make sure that class is not already on such list for given prio.
@@ -250,7 +269,7 @@ static void htb_add_to_id_tree(struct rb_root *root,
 		struct htb_class *c;
 		parent = *p;
 		c = rb_entry(parent, struct htb_class, node[prio]);
-
+		/* 比较classid */
 		if (cl->common.classid > c->common.classid)
 			p = &parent->rb_right;
 		else
@@ -335,7 +354,7 @@ static void htb_safe_rb_erase(struct rb_node *rb, struct rb_root *root)
 
 /**
  * htb_remove_class_from_row - removes class from its row
- *
+ *                           - 将class从sched的row中移除
  * The class is removed from row at priorities marked in mask.
  * It does nothing if mask == 0.
  */
@@ -345,7 +364,7 @@ static inline void htb_remove_class_from_row(struct htb_sched *q,
 	int m = 0;
 
 	while (mask) {
-		int prio = ffz(~mask);
+		int prio = ffz(~mask); /* 获取mask中bit为为1的最低位置 */
 
 		mask &= ~(1 << prio);
 		if (q->ptr[cl->level][prio] == cl->node + prio)
@@ -360,40 +379,61 @@ static inline void htb_remove_class_from_row(struct htb_sched *q,
 
 /**
  * htb_activate_prios - creates active classe's feed chain
- *
+ *                      创建active class的feed chain
  * The class is connected to ancestors and/or appropriate rows
  * for priorities it is participating on. cl->cmode must be new
  * (activated) mode. It does nothing if cl->prio_activity == 0.
+ * 这里的class必须是根据优先级连接到祖先节点的inner self或者合适的rows（self feed）。
+ * cl->cmode必须是new (activated) mode。
+ * 如果cl->prio_activity == 0,就是一个空函数， 不过从前面看prio_activity似乎是不会为0的
+ * 激活操作, 建立数据提供树
  */
 static void htb_activate_prios(struct htb_sched *q, struct htb_class *cl)
 {
+    /* 父节点 */
 	struct htb_class *p = cl->parent;
+    /* prio_activity是作为一个掩码, 应该只有一位为1 */
 	long m, mask = cl->prio_activity;
 
+    /* 在当前模式是HTB_MAY_BORROW情况下进入循环, 某些情况下这些类别是可以激活的
+	   绝大多数情况p和mask的初始值应该都是非0值 */
 	while (cl->cmode == HTB_MAY_BORROW && p && mask) {
-		m = mask;
+		m = mask; /* 备份mask的值 */
 		while (m) {
-			int prio = ffz(~m);
+            /* 掩码取反, 找第一个0位的位置（从0开始计数）, 也就是原来最低为1的位的位置
+			   prio越小, 等级越高, 取数据包也是先从prio值小的节点取 */
+			int prio = ffz(~m); /* 获得优先级 */
+            /* 清除该位 */
 			m &= ~(1 << prio);
-
+            /* p是父节点, 所以inner结构肯定有效, 不会使用leaf结构
+			   如果父节点的prio优先权的数据包的提供树已经存在, 在掩码中去掉该位 */
 			if (p->un.inner.feed[prio].rb_node)
 				/* parent already has its feed in use so that
 				   reset bit in mask as parent is already ok */
 				mask &= ~(1 << prio);
-
+            /* 将该类别加到父节点的prio优先权提供数据包的节点树中，
+			   即由于子class是yellow，所以将其按优先级添加到父class的inner feed中 */
 			htb_add_to_id_tree(p->un.inner.feed + prio, cl, prio);
 		}
+        /* 父节点的prio_activity或上mask中的置1位, 某位为1表示该位对应的优先权的数据可用
+		   表示inner feed中与该子class的连线 */
 		p->prio_activity |= mask;
+        /* 循环到上一层, 当前类别更新父节点, 父节点更新为祖父节点
+		   如果父节点也变yellow，需要将父节点也添加到祖父节点的inner feed中 */
 		cl = p;
 		p = cl->parent;
 
 	}
+
+    /* 如果cl是HTB_CAN_SEND模式, 将该类别添加到合适的ROW（self feed）中
+	  此时的cl可能已经不是原来的cl了,而是原cl的长辈节点了 */
 	if (cl->cmode == HTB_CAN_SEND && mask)
 		htb_add_class_to_row(q, cl, mask);
 }
 
 /**
  * htb_deactivate_prios - remove class from feed chain
+ *  更新feed chain,其实就是加快下次查找的速度,类似于更新索引
  *
  * cl->cmode must represent old mode (before deactivation). It does
  * nothing if cl->prio_activity == 0. Class is removed from all feed
@@ -408,8 +448,8 @@ static void htb_deactivate_prios(struct htb_sched *q, struct htb_class *cl)
 		m = mask;
 		mask = 0;
 		while (m) {
-			int prio = ffz(~m);
-			m &= ~(1 << prio);
+			int prio = ffz(~m); /* 获取m中bit为1的最低位的位置  */
+			m &= ~(1 << prio); /* 将m的prio位掩掉,表示已经处理过了 */
 
 			if (p->un.inner.ptr[prio] == cl->node + prio) {
 				/* we are removing child which is pointed to from
@@ -418,7 +458,7 @@ static void htb_deactivate_prios(struct htb_sched *q, struct htb_class *cl)
 				p->un.inner.last_ptr_id[prio] = cl->common.classid;
 				p->un.inner.ptr[prio] = NULL;
 			}
-
+            /* cl从parent的feed中移除 */
 			htb_safe_rb_erase(cl->node + prio, p->un.inner.feed + prio);
 
 			if (!p->un.inner.feed[prio].rb_node)
@@ -426,7 +466,7 @@ static void htb_deactivate_prios(struct htb_sched *q, struct htb_class *cl)
 		}
 
 		p->prio_activity &= ~mask;
-		cl = p;
+		cl = p; /* 不断向上处理 */
 		p = cl->parent;
 
 	}
@@ -465,7 +505,7 @@ static inline enum htb_cmode
 htb_class_mode(struct htb_class *cl, long *diff)
 {
 	long toks;
-
+    /* 令牌不足 */
 	if ((toks = (cl->ctokens + *diff)) < htb_lowater(cl)) {
 		*diff = -toks;
 		return HTB_CANT_SEND;
@@ -480,16 +520,20 @@ htb_class_mode(struct htb_class *cl, long *diff)
 
 /**
  * htb_change_class_mode - changes classe's mode
+ *                       - 调整类别节点的发送模式
  *
  * This should be the only way how to change classe's mode under normal
  * cirsumstances. Routine will update feed lists linkage, change mode
  * and add class to the wait event queue if appropriate. New mode should
  * be different from old one and cl->pq_key has to be valid if changing
  * to mode other than HTB_CAN_SEND (see htb_add_to_wait_tree).
+ * 这个函数应该是正常情况下唯一改变class发送模式的方法,函数将会更新self feed list的连接关系
+
  */
 static void
 htb_change_class_mode(struct htb_sched *q, struct htb_class *cl, long *diff)
 {
+    /* 计算出class的新的模式 */
 	enum htb_cmode new_mode = htb_class_mode(cl, diff);
 
 	if (new_mode == cl->cmode)
@@ -500,25 +544,32 @@ htb_change_class_mode(struct htb_sched *q, struct htb_class *cl, long *diff)
 			htb_deactivate_prios(q, cl);
 		cl->cmode = new_mode;
 		if (new_mode != HTB_CANT_SEND)
-			htb_activate_prios(q, cl);
+			htb_activate_prios(q, cl); /* 可以发送数据,激活 */
 	} else
 		cl->cmode = new_mode;
 }
 
 /**
  * htb_activate - inserts leaf cl into appropriate active feeds
+ *                将叶子节点cl插入合适的active self feed
  *
  * Routine learns (new) priority of leaf and activates feed chain
  * for the prio. It can be called on already active leaf safely.
  * It also adds leaf into droplist.
+ * Routine学习(新的)叶子节点优先级，并根据优先级激活feed chain。它可以安全地调用已经激活的叶子
+ * 它也可以将叶子节点添加到droplist中
+ * 激活类别结构, 将该类别节点作为数据包提供者, 而数据类别表提供是一个有序表, 以RB树形式实现
  */
 static inline void htb_activate(struct htb_sched *q, struct htb_class *cl)
 {
 	WARN_ON(cl->level || !cl->un.leaf.q || !cl->un.leaf.q->q.qlen);
-
+    /* 如果类别的prio_activity参数为0才进行操作, 非0表示已经激活了
+	   leaf.aprio保存当前的leaf.prio */
 	if (!cl->prio_activity) {
+        /* prio_activity是通过叶子节点的prio值来设置的, 至少是1, 最大是1<<7, 非0值 */
 		cl->prio_activity = 1 << cl->prio;
 		htb_activate_prios(q, cl);
+        /* 根据leaf.aprio添加到指定的优先权位置的丢包链表 */
 		list_add_tail(&cl->un.leaf.drop_list,
 			      q->drops + cl->prio);
 	}
@@ -526,7 +577,7 @@ static inline void htb_activate(struct htb_sched *q, struct htb_class *cl)
 
 /**
  * htb_deactivate - remove leaf cl from active feeds
- *
+ *                - 将叶子节点cl从active feeds中移除
  * Make sure that leaf is active. In the other words it can't be called
  * with non-active leaf. It also removes class from the drop list.
  */
@@ -535,10 +586,11 @@ static inline void htb_deactivate(struct htb_sched *q, struct htb_class *cl)
 	WARN_ON(!cl->prio_activity);
 
 	htb_deactivate_prios(q, cl);
-	cl->prio_activity = 0;
+	cl->prio_activity = 0; /* 该类别处于deactivate状态 */
 	list_del_init(&cl->un.leaf.drop_list);
 }
 
+/* 报文入队列 */
 static int htb_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 {
 	int uninitialized_var(ret);
@@ -558,7 +610,7 @@ static int htb_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 #ifdef CONFIG_NET_CLS_ACT
 	} else if (!cl) {
 		if (ret & __NET_XMIT_BYPASS)
-			sch->qstats.drops++;
+			sch->qstats.drops++; /* 直接丢弃报文 */
 		kfree_skb(skb);
 		return ret;
 #endif
@@ -625,9 +677,9 @@ static void htb_charge_class(struct htb_sched *q, struct htb_class *cl,
 	enum htb_cmode old_mode;
 	long diff;
 
-	while (cl) {
+	while (cl) { /* 这里是一个循环,子类发包,同时要扣除父类和子类的令牌 */
 		diff = psched_tdiff_bounded(q->now, cl->t_c, cl->mbuffer);
-		if (cl->level >= level) {
+		if (cl->level >= level) { /* cl为父节点 */
 			if (cl->level == level)
 				cl->xstats.lends++;
 			htb_accnt_tokens(cl, bytes, diff);
@@ -640,11 +692,11 @@ static void htb_charge_class(struct htb_sched *q, struct htb_class *cl,
 
 		old_mode = cl->cmode;
 		diff = 0;
-		htb_change_class_mode(q, cl, &diff);
+		htb_change_class_mode(q, cl, &diff); /* 判断是否要切换状态 */
 		if (old_mode != cl->cmode) {
 			if (old_mode != HTB_CAN_SEND)
 				htb_safe_rb_erase(&cl->pq_node, q->wait_pq + cl->level);
-			if (cl->cmode != HTB_CAN_SEND)
+			if (cl->cmode != HTB_CAN_SEND) /* 节点令牌不足 */
 				htb_add_to_wait_tree(q, cl, diff);
 		}
 
@@ -660,10 +712,13 @@ static void htb_charge_class(struct htb_sched *q, struct htb_class *cl,
 
 /**
  * htb_do_events - make mode changes to classes at the level
+ *                对第level号等待树的类别节点进行模式调整
  *
  * Scans event queue for pending events and applies them. Returns time of
  * next pending event (0 for no event in pq, q->now for too many events).
  * Note: Applied are events whose have cl->pq_key <= q->now.
+ * 扫描event队列,发现pending event然后应用它们.
+ * 返回下一个pending event的时间,如果pq没有event,则返回0
  */
 static psched_time_t htb_do_events(struct htb_sched *q, int level,
 				   unsigned long start)
@@ -685,6 +740,10 @@ static psched_time_t htb_do_events(struct htb_sched *q, int level,
 			return cl->pq_key;
 
 		htb_safe_rb_erase(p, q->wait_pq + level);
+        /* 计算当前时间和上次流控计算时间的时间差来计算可用的令牌量
+         * 计算从上次发送数据包到现在的时间里生成的令牌数，然后把diff加上原先桶中的令牌数就为总的令牌数
+         * 当然总的令牌数是不能比桶大的
+         */
 		diff = psched_tdiff_bounded(q->now, cl->t_c, cl->mbuffer);
 		htb_change_class_mode(q, cl, &diff);
 		if (cl->cmode != HTB_CAN_SEND)
@@ -701,7 +760,8 @@ static psched_time_t htb_do_events(struct htb_sched *q, int level,
 }
 
 /* Returns class->node+prio from id-tree where classe's id is >= id. NULL
-   is no such one exists. */
+   is no such one exists.
+ */
 static struct rb_node *htb_id_find_next_upper(int prio, struct rb_node *n,
 					      u32 id)
 {
@@ -711,10 +771,10 @@ static struct rb_node *htb_id_find_next_upper(int prio, struct rb_node *n,
 		    rb_entry(n, struct htb_class, node[prio]);
 
 		if (id > cl->common.classid) {
-			n = n->rb_right;
+			n = n->rb_right; /* 右边节点 */
 		} else if (id < cl->common.classid) {
 			r = n;
-			n = n->rb_left;
+			n = n->rb_left; /* 左边节点 */
 		} else {
 			return n;
 		}
@@ -732,9 +792,9 @@ static struct htb_class *htb_lookup_leaf(struct rb_root *tree, int prio,
 {
 	int i;
 	struct {
-		struct rb_node *root;
+		struct rb_node *root; /* 根节点(相对) */
 		struct rb_node **pptr;
-		u32 *pid;
+		u32 *pid; /* 节点的优先级 */
 	} stk[TC_HTB_MAXDEPTH], *sp = stk;
 
 	BUG_ON(!tree->rb_node);
@@ -744,6 +804,7 @@ static struct htb_class *htb_lookup_leaf(struct rb_root *tree, int prio,
 
 	for (i = 0; i < 65535; i++) {
 		if (!*sp->pptr && *sp->pid) {
+            /* ptr无效,id有效 */
 			/* ptr was invalidated but id is valid - try to recover
 			   the original or next ptr */
 			*sp->pptr =
@@ -753,8 +814,8 @@ static struct htb_class *htb_lookup_leaf(struct rb_root *tree, int prio,
 				   can become out of date quickly */
 		if (!*sp->pptr) {	/* we are at right end; rewind & go up */
 			*sp->pptr = sp->root;
-			while ((*sp->pptr)->rb_left)
-				*sp->pptr = (*sp->pptr)->rb_left;
+			while ((*sp->pptr)->rb_left) /* 存在左树 */
+				*sp->pptr = (*sp->pptr)->rb_left; /* 移动到左树 */
 			if (sp > stk) {
 				sp--;
 				if (!*sp->pptr) {
@@ -763,9 +824,9 @@ static struct htb_class *htb_lookup_leaf(struct rb_root *tree, int prio,
 				}
 				htb_next_rb_node(sp->pptr);
 			}
-		} else {
+		} else { /* 到达了叶子节点 */
 			struct htb_class *cl;
-			cl = rb_entry(*sp->pptr, struct htb_class, node[prio]);
+			cl = rb_entry(*sp->pptr, struct htb_class, node[prio]); /* 获得数据 */
 			if (!cl->level)
 				return cl;
 			(++sp)->root = cl->un.inner.feed[prio].rb_node;
@@ -779,12 +840,19 @@ static struct htb_class *htb_lookup_leaf(struct rb_root *tree, int prio,
 
 /* dequeues packet at given priority and level; call only if
    you are sure that there is active class at prio/level */
+/* 给定优先级(priority)以及层次(level),出报文 */
 static struct sk_buff *htb_dequeue_tree(struct htb_sched *q, int prio,
 					int level)
 {
 	struct sk_buff *skb = NULL;
 	struct htb_class *cl, *start;
-	/* look initial class up in the row */
+    /* look initial class up in the row
+	 * 根据层次和优先权值查找起始类别节点
+	 * 找到该level 该priority下的一个leafclass
+	 * 如果这个节点是叶子节点，那么它必然是green的
+	 * 如果这个节点是inner class，那么它是green的，就会找它的子孙叶子节点，而这个叶子节点必然是yellow的，
+	 * 该inner class可以向它的子孙叶子节点“借”出带宽。
+     */
 	start = cl = htb_lookup_leaf(q->row[level] + prio, prio,
 				     q->ptr[level] + prio,
 				     q->last_ptr_id[level] + prio);
@@ -798,11 +866,20 @@ next:
 		   qdisc drops packets in enqueue routine or if someone used
 		   graft operation on the leaf since last dequeue;
 		   simply deactivate and skip such class */
+		/*
+		 * class队列可以是空的---如果叶子节点的qdisc在入队时就drop掉数据包
+		 * 或者如果someone在上一次dequeue时候对叶子节点使用graft操作（）
+		 * 如果遇到class队列为空，则deactivate或skip
+		 * 如果队列长度为0, 队列空的情况, 可能性较小
+		 */
 		if (unlikely(cl->un.leaf.q->q.qlen == 0)) {
 			struct htb_class *next;
+            /* 该类别队列中没数据包了, 停止该类别结构  */
 			htb_deactivate(q, cl);
 
 			/* row/level might become empty */
+            /* 掩码该位为0， 表示该层该prio的rb树为空, 没有数据提供树， 返回数据包为空
+			   即该level的self feed的该prio为空 */
 			if ((q->row_mask[level] & (1 << prio)) == 0)
 				return NULL;
 
@@ -816,7 +893,7 @@ next:
 			goto next;
 		}
 
-		skb = cl->un.leaf.q->dequeue(cl->un.leaf.q);
+		skb = cl->un.leaf.q->dequeue(cl->un.leaf.q); /* 出包 */
 		if (likely(skb != NULL))
 			break;
 
@@ -830,8 +907,9 @@ next:
 	} while (cl != start);
 
 	if (likely(skb != NULL)) {
+        /* 扣除该包的byte数 */
 		cl->un.leaf.deficit[level] -= qdisc_pkt_len(skb);
-		if (cl->un.leaf.deficit[level] < 0) {
+		if (cl->un.leaf.deficit[level] < 0) { /* deficit[level] < 0表示该类已经发送了quantum,需要发送下一个类 */
 			cl->un.leaf.deficit[level] += cl->quantum;
 			htb_next_rb_node((level ? cl->parent->un.inner.ptr : q->
 					  ptr[0]) + prio);
@@ -840,11 +918,12 @@ next:
 		   gives us slightly better performance */
 		if (!cl->un.leaf.q->q.qlen)
 			htb_deactivate(q, cl);
-		htb_charge_class(q, cl, level, skb);
+		htb_charge_class(q, cl, level, skb); /* 更新令牌 */
 	}
 	return skb;
 }
 
+/* 报文出队列 */
 static struct sk_buff *htb_dequeue(struct Qdisc *sch)
 {
 	struct sk_buff *skb = NULL;
@@ -867,7 +946,7 @@ static struct sk_buff *htb_dequeue(struct Qdisc *sch)
 	start_at = jiffies;
 
 	next_event = q->now + 5 * PSCHED_TICKS_PER_SEC;
-
+    /* 逐层找,这里的level是反的,0表示最底层 */
 	for (level = 0; level < TC_HTB_MAXDEPTH; level++) {
 		/* common case optimization - skip event handler quickly */
 		int m;
@@ -885,11 +964,15 @@ static struct sk_buff *htb_dequeue(struct Qdisc *sch)
 			next_event = event;
 
 		m = ~q->row_mask[level];
-		while (m != (int)(-1)) {
+		while (m != (int)(-1)) { /* 同一层取优先级最高的 */
+            /* m的数据位中第一个0位的位置作为优先级值, 从低位开始找, 也就是prio越小, 实际数据的优先权越大, 越先出队
+			  找出同一层取优先级高的 */
 			int prio = ffz(m);
-			m |= 1 << prio;
+			m |= 1 << prio; /* 这里掩掉prio位,下一次循环prio就会递进到下一个优先级 */
 			skb = htb_dequeue_tree(q, prio, level);
 			if (likely(skb != NULL)) {
+                /* 数据包出队成功, 更新参数, 退出循环, 返回数据包
+				  取数据包成功就要去掉流控节点的阻塞标志 */
 				sch->q.qlen--;
 				sch->flags &= ~TCQ_F_THROTTLED;
 				goto fin;

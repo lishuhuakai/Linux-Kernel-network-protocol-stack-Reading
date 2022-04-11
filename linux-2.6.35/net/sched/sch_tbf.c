@@ -1,5 +1,5 @@
 /*
- * net/sched/sch_tbf.c	Token Bucket Filter queue.
+ * net/sched/sch_tbf.c	Token Bucket Filter queue. 令牌桶
  *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
@@ -23,6 +23,7 @@
 
 
 /*	Simple Token Bucket Filter.
+    简单令牌桶过滤器
 	=======================================
 
 	SOURCE.
@@ -101,6 +102,7 @@ struct tbf_sched_data
 {
 /* Parameters */
 	u32		limit;		/* Maximal length of backlog: bytes */
+    /* Qdisc中缓冲区的大小 */
 	u32		buffer;		/* Token bucket depth/rate: MUST BE >= MTU/B */
 	u32		mtu;
 	u32		max_size;
@@ -108,8 +110,11 @@ struct tbf_sched_data
 	struct qdisc_rate_table	*P_tab;
 
 /* Variables */
+    /* B令牌的数目,也就是缓冲区内现有的token的数目 */
 	long	tokens;			/* Current number of B tokens */
+    /* P令牌的数目 */
 	long	ptokens;		/* Current number of P tokens */
+    /* 最近一次检查点 */
 	psched_time_t	t_c;		/* Time check-point */
 	struct Qdisc	*qdisc;		/* Inner qdisc, default - bfifo queue */
 	struct qdisc_watchdog watchdog;	/* Watchdog timer */
@@ -118,6 +123,7 @@ struct tbf_sched_data
 #define L2T(q,L)   qdisc_l2t((q)->R_tab,L)
 #define L2T_P(q,L) qdisc_l2t((q)->P_tab,L)
 
+/* 报文入队列 */
 static int tbf_enqueue(struct sk_buff *skb, struct Qdisc* sch)
 {
 	struct tbf_sched_data *q = qdisc_priv(sch);
@@ -151,6 +157,7 @@ static unsigned int tbf_drop(struct Qdisc* sch)
 	return len;
 }
 
+/* 出队列 */
 static struct sk_buff *tbf_dequeue(struct Qdisc* sch)
 {
 	struct tbf_sched_data *q = qdisc_priv(sch);
@@ -162,23 +169,24 @@ static struct sk_buff *tbf_dequeue(struct Qdisc* sch)
 		psched_time_t now;
 		long toks;
 		long ptoks = 0;
-		unsigned int len = qdisc_pkt_len(skb);
+		unsigned int len = qdisc_pkt_len(skb); /* 报文长度 */
 
 		now = psched_get_time();
+        /* 距离上次检查到现在,产生的token的数目,总的数目不会超过q->buffer */
 		toks = psched_tdiff_bounded(now, q->t_c, q->buffer);
 
 		if (q->P_tab) {
 			ptoks = toks + q->ptokens;
 			if (ptoks > (long)q->mtu)
 				ptoks = q->mtu;
-			ptoks -= L2T_P(q, len);
+			ptoks -= L2T_P(q, len); /* 消耗掉P令牌 */
 		}
-		toks += q->tokens;
+		toks += q->tokens; /* Qdisc中现有的token的数目 */
 		if (toks > (long)q->buffer)
 			toks = q->buffer;
-		toks -= L2T(q, len);
+		toks -= L2T(q, len); /* 取走token */
 
-		if ((toks|ptoks) >= 0) {
+		if ((toks|ptoks) >= 0) { /* 可以发送报文 */
 			skb = qdisc_dequeue_peeked(q->qdisc);
 			if (unlikely(!skb))
 				return NULL;
@@ -252,7 +260,7 @@ static int tbf_change(struct Qdisc* sch, struct nlattr *opt)
 	if (rtab == NULL)
 		goto done;
 
-	if (qopt->peakrate.rate) {
+	if (qopt->peakrate.rate) { /* 峰值速率,也就是发送包的最快速度 */
 		if (qopt->peakrate.rate > qopt->rate.rate)
 			ptab = qdisc_get_rtab(&qopt->peakrate, tb[TCA_TBF_PTAB]);
 		if (ptab == NULL)

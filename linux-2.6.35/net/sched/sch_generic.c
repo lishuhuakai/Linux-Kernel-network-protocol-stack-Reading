@@ -50,6 +50,7 @@ static inline int dev_requeue_skb(struct sk_buff *skb, struct Qdisc *q)
 	return 0;
 }
 
+/* 从qdisc结构中取出一个skb */
 static inline struct sk_buff *dequeue_skb(struct Qdisc *q)
 {
 	struct sk_buff *skb = q->gso_skb;
@@ -429,6 +430,7 @@ static inline struct sk_buff_head *band2list(struct pfifo_fast_priv *priv,
 	return priv->q + band;
 }
 
+/* 报文入队列 */
 static int pfifo_fast_enqueue(struct sk_buff *skb, struct Qdisc* qdisc)
 {
 	if (skb_queue_len(&qdisc->q) < qdisc_dev(qdisc)->tx_queue_len) {
@@ -438,6 +440,7 @@ static int pfifo_fast_enqueue(struct sk_buff *skb, struct Qdisc* qdisc)
 
 		priv->bitmap |= (1 << band);
 		qdisc->q.qlen++;
+        /* 插入到队列尾部 */
 		return __qdisc_enqueue_tail(skb, qdisc, list);
 	}
 
@@ -451,6 +454,7 @@ static struct sk_buff *pfifo_fast_dequeue(struct Qdisc* qdisc)
 
 	if (likely(band >= 0)) {
 		struct sk_buff_head *list = band2list(priv, band);
+        /* 从头部取出一个报文 */
 		struct sk_buff *skb = __qdisc_dequeue_head(qdisc, list);
 
 		qdisc->q.qlen--;
@@ -502,6 +506,7 @@ nla_put_failure:
 	return -1;
 }
 
+/* FIFO排队规则的初始化函数 */
 static int pfifo_fast_init(struct Qdisc *qdisc, struct nlattr *opt)
 {
 	int prio;
@@ -633,7 +638,9 @@ void qdisc_destroy(struct Qdisc *qdisc)
 }
 EXPORT_SYMBOL(qdisc_destroy);
 
-/* Attach toplevel qdisc to device queue. */
+/* Attach toplevel qdisc to device queue.
+ * 为网络设备安装指定的根排队规则
+ */
 struct Qdisc *dev_graft_qdisc(struct netdev_queue *dev_queue,
 			      struct Qdisc *qdisc)
 {
@@ -650,7 +657,7 @@ struct Qdisc *dev_graft_qdisc(struct netdev_queue *dev_queue,
 	/* ... and graft new one */
 	if (qdisc == NULL)
 		qdisc = &noop_qdisc;
-	dev_queue->qdisc_sleeping = qdisc;
+	dev_queue->qdisc_sleeping = qdisc; /* 记录下Qdisc */
 	rcu_assign_pointer(dev_queue->qdisc, &noop_qdisc);
 
 	spin_unlock_bh(root_lock);
@@ -817,6 +824,7 @@ static void dev_init_scheduler_queue(struct net_device *dev,
 	dev_queue->qdisc_sleeping = qdisc;
 }
 
+/* 初始化排队规则的相关数据 */
 void dev_init_scheduler(struct net_device *dev)
 {
 	dev->qdisc = &noop_qdisc;

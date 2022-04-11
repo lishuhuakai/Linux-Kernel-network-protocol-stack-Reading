@@ -1,5 +1,5 @@
 /*
- * net/sched/sch_sfq.c	Stochastic Fairness Queueing discipline.
+ * net/sched/sch_sfq.c	Stochastic Fairness Queueing discipline. 随机公平队列
  *
  *		This program is free software; you can redistribute it and/or
  *		modify it under the terms of the GNU General Public License
@@ -91,9 +91,9 @@ struct sfq_head
 struct sfq_sched_data
 {
 /* Parameters */
-	int		perturb_period;
+	int		perturb_period; /* 每隔多少s就重新配置hash算法 */
 	unsigned	quantum;	/* Allotment per round: MUST BE >= MTU */
-	int		limit;
+	int		limit; /* SFQ能缓存的最大包数 */
 
 /* Variables */
 	struct tcf_proto *filter_list;
@@ -157,6 +157,7 @@ static unsigned sfq_hash(struct sfq_sched_data *q, struct sk_buff *skb)
 	return sfq_fold_hash(q, h, h2);
 }
 
+/* 报文分类 */
 static unsigned int sfq_classify(struct sk_buff *skb, struct Qdisc *sch,
 				 int *qerr)
 {
@@ -276,6 +277,7 @@ static unsigned int sfq_drop(struct Qdisc *sch)
 	return 0;
 }
 
+/* 入队列 */
 static int
 sfq_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 {
@@ -344,6 +346,7 @@ sfq_peek(struct Qdisc *sch)
 	return skb_peek(&q->qs[a]);
 }
 
+/* 出队列 */
 static struct sk_buff *
 sfq_dequeue(struct Qdisc *sch)
 {

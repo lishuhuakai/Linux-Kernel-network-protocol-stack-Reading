@@ -21,7 +21,7 @@
 #include <net/netlink.h>
 #include <net/pkt_sched.h>
 
-/* 优先级队列规定的band为16个,参考TC流量控制实现分析(初步)-图3  建立”prio”类型的根流控对象_2 
+/* 优先级队列规定的band为16个,参考TC流量控制实现分析(初步)-图3  建立”prio”类型的根流控对象_2
  * 详细理解也可以参考<<LINUX高级路由和流量控制>>
  *
  *
@@ -35,28 +35,29 @@
  * 7. 只要时间允许且流控对象不为空，就一直循环5，6的过程。
  */
 /*
- * 进入出口流控的函数为dev_queue_xmit(); 如果是入口流控, 数据只是刚从网卡设备中收到, 还未交到网络上层处理, 
+ * 进入出口流控的函数为dev_queue_xmit(); 如果是入口流控, 数据只是刚从网卡设备中收到, 还未交到网络上层处理,
  * 不过网卡的入口流控不是必须的,  增加一个入口流控队列# tc qdisc add dev eth0 ingress
  * 缺省情况下并不进行流控，进入入口流控函数为ing_filter()函数，该函数被skb_receive_skb()调用。
- */ 
+ */
 
 /* 获取引用层参数的地方在prio_tune，该结构初始化在prio_tune */
 struct prio_sched_data
 {
 	int bands;
 	struct tcf_proto *filter_list;
-	u8  prio2band[TC_PRIO_MAX+1];
-	struct Qdisc *queues[TCQ_PRIO_BANDS];
+	u8  prio2band[TC_PRIO_MAX+1]; /* 映射表,由优先级映射到对应的queue */
+    /* PRIO Qdisc是树的中间节点,不是叶子节点 */
+	struct Qdisc *queues[TCQ_PRIO_BANDS]; /* 16个队列 */
 };
 
 /* 内核空间和应用层通过netlink交互接收数据过程，见函数pktsched_init，
  * tc qdisc命令就是在这里面确定
  */
-struct prio_sched_data 
+struct prio_sched_data
 {	/* 加入给定下面的tc命令
 	 * tc qdisc add dev eth0 root handle 22 prio band 4 priomap 3 3 2 2 1 2 0 0 1 1 1 1 1 1 1 1
      * band表示该qdisc最多有几个频道，其子qdisc的band参数不能超过改值，超过了则返回错
-     * (tc qdisc add dev eth0 parent 22:8 handle 33,8不能超过父Qdisc的band)，见prio_get 
+     * (tc qdisc add dev eth0 parent 22:8 handle 33,8不能超过父Qdisc的band)，见prio_get
      * 则bands对应的就是命令中的4，表示用的是prio2band中前面4个band
      * bands参数取值范围2-16，见prio_tune 如果不设置该参数，默认值为3，见应用层prio_parse_opt
      *
@@ -72,14 +73,15 @@ struct prio_sched_data
      * 默认指向的是pfifo_qdisc_ops,见qdisc_create -> prio_init -> prio_tune -> qdisc_create_dflt，
      * 也就是说在创建分类队列规程的时候，系统会默认给分类信息数组指定pfifo无类队列规程，也就是queue[]默
      * 认指向的是pfifo_fast无类队列规程
-     * 
+     *
      */
 	int bands;
 	struct tcf_proto *filter_list;
-	u8  prio2band[TC_PRIO_MAX+1]; 
+	u8  prio2band[TC_PRIO_MAX+1];
 
 
 	struct Qdisc *queues[TCQ_PRIO_BANDS];
+};
 
 
 
@@ -117,6 +119,7 @@ prio_classify(struct sk_buff *skb, struct Qdisc *sch, int *qerr)
 	return q->queues[band];
 }
 
+/* 报文入队列 */
 static int
 prio_enqueue(struct sk_buff *skb, struct Qdisc *sch)
 {
@@ -167,6 +170,7 @@ static struct sk_buff *prio_dequeue(struct Qdisc* sch)
 
 	for (prio = 0; prio < q->bands; prio++) {
 		struct Qdisc *qdisc = q->queues[prio];
+        /* 这里完全按照优先级来调度 */
 		struct sk_buff *skb = qdisc->dequeue(qdisc);
 		if (skb) {
 			sch->q.qlen--;
@@ -185,7 +189,7 @@ static unsigned int prio_drop(struct Qdisc* sch)
 	struct Qdisc *qdisc;
 
 	for (prio = q->bands-1; prio >= 0; prio--) {
-		qdisc = q->queues[prio];
+		qdisc = q->queues[prio]; /* 调用子节点的drop函数 */
 		if (qdisc->ops->drop && (len = qdisc->ops->drop(qdisc)) != 0) {
 			sch->q.qlen--;
 			return len;

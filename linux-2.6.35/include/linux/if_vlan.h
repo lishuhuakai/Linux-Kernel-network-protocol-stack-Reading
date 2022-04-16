@@ -87,6 +87,7 @@ struct vlan_group {
 	unsigned int		nr_vlans;
 	int			killall;
 	struct hlist_node	hlist;	/* linked list */
+    /* 每一个设备都可以加入4096个vlan,但是实际用不上这么多,所以这里用了二维数组 */
 	struct net_device **vlan_devices_arrays[VLAN_GROUP_ARRAY_SPLIT_PARTS];
 	struct rcu_head		rcu;
 };

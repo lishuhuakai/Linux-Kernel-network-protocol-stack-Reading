@@ -52,6 +52,7 @@ const char vlan_version[] = DRV_VERSION;
 static const char vlan_copyright[] = "Ben Greear <greearb@candelatech.com>";
 static const char vlan_buggyright[] = "David S. Miller <davem@redhat.com>";
 
+/* 如果接收到了带vlan tag的报文,会调用vlan_skb_recv */
 static struct packet_type vlan_packet_type __read_mostly = {
 	.type = cpu_to_be16(ETH_P_8021Q),
 	.func = vlan_skb_recv, /* VLAN receive method */
@@ -116,6 +117,7 @@ static struct vlan_group *vlan_group_alloc(struct net_device *real_dev)
 	return grp;
 }
 
+/* vlangroup中提前为vlan分配相应内存 */
 static int vlan_group_prealloc_vid(struct vlan_group *vg, u16 vlan_id)
 {
 	struct net_device **array;
@@ -131,7 +133,7 @@ static int vlan_group_prealloc_vid(struct vlan_group *vg, u16 vlan_id)
 	array = kzalloc(size, GFP_KERNEL);
 	if (array == NULL)
 		return -ENOBUFS;
-
+    /* 分配空间 */
 	vg->vlan_devices_arrays[vlan_id / VLAN_GROUP_ARRAY_PART_LEN] = array;
 	return 0;
 }

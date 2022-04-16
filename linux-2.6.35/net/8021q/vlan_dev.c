@@ -326,7 +326,7 @@ static netdev_tx_t vlan_dev_hard_start_xmit(struct sk_buff *skb,
 			vlan_dev_info(dev)->cnt_inc_headroom_on_tx++;
 	}
 
-
+    /* vlan设备需要依附于真实的设备 */
 	skb_set_dev(skb, vlan_dev_info(dev)->real_dev);
 	len = skb->len;
 	ret = dev_queue_xmit(skb);

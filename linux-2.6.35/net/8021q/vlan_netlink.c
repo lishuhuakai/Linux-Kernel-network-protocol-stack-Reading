@@ -136,8 +136,8 @@ static int vlan_newlink(struct net *src_net, struct net_device *dev,
 	if (!real_dev)
 		return -ENODEV;
 
-	vlan->vlan_id  = nla_get_u16(data[IFLA_VLAN_ID]);
-	vlan->real_dev = real_dev;
+	vlan->vlan_id  = nla_get_u16(data[IFLA_VLAN_ID]); /* vlanid */
+	vlan->real_dev = real_dev; /* 将真实设备加入vlan */
 	vlan->flags    = VLAN_FLAG_REORDER_HDR;
 
 	err = vlan_check_real_dev(real_dev, vlan->vlan_id);
@@ -241,7 +241,7 @@ struct rtnl_link_ops vlan_link_ops __read_mostly = {
 	.get_tx_queues  = vlan_get_tx_queues,
 	.setup		= vlan_setup,
 	.validate	= vlan_validate,
-	.newlink	= vlan_newlink,
+	.newlink	= vlan_newlink, /* 创建vlan */
 	.changelink	= vlan_changelink,
 	.dellink	= unregister_vlan_dev,
 	.get_size	= vlan_get_size,

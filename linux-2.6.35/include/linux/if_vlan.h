@@ -304,6 +304,7 @@ static inline int __vlan_hwaccel_get_tag(const struct sk_buff *skb,
 
 /**
  * vlan_get_tag - get the VLAN ID from the skb
+ *              - 从skb中获取vlan标记
  * @skb: skbuff to query
  * @vlan_tci: buffer to store vlaue
  *

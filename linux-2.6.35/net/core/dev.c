@@ -2869,7 +2869,7 @@ static int __netif_receive_skb(struct sk_buff *skb)
 	 */
 	null_or_orig = NULL;
 	orig_dev = skb->dev;
-	master = ACCESS_ONCE(orig_dev->master);
+	master = ACCESS_ONCE(orig_dev->master); /* 如果接口是聚合组成员口 */
 	if (skb->deliver_no_wcard)
 		null_or_orig = orig_dev;
 	else if (master) {
@@ -2877,7 +2877,7 @@ static int __netif_receive_skb(struct sk_buff *skb)
 			skb->deliver_no_wcard = 1;
 			null_or_orig = orig_dev; /* deliver only exact match */
 		} else
-			skb->dev = master;
+			skb->dev = master; /* 这里实现虚拟设备的替换 */
 	}
 
 	__get_cpu_var(softnet_data).processed++;

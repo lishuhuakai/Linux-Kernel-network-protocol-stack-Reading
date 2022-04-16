@@ -50,6 +50,7 @@
 /*
  * "show" function for the bond_masters attribute.
  * The class parameter is ignored.
+ * 显示所有的聚合组
  */
 static ssize_t bonding_show_bonds(struct class *cls,
 				  struct class_attribute *attr,
@@ -116,7 +117,7 @@ static ssize_t bonding_store_bonds(struct class *cls,
 
 	if (command[0] == '+') {
 		pr_info("%s is being created...\n", ifname);
-		rv = bond_create(net, ifname);
+		rv = bond_create(net, ifname); /* 创建聚合口 */
 		if (rv) {
 			pr_info("Bond creation failed.\n");
 			res = rv;
@@ -183,6 +184,7 @@ void bond_destroy_slave_symlinks(struct net_device *master,
 
 /*
  * Show the slaves in the current bond.
+ * 展示聚合组的成员设备
  */
 static ssize_t bonding_show_slaves(struct device *d,
 				   struct device_attribute *attr, char *buf)
@@ -212,6 +214,7 @@ static ssize_t bonding_show_slaves(struct device *d,
  * Set the slaves in the current bond.  The bond interface must be
  * up for this to succeed.
  * This function is largely the same flow as bonding_update_bonds().
+ * 将一个设备加入聚合组
  */
 static ssize_t bonding_store_slaves(struct device *d,
 				    struct device_attribute *attr,
@@ -278,6 +281,7 @@ static ssize_t bonding_store_slaves(struct device *d,
 		/* If this is the first slave, then we need to set
 		   the master's hardware address to be the same as the
 		   slave's. */
+		/* 如果这是聚合组的第一个成员口,那么将成员口的mac地址作为聚合组的mac地址 */
 		if (is_zero_ether_addr(bond->dev->dev_addr))
 			memcpy(bond->dev->dev_addr, dev->dev_addr,
 			       dev->addr_len);
@@ -343,6 +347,7 @@ static DEVICE_ATTR(slaves, S_IRUGO | S_IWUSR, bonding_show_slaves,
 /*
  * Show and set the bonding mode.  The bond interface must be down to
  * change the mode.
+ * 显示以及设置聚合模式
  */
 static ssize_t bonding_show_mode(struct device *d,
 				 struct device_attribute *attr, char *buf)
@@ -376,6 +381,7 @@ static ssize_t bonding_store_mode(struct device *d,
 		goto out;
 	} else {
 		if (bond->params.mode == BOND_MODE_8023AD)
+            /* 启用lacp协议 */
 			bond_unset_master_3ad_flags(bond);
 
 		if (bond->params.mode == BOND_MODE_ALB)

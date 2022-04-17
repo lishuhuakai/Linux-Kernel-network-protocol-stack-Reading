@@ -46,7 +46,7 @@ ipt_snat_target(struct sk_buff *skb, const struct xt_action_param *par)
 	const struct nf_nat_multi_range_compat *mr = par->targinfo;
 
 	NF_CT_ASSERT(par->hooknum == NF_INET_POST_ROUTING);
-
+    /* 获取连接信息 */
 	ct = nf_ct_get(skb, &ctinfo);
 
 	/* Connection must be valid and new. */
@@ -106,6 +106,7 @@ alloc_null_binding(struct nf_conn *ct, unsigned int hooknum)
 	   per-proto parts (hence not IP_NAT_RANGE_PROTO_SPECIFIED).
 	   Use reply in case it's already been mangled (eg local packet).
 	*/
+	/* 获取原始的ip */
 	__be32 ip
 		= (HOOK2MANIP(hooknum) == IP_NAT_MANIP_SRC
 		   ? ct->tuplehash[IP_CT_DIR_REPLY].tuple.dst.u3.ip
@@ -136,16 +137,18 @@ int nf_nat_rule_find(struct sk_buff *skb,
 	return ret;
 }
 
+/* snat */
 static struct xt_target ipt_snat_reg __read_mostly = {
 	.name		= "SNAT",
 	.target		= ipt_snat_target,
 	.targetsize	= sizeof(struct nf_nat_multi_range_compat),
 	.table		= "nat",
-	.hooks		= 1 << NF_INET_POST_ROUTING,
+	.hooks		= 1 << NF_INET _POST_ROUTING,
 	.checkentry	= ipt_snat_checkentry,
 	.family		= AF_INET,
 };
 
+/* dnat */
 static struct xt_target ipt_dnat_reg __read_mostly = {
 	.name		= "DNAT",
 	.target		= ipt_dnat_target,
@@ -180,6 +183,7 @@ static struct pernet_operations nf_nat_rule_net_ops = {
 	.exit = nf_nat_rule_net_exit,
 };
 
+/* 注册nat */
 int __init nf_nat_rule_init(void)
 {
 	int ret;

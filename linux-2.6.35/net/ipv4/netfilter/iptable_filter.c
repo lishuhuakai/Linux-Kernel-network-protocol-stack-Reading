@@ -28,10 +28,11 @@ static const struct xt_table packet_filter = {
 	.name		= "filter",
 	.valid_hooks	= FILTER_VALID_HOOKS,
 	.me		= THIS_MODULE,
-	.af		= NFPROTO_IPV4,
+	.af		= NFPROTO_IPV4, /* 协议族 */
 	.priority	= NF_IP_PRI_FILTER,
 };
 
+/* filter表的入口 */
 static unsigned int
 iptable_filter_hook(unsigned int hook, struct sk_buff *skb,
 		    const struct net_device *in, const struct net_device *out,
@@ -98,7 +99,7 @@ static int __init iptable_filter_init(void)
 		return ret;
 
 	/* Register hooks */
-	filter_ops = xt_hook_link(&packet_filter, iptable_filter_hook);
+	filter_ops = xt_hook_link(&packet_filter, iptable_filter_hook); /* 注册filter表 */
 	if (IS_ERR(filter_ops)) {
 		ret = PTR_ERR(filter_ops);
 		goto cleanup_table;

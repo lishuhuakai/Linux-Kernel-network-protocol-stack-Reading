@@ -804,7 +804,9 @@ static void cleanup_entry(struct ip6t_entry *e, struct net *net)
 }
 
 /* Checks and translates the user-supplied table segment (held in
-   newinfo) */
+   newinfo)
+ * 检查并且转换用户提供的表段
+ */
 static int
 translate_table(struct net *net, struct xt_table_info *newinfo, void *entry0,
                 const struct ip6t_replace *repl)

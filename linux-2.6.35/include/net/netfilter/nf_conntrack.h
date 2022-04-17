@@ -91,12 +91,14 @@ struct nf_conn_help {
 struct nf_conn {
 	/* Usage count in here is 1 for hash table/destruct timer, 1 per skb,
            plus 1 for any connection(s) we are `master' for */
+    /* 连接信息块的引用计数 */
 	struct nf_conntrack ct_general;
 
 	spinlock_t lock;
 
 	/* XXX should I move this to the tail ? - Y.K */
 	/* These are my tuples; original and reply */
+    /* 连接的标识tuple,每条连接有两个tuple,分别代表初始方向和reply方向 */
 	struct nf_conntrack_tuple_hash tuplehash[IP_CT_DIR_MAX];
 
 	/* Have we seen traffic both ways yet? (bitset) */
@@ -106,6 +108,9 @@ struct nf_conn {
 	struct nf_conn *master;
 
 	/* Timer function; drops refcnt when it goes off. */
+    /* 如果一个连接上面长时间任何方向上都没有数据传输,那么应该清除该连接跟踪信息块,防止其继续占有系统资源
+     * 这里为每一个连接维持一个定时器,定时器超时则清除该连接,每当有数据传输时,会重置该定时器
+     */
 	struct timer_list timeout;
 
 #if defined(CONFIG_NF_CONNTRACK_MARK)
@@ -120,6 +125,7 @@ struct nf_conn {
 	union nf_conntrack_proto proto;
 
 	/* Extensions */
+    /* 连接跟踪信息块的扩展 */
 	struct nf_ct_ext *ext;
 #ifdef CONFIG_NET_NS
 	struct net *ct_net;
@@ -171,6 +177,7 @@ nf_conntrack_tuple_taken(const struct nf_conntrack_tuple *tuple,
 			 const struct nf_conn *ignored_conntrack);
 
 /* Return conntrack_info and tuple hash for given skb. */
+/* 根据给定的skb,返回conntrack信息 */
 static inline struct nf_conn *
 nf_ct_get(const struct sk_buff *skb, enum ip_conntrack_info *ctinfo)
 {

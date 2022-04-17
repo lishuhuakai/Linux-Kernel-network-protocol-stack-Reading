@@ -107,6 +107,7 @@ enum tcp_bit_set {
 
 /*
  * The TCP state transition table needs a few words...
+ * tcp状态转换表
  *
  * We are the man in the middle. All the packets go through us
  * but might get lost in transit to the destination.
@@ -271,6 +272,7 @@ static const u8 tcp_conntracks[2][6][TCP_CONNTRACK_MAX] = {
 	}
 };
 
+/* 将报文中的信息填入tuple之中 */
 static bool tcp_pkt_to_tuple(const struct sk_buff *skb, unsigned int dataoff,
 			     struct nf_conntrack_tuple *tuple)
 {
@@ -288,6 +290,7 @@ static bool tcp_pkt_to_tuple(const struct sk_buff *skb, unsigned int dataoff,
 	return true;
 }
 
+/* 反向tuple中的源/目的端口 */
 static bool tcp_invert_tuple(struct nf_conntrack_tuple *tuple,
 			     const struct nf_conntrack_tuple *orig)
 {
@@ -1052,7 +1055,9 @@ static int tcp_packet(struct nf_conn *ct,
 	return NF_ACCEPT;
 }
 
-/* Called when a new connection for this protocol found. */
+/* Called when a new connection for this protocol found.
+ * 当一个新的连接建立
+ */
 static bool tcp_new(struct nf_conn *ct, const struct sk_buff *skb,
 		    unsigned int dataoff)
 {

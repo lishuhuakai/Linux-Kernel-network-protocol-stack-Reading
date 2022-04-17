@@ -6,7 +6,7 @@
 #define XT_FUNCTION_MAXNAMELEN 30
 #define XT_EXTENSION_MAXNAMELEN 29
 #define XT_TABLE_MAXNAMELEN 32
-
+/* 匹配规则 */
 struct xt_entry_match {
 	union {
 		struct {
@@ -20,7 +20,7 @@ struct xt_entry_match {
 			__u16 match_size;
 
 			/* Used inside the kernel */
-			struct xt_match *match;
+			struct xt_match *match; /* 可以参考xt_mac.c     xt_tcpudp.c等文件,有具体的实现 */
 		} kernel;
 
 		/* Total length */
@@ -30,6 +30,9 @@ struct xt_entry_match {
 	unsigned char data[0];
 };
 
+/* 你可以简单的认为target就是action,也就是说,规则匹配之后
+ * 怎样来处理报文
+ */
 struct xt_entry_target {
 	union {
 		struct {
@@ -184,6 +187,7 @@ struct xt_counters_info {
 
 /**
  * struct xt_action_param - parameters for matches/targets
+ *      用来匹配的参数
  *
  * @match:	the match extension
  * @target:	the target extension
@@ -279,9 +283,10 @@ struct xt_tgdtor_param {
 	u_int8_t family;
 };
 
+/* 此结构的一个实例代表一条匹配规则 */
 struct xt_match {
-	struct list_head list;
-
+	struct list_head list; /* match链 */
+     /* Match名，和核心模块加载类似，作为动态链接库存在的Iptables Extension的命名规则为libipt_'name'.so */
 	const char name[XT_EXTENSION_MAXNAMELEN];
 	u_int8_t revision;
 
@@ -327,6 +332,9 @@ struct xt_target {
 	/* Returns verdict. Argument order changed since 2.6.9, as this
 	   must now handle non-linear skbs, using skb_copy_bits and
 	   skb_ip_make_writable. */
+
+    /* target的模块函数，如果需要继续处理则返回IPT_CONTINUE（-1）
+     * 否则返回NF_ACCEPT、NF_DROP等值，它的调用者根据它的返回值来判断如何处理它处理过的报文 */
 	unsigned int (*target)(struct sk_buff *skb,
 			       const struct xt_action_param *);
 
@@ -334,6 +342,7 @@ struct xt_target {
            hook_mask is a bitmask of hooks from which it can be
            called. */
 	/* Should return 0 on success or an error code otherwise (-Exxxx). */
+    /* 在使用本Match的规则注入表中之前调用，进行有效性检查，如果返回0，规则就不会加入iptables中 */
 	int (*checkentry)(const struct xt_tgchk_param *);
 
 	/* Called when entry of this type deleted. */
@@ -362,19 +371,19 @@ struct xt_table {
 	struct list_head list;
 
 	/* What hooks you will enter on */
-	unsigned int valid_hooks;
+	unsigned int valid_hooks; /* 表在哪些位置生效 */
 
 	/* Man behind the curtain... */
 	struct xt_table_info *private;
 
 	/* Set this to THIS_MODULE if you are a module, otherwise NULL */
 	struct module *me;
-
+    /* 协议族 */
 	u_int8_t af;		/* address/protocol family */
 	int priority;		/* hook order */
 
 	/* A unique name... */
-	const char name[XT_TABLE_MAXNAMELEN];
+	const char name[XT_TABLE_MAXNAMELEN]; /* 表名,如filter,nat等 */
 };
 
 #include <linux/netfilter_ipv4.h>
@@ -382,14 +391,16 @@ struct xt_table {
 /* The table itself */
 struct xt_table_info {
 	/* Size per table */
-	unsigned int size;
+	unsigned int size; /* 表大小 */
 	/* Number of entries: FIXME. --RR */
-	unsigned int number;
+	unsigned int number; /* 表中的规则数目 */
 	/* Initial number of entries. Needed for module usage count */
-	unsigned int initial_entries;
+	unsigned int initial_entries; /* 初始的规则数 */
 
 	/* Entry points and underflows */
+    /* 记录所影响的HOOK的规则入口相对于下面的entries变量的偏移量 */
 	unsigned int hook_entry[NF_INET_NUMHOOKS];
+    /* 与hook_entry相对应的规则表上限偏移量，当无规则录入时，相应的hook_entry和underflow均为0 */
 	unsigned int underflow[NF_INET_NUMHOOKS];
 
 	/*
@@ -401,7 +412,7 @@ struct xt_table_info {
 	void ***jumpstack;
 	/* ipt_entry tables: one per CPU */
 	/* Note : this field MUST be the last one, see XT_TABLE_INFO_SZ */
-	void *entries[1];
+	void *entries[1]; /* 规则表入口 */
 };
 
 #define XT_TABLE_INFO_SZ (offsetof(struct xt_table_info, entries) \

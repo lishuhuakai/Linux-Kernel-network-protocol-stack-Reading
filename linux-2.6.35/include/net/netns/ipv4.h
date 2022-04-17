@@ -32,7 +32,7 @@ struct netns_ipv4 {
 	struct sock		*tcp_sock;
 
 	struct netns_frags	frags;
-#ifdef CONFIG_NETFILTER
+#ifdef CONFIG_NETFILTER /* netfilter一共包含4张表 */
 	struct xt_table		*iptable_filter;
 	struct xt_table		*iptable_mangle;
 	struct xt_table		*iptable_raw;

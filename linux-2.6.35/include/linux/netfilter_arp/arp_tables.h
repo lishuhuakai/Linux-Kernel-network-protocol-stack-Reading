@@ -34,9 +34,9 @@ struct arpt_devaddr_info {
 /* Yes, Virginia, you have to zero the padding. */
 struct arpt_arp {
 	/* Source and target IP addr */
-	struct in_addr src, tgt;
+	struct in_addr src, tgt; /* 源/目的ip */
 	/* Mask for src and target IP addr */
-	struct in_addr smsk, tmsk;
+	struct in_addr smsk, tmsk; /* 掩码 */
 
 	/* Device hw address length, src+target device addresses */
 	u_int8_t arhln, arhln_mask;

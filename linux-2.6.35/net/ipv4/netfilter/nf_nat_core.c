@@ -287,10 +287,11 @@ nf_nat_setup_info(struct nf_conn *ct,
 	struct net *net = nf_ct_net(ct);
 	struct nf_conntrack_tuple curr_tuple, new_tuple;
 	struct nf_conn_nat *nat;
+    /* 初始化还未完成,就需要将连接放入hash之中 */
 	int have_to_hash = !(ct->status & IPS_NAT_DONE_MASK);
 
 	/* nat helper or nfctnetlink also setup binding */
-	nat = nfct_nat(ct);
+	nat = nfct_nat(ct); /* 获取扩展的连接信息 */
 	if (!nat) {
 		nat = nf_ct_ext_add(ct, NF_CT_EXT_NAT, GFP_ATOMIC);
 		if (nat == NULL) {
@@ -310,7 +311,7 @@ nf_nat_setup_info(struct nf_conn *ct,
 	   conntrack->tuplehash[IP_CT_DIR_ORIGINAL].tuple) */
 	nf_ct_invert_tuplepr(&curr_tuple,
 			     &ct->tuplehash[IP_CT_DIR_REPLY].tuple);
-
+    /* 生成唯一的tuple,填入new_tuple */
 	get_unique_tuple(&new_tuple, &curr_tuple, range, ct, maniptype);
 
 	if (!nf_ct_tuple_equal(&new_tuple, &curr_tuple)) {
@@ -322,7 +323,7 @@ nf_nat_setup_info(struct nf_conn *ct,
 
 		/* Non-atomic: we own this at the moment. */
 		if (maniptype == IP_NAT_MANIP_SRC)
-			ct->status |= IPS_SRC_NAT;
+			ct->status |= IPS_SRC_NAT; /* SNAT */
 		else
 			ct->status |= IPS_DST_NAT;
 	}
@@ -337,6 +338,7 @@ nf_nat_setup_info(struct nf_conn *ct,
 		/* nf_conntrack_alter_reply might re-allocate exntension aera */
 		nat = nfct_nat(ct);
 		nat->ct = ct;
+        /* 将连接信息再次放入hash链表中 */
 		hlist_add_head_rcu(&nat->bysource,
 				   &net->ipv4.nat_bysource[srchash]);
 		spin_unlock_bh(&nf_nat_lock);
@@ -371,7 +373,7 @@ manip_pkt(u_int16_t proto,
 	/* Manipulate protcol part. */
 
 	/* rcu_read_lock()ed by nf_hook_slow */
-	p = __nf_nat_proto_find(proto);
+	p = __nf_nat_proto_find(proto); /* 根据协议,找到对应的class */
 	if (!p->manip_pkt(skb, iphdroff, target, maniptype))
 		return false;
 
@@ -379,15 +381,17 @@ manip_pkt(u_int16_t proto,
 
 	if (maniptype == IP_NAT_MANIP_SRC) {
 		csum_replace4(&iph->check, iph->saddr, target->src.u3.ip);
-		iph->saddr = target->src.u3.ip;
+		iph->saddr = target->src.u3.ip; /* 替换掉源ip */
 	} else {
 		csum_replace4(&iph->check, iph->daddr, target->dst.u3.ip);
-		iph->daddr = target->dst.u3.ip;
+		iph->daddr = target->dst.u3.ip; /* 替换掉目的ip */
 	}
 	return true;
 }
 
-/* Do packet manipulations according to nf_nat_setup_info. */
+/* Do packet manipulations according to nf_nat_setup_info.
+ * 根据nf_nat_setup_info做包操作
+ */
 unsigned int nf_nat_packet(struct nf_conn *ct,
 			   enum ip_conntrack_info ctinfo,
 			   unsigned int hooknum,

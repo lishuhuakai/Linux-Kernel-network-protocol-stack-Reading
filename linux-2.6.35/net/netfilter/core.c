@@ -55,7 +55,7 @@ EXPORT_SYMBOL_GPL(nf_unregister_afinfo);
 struct list_head nf_hooks[NFPROTO_NUMPROTO][NF_MAX_HOOKS] __read_mostly;
 EXPORT_SYMBOL(nf_hooks);
 static DEFINE_MUTEX(nf_hook_mutex);
-
+/* 向外部暴露的接口,用于注册回调 */
 int nf_register_hook(struct nf_hook_ops *reg)
 {
 	struct nf_hook_ops *elem;
@@ -84,6 +84,7 @@ void nf_unregister_hook(struct nf_hook_ops *reg)
 }
 EXPORT_SYMBOL(nf_unregister_hook);
 
+/* 注册钩子函数 */
 int nf_register_hooks(struct nf_hook_ops *reg, unsigned int n)
 {
 	unsigned int i;
@@ -135,7 +136,12 @@ unsigned int nf_iterate(struct list_head *head,
 
 		/* Optimization: we don't need to hold module
 		   reference here, since function can't sleep. --RR */
-		verdict = elem->hook(hook, skb, indev, outdev, okfn);
+		/* 依次调用指定hook点下的所有nf_hook_ops->(*hook)函数，这些nf_hook_ops里有filter表注册的，
+		 * 有mangle表注册的，等等。list_for_each_continue_rcu函数是一个for循环的宏，当调用结点中的hook函数后，
+		 * 根据返回值进行相应处理。如果hook函数的返回值是NF_QUEUE,NF_STOLEN,NF_DROP时，函数返回该值；
+		 * 如果返回值是NF_REPEAT时，则跳到前一个结点继续处理；如果是其他值，由下一个结点继续处理。
+		 * 如果整条链表处理完毕，返回值不是上面四个值，则返回NF_ACCEPT。*/
+		verdict = elem->hook(hook, skb, indev, outdev, okfn); /* 调用回调函数 */
 		if (verdict != NF_ACCEPT) {
 #ifdef CONFIG_NETFILTER_DEBUG
 			if (unlikely((verdict & NF_VERDICT_MASK)

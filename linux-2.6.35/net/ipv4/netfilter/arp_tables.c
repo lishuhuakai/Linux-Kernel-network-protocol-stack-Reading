@@ -60,6 +60,7 @@ void *arpt_alloc_initial_table(const struct xt_table *info)
 }
 EXPORT_SYMBOL_GPL(arpt_alloc_initial_table);
 
+/* arp地址比较 */
 static inline int arp_devaddr_compare(const struct arpt_devaddr_info *ap,
 				      const char *hdr_addr, int len)
 {

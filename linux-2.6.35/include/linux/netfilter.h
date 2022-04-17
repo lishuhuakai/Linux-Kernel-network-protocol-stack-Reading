@@ -97,12 +97,12 @@ struct nf_hook_ops {
 	struct list_head list;
 
 	/* User fills in from here down. */
-	nf_hookfn *hook;
+	nf_hookfn *hook; /* 回调函数 */
 	struct module *owner;
-	u_int8_t pf;
-	unsigned int hooknum;
+	u_int8_t pf; /* 协议号,对于ipv4而言,是PF_INET */
+	unsigned int hooknum; /* 钩子id,或者说是挂载点 */
 	/* Hooks are ordered in ascending priority. */
-	int priority;
+	int priority; /* 优先级 */
 };
 
 struct nf_sockopt_ops {
@@ -154,7 +154,7 @@ int nf_hook_slow(u_int8_t pf, unsigned int hook, struct sk_buff *skb,
 
 /**
  *	nf_hook_thresh - call a netfilter hook
- *	
+ *
  *	Returns 1 if the hook has allowed the packet to pass.  The function
  *	okfn must be invoked by the caller in this case.  Any other return
  *	value indicates the packet has been consumed by the hook.
@@ -178,7 +178,7 @@ static inline int nf_hook(u_int8_t pf, unsigned int hook, struct sk_buff *skb,
 {
 	return nf_hook_thresh(pf, hook, skb, indev, outdev, okfn, INT_MIN);
 }
-                   
+
 /* Activate hook; either okfn or kfree_skb called, unless a hook
    returns NF_STOLEN (in which case, it's up to the hook to deal with
    the consequences).

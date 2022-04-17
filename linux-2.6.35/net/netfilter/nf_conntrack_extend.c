@@ -71,6 +71,7 @@ static void __nf_ct_ext_free_rcu(struct rcu_head *head)
 	kfree(ext);
 }
 
+/* 添加扩展信息 */
 void *__nf_ct_ext_add(struct nf_conn *ct, enum nf_ct_ext_id id, gfp_t gfp)
 {
 	struct nf_ct_ext *new;

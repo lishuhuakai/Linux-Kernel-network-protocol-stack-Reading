@@ -87,9 +87,12 @@ ip_packet_match(const struct iphdr *ip,
 		int isfrag)
 {
 	unsigned long ret;
-
+/*定义一个宏，当bool和invflg的是一真一假的情况时，返回真。注意这里使用两个“！”的目的是使得这样计算后的值域只取0和1两个值*/
 #define FWINV(bool, invflg) ((bool) ^ !!(ipinfo->invflags & (invflg)))
 
+    /* 处理源和目标ip地址，这个if语句的意义是：到达分组的源ip地址经过掩码处理后与规则中的ip不匹配
+     * 并且规则中没有包含对ip地址的取反，或者规则中包含了对匹配地址的取反，但到达分组的源ip与规则中的ip地址匹配，
+     * if的第一部分返回真，同样道理处理到达分组的目的ip地址。这两部分任意部分为真时，源或者目标地址不匹配。*/
 	if (FWINV((ip->saddr&ipinfo->smsk.s_addr) != ipinfo->src.s_addr,
 		  IPT_INV_SRCIP) ||
 	    FWINV((ip->daddr&ipinfo->dmsk.s_addr) != ipinfo->dst.s_addr,
@@ -105,6 +108,7 @@ ip_packet_match(const struct iphdr *ip,
 		return false;
 	}
 
+    /* 匹配入设备 */
 	ret = ifname_compare_aligned(indev, ipinfo->iniface, ipinfo->iniface_mask);
 
 	if (FWINV(ret != 0, IPT_INV_VIA_IN)) {
@@ -113,7 +117,7 @@ ip_packet_match(const struct iphdr *ip,
 			ipinfo->invflags&IPT_INV_VIA_IN ?" (INV)":"");
 		return false;
 	}
-
+    /* 匹配出设备 */
 	ret = ifname_compare_aligned(outdev, ipinfo->outiface, ipinfo->outiface_mask);
 
 	if (FWINV(ret != 0, IPT_INV_VIA_OUT)) {
@@ -124,6 +128,7 @@ ip_packet_match(const struct iphdr *ip,
 	}
 
 	/* Check specific protocol */
+    /* 匹配协议 */
 	if (ipinfo->proto &&
 	    FWINV(ip->protocol != ipinfo->proto, IPT_INV_PROTO)) {
 		dprintf("Packet protocol %hi does not match %hi.%s\n",
@@ -134,6 +139,7 @@ ip_packet_match(const struct iphdr *ip,
 
 	/* If we have a fragment rule but the packet is not a fragment
 	 * then we return zero */
+	/* 处理分片包的匹配情况 */
 	if (FWINV((ipinfo->flags&IPT_F_FRAG) && !isfrag, IPT_INV_FRAG)) {
 		dprintf("Fragment rule but not fragment.%s\n",
 			ipinfo->invflags & IPT_INV_FRAG ? " (INV)" : "");
@@ -295,8 +301,8 @@ struct ipt_entry *ipt_next_entry(const struct ipt_entry *entry)
 
 /* Returns one of the generic firewall policies, like NF_ACCEPT. */
 unsigned int
-ipt_do_table(struct sk_buff *skb,
-	     unsigned int hook,
+ipt_do_table(struct sk_buff *skb, /* 报文 */
+	     unsigned int hook, /* 钩子位置 */
 	     const struct net_device *in,
 	     const struct net_device *out,
 	     struct xt_table *table)
@@ -322,7 +328,7 @@ ipt_do_table(struct sk_buff *skb,
 	 * things we don't know, ie. tcp syn flag or ports).  If the
 	 * rule is also a fragment-specific rule, non-fragments won't
 	 * match it. */
-	acpar.fragoff = ntohs(ip->frag_off) & IP_OFFSET;
+	acpar.fragoff = ntohs(ip->frag_off) & IP_OFFSET; /* 分片报文 */
 	acpar.thoff   = ip_hdrlen(skb);
 	acpar.hotdrop = false;
 	acpar.in      = in;
@@ -334,7 +340,7 @@ ipt_do_table(struct sk_buff *skb,
 	xt_info_rdlock_bh();
 	private = table->private;
 	cpu        = smp_processor_id();
-	table_base = private->entries[cpu];
+	table_base = private->entries[cpu]; /* 获取当前表的当前cpu的规则入口 */
 	jumpstack  = (struct ipt_entry **)private->jumpstack[cpu];
 	stackptr   = per_cpu_ptr(private->stackptr, cpu);
 	origptr    = *stackptr;
@@ -345,18 +351,27 @@ ipt_do_table(struct sk_buff *skb,
 		 table->name, hook, origptr,
 		 get_entry(table_base, private->underflow[hook]));
 
-	do {
+	do { /* 规则匹配 */
 		const struct ipt_entry_target *t;
 		const struct xt_entry_match *ematch;
+        /*
+         * 匹配IP包，成功则继续匹配下去，否则跳到下一个规则
+         * ip_packet_match匹配标准match, 也就是ip报文中的一些基本的元素，
+         * 如来源/目的地址，进/出网口，协议等，因为要匹配的内容是固定的，所以具体的函数实现也是固定的。
+         * 而IPT_MATCH_ITERATE （应该猜到实际是调用第二个参数do_match函数）匹配扩展的match，如字符串匹配，p2p匹配等，
+         * 因为要匹配的内容不确定，所以函数的实现也是不一样的，所以do_match的实现就和具体的match模块有关了。
+         * 这里的&e->ip就是上面的ipt_ip结构
+         */
 
 		IP_NF_ASSERT(e);
+        /* 匹配ip */
 		if (!ip_packet_match(ip, indev, outdev,
 		    &e->ip, acpar.fragoff)) {
  no_match:
 			e = ipt_next_entry(e);
 			continue;
 		}
-
+        /* 扩展的匹配 */
 		xt_ematch_foreach(ematch, e) {
 			acpar.match     = ematch->u.kernel.match;
 			acpar.matchinfo = ematch->data;
@@ -365,7 +380,9 @@ ipt_do_table(struct sk_buff *skb,
 		}
 
 		ADD_COUNTER(e->counters, ntohs(ip->tot_len), 1);
-
+        /* ipt_get_target获取当前target，t是一个ipt_entry_target结构
+         * 这个函数就是简单的返回e+e->target_offset,每个entry只有一个target
+         * 所以不需要像match一样遍历，直接指针指过去了*/
 		t = ipt_get_target(e);
 		IP_NF_ASSERT(t->u.kernel.target);
 
@@ -376,11 +393,14 @@ ipt_do_table(struct sk_buff *skb,
 			trace_packet(skb, hook, in, out,
 				     table->name, private, e);
 #endif
+        /* 开始匹配target,来决定包的命运 */
 		/* Standard target? */
+        /* t->u.kernel.target->target为空,表示无需外部提供动作,就是标准的target */
 		if (!t->u.kernel.target->target) {
 			int v;
 
 			v = ((struct ipt_standard_target *)t)->verdict;
+            /*v小于0，动作是默认内建的动作，也可能是自定义链已经结束而返回return标志*/
 			if (v < 0) {
 				/* Pop from stack? */
 				if (v != IPT_RETURN) {
@@ -400,6 +420,10 @@ ipt_do_table(struct sk_buff *skb,
 				}
 				continue;
 			}
+            /* v大于等于0,处理用户自定义链,如果当前链后还有规则,而要跳到自定义链去执行,
+             * 那么需要保存一个back点,以指示程序在匹配完自定义链后，应当继续匹配的规则位置,
+             * 自然地,back点应该为当前规则的下一条规则（如果存在的话）
+             * 至于为什么下一条规则的地址是table_base+v, 就要去看具体的规则是如何添加的了 */
 			if (table_base + v != ipt_next_entry(e) &&
 			    !(e->ip.flags & IPT_F_GOTO)) {
 				if (*stackptr >= private->stacksize) {
@@ -417,11 +441,11 @@ ipt_do_table(struct sk_buff *skb,
 
 		acpar.target   = t->u.kernel.target;
 		acpar.targinfo = t->data;
-
+        /* 这里调用自定义的target来决定包的命运 */
 		verdict = t->u.kernel.target->target(skb, &acpar);
 		/* Target might have changed stuff. */
 		ip = ip_hdr(skb);
-		if (verdict == IPT_CONTINUE)
+		if (verdict == IPT_CONTINUE) /* 需要继续匹配 */
 			e = ipt_next_entry(e);
 		else
 			/* Verdict */
@@ -2083,7 +2107,9 @@ struct xt_table *ipt_register_table(struct net *net,
 	/* choose the copy on our node/cpu, but dont care about preemption */
 	loc_cpu_entry = newinfo->entries[raw_smp_processor_id()];
 	memcpy(loc_cpu_entry, repl->entries, repl->size);
-
+    /* translate_table函数将newinfo表示的table的各个规则进行边界检查,
+     * 然后对于newinfo所指的ipt_talbe_info结构中的hook_entries和underflows赋予正确的值,
+     * 最后将表项向其他cpu拷贝 */
 	ret = translate_table(net, newinfo, loc_cpu_entry, repl);
 	if (ret != 0)
 		goto out_free;
@@ -2131,6 +2157,7 @@ icmp_type_code_match(u_int8_t test_type, u_int8_t min_code, u_int8_t max_code,
 		^ invert;
 }
 
+/* 匹配icmp */
 static bool
 icmp_match(const struct sk_buff *skb, struct xt_action_param *par)
 {
@@ -2141,7 +2168,7 @@ icmp_match(const struct sk_buff *skb, struct xt_action_param *par)
 	/* Must not be a fragment. */
 	if (par->fragoff != 0)
 		return false;
-
+    /* 获取icmp头部指针 */
 	ic = skb_header_pointer(skb, par->thoff, sizeof(_icmph), &_icmph);
 	if (ic == NULL) {
 		/* We've been asked to examine this packet, and we

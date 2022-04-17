@@ -55,6 +55,7 @@ nf_conntrack_find_get(struct net *net, u16 zone,
 extern int __nf_conntrack_confirm(struct sk_buff *skb);
 
 /* Confirm a connection: returns NF_DROP if packet must be dropped. */
+/* 确认一个连接,如果一个报文必须被丢弃,返回NF_DROP */
 static inline int nf_conntrack_confirm(struct sk_buff *skb)
 {
 	struct nf_conn *ct = (struct nf_conn *)skb->nfct;

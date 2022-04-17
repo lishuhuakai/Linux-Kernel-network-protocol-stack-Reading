@@ -93,6 +93,7 @@ static inline u_int32_t hash_conntrack(const struct net *net, u16 zone,
 				nf_conntrack_hash_rnd);
 }
 
+/* 从报文中解析出tuple */
 bool
 nf_ct_get_tuple(const struct sk_buff *skb,
 		unsigned int nhoff,
@@ -110,8 +111,12 @@ nf_ct_get_tuple(const struct sk_buff *skb,
 		return false;
 
 	tuple->dst.protonum = protonum;
-	tuple->dst.dir = IP_CT_DIR_ORIGINAL;
-
+	tuple->dst.dir = IP_CT_DIR_ORIGINAL; /* 初始方向 */
+	/* 调用L4协议继续初始化tuple内容
+     * 调用四层函数l4_pkt_to_tuple，设置tuple结构中的四层相关的源/目的值。
+     * 对于tcp协议来说,则是调用函数tcp_pkt_to_tuple
+     * 对于udp协议来说,则是调用函数udp_pkt_to_tuple
+     */
 	return l4proto->pkt_to_tuple(skb, dataoff, tuple);
 }
 EXPORT_SYMBOL_GPL(nf_ct_get_tuple);
@@ -143,10 +148,10 @@ bool nf_ct_get_tuplepr(const struct sk_buff *skb, unsigned int nhoff,
 	return ret;
 }
 EXPORT_SYMBOL_GPL(nf_ct_get_tuplepr);
-
+/* tuple反向 */
 bool
-nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse,
-		   const struct nf_conntrack_tuple *orig,
+nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse, /* reply方向的元组 */
+		   const struct nf_conntrack_tuple *orig, /* 初始方向的元组 */
 		   const struct nf_conntrack_l3proto *l3proto,
 		   const struct nf_conntrack_l4proto *l4proto)
 {
@@ -298,8 +303,12 @@ __nf_conntrack_find(struct net *net, u16 zone,
 {
 	struct nf_conntrack_tuple_hash *h;
 	struct hlist_nulls_node *n;
+    /* 根据tuple计算hash值 */
 	unsigned int hash = hash_conntrack(net, zone, tuple);
-
+    /* 如何将将节点插入hash表,可以参考 __nf_conntrack_hash_insert函数
+     * 一个nf_conn节点,先计算其初始方向的tuple的hash,将节点插入hash表一次
+     * 然后计算其reply方向的tuple的hash,再将将节点插入hahs表一次
+     */
 	/* Disable BHs the entire time since we normally need to disable them
 	 * at least once for the stats anyway.
 	 */
@@ -339,8 +348,12 @@ nf_conntrack_find_get(struct net *net, u16 zone,
 
 	rcu_read_lock();
 begin:
+    /* 真正的查找函数 */
 	h = __nf_conntrack_find(net, zone, tuple);
 	if (h) {
+        /* 找到后还需要看一下该连接跟踪信息块的引用计数是否已经为0了,如果是则返回NULL,
+         * 因为这种情况说明该连接跟踪信息块即将被删除了,不应该被继续引用
+         */
 		ct = nf_ct_tuplehash_to_ctrack(h);
 		if (unlikely(nf_ct_is_dying(ct) ||
 			     !atomic_inc_not_zero(&ct->ct_general.use)))
@@ -359,6 +372,7 @@ begin:
 }
 EXPORT_SYMBOL_GPL(nf_conntrack_find_get);
 
+/* 注意,这里是将同一个节点插入一个hash表两次      */
 static void __nf_conntrack_hash_insert(struct nf_conn *ct,
 				       unsigned int hash,
 				       unsigned int repl_hash)
@@ -386,6 +400,7 @@ void nf_conntrack_hash_insert(struct nf_conn *ct)
 EXPORT_SYMBOL_GPL(nf_conntrack_hash_insert);
 
 /* Confirm a connection given skb; places it in hash table */
+/* 确认连接 */
 int
 __nf_conntrack_confirm(struct sk_buff *skb)
 {
@@ -398,7 +413,7 @@ __nf_conntrack_confirm(struct sk_buff *skb)
 	struct net *net;
 	u16 zone;
 
-	ct = nf_ct_get(skb, &ctinfo);
+	ct = nf_ct_get(skb, &ctinfo); /* 获得连接信息 */
 	net = nf_ct_net(ct);
 
 	/* ipt_REJECT uses nf_conntrack_attach to attach related
@@ -437,6 +452,7 @@ __nf_conntrack_confirm(struct sk_buff *skb)
 	/* See if there's one in the list already, including reverse:
 	   NAT could have grabbed it without realizing, since we're
 	   not in the hash.  If there is, we lost race. */
+	/* 检查一下,链表中是否已经存在 */
 	hlist_nulls_for_each_entry(h, n, &net->ct.hash[hash], hnnode)
 		if (nf_ct_tuple_equal(&ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple,
 				      &h->tuple) &&
@@ -464,6 +480,7 @@ __nf_conntrack_confirm(struct sk_buff *skb)
 	 * guarantee that no other CPU can find the conntrack before the above
 	 * stores are visible.
 	 */
+	/* 将连接插入hash链表中 */
 	__nf_conntrack_hash_insert(ct, hash, repl_hash);
 	NF_CT_STAT_INC(net, insert);
 	spin_unlock_bh(&nf_conntrack_lock);
@@ -613,8 +630,10 @@ struct nf_conn *nf_conntrack_alloc(struct net *net, u16 zone,
 	memset(&ct->tuplehash[IP_CT_DIR_MAX], 0,
 	       sizeof(*ct) - offsetof(struct nf_conn, tuplehash[IP_CT_DIR_MAX]));
 	spin_lock_init(&ct->lock);
+    /* 初始方向 */
 	ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple = *orig;
 	ct->tuplehash[IP_CT_DIR_ORIGINAL].hnnode.pprev = NULL;
+    /* reply方向 */
 	ct->tuplehash[IP_CT_DIR_REPLY].tuple = *repl;
 	ct->tuplehash[IP_CT_DIR_REPLY].hnnode.pprev = NULL;
 	/* Don't set timer yet: wait for confirmation */
@@ -660,9 +679,10 @@ EXPORT_SYMBOL_GPL(nf_conntrack_free);
 
 /* Allocate a new conntrack: we return -ENOMEM if classification
    failed due to stress.  Otherwise it really is unclassifiable. */
+/* 连接跟踪信息块的创建 */
 static struct nf_conntrack_tuple_hash *
 init_conntrack(struct net *net, struct nf_conn *tmpl,
-	       const struct nf_conntrack_tuple *tuple,
+	       const struct nf_conntrack_tuple *tuple, /* 初始方向的tuple */
 	       struct nf_conntrack_l3proto *l3proto,
 	       struct nf_conntrack_l4proto *l4proto,
 	       struct sk_buff *skb,
@@ -674,7 +694,7 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 	struct nf_conntrack_ecache *ecache;
 	struct nf_conntrack_expect *exp;
 	u16 zone = tmpl ? nf_ct_zone(tmpl) : NF_CT_DEFAULT_ZONE;
-
+    /* 根据初始方向的tuple得到reply方向的tuple,保存值repl_tuple之中,tuple->dst.dir也反向了 */
 	if (!nf_ct_invert_tuple(&repl_tuple, tuple, l3proto, l4proto)) {
 		pr_debug("Can't invert tuple.\n");
 		return NULL;
@@ -685,7 +705,7 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 		pr_debug("Can't allocate conntrack.\n");
 		return (struct nf_conntrack_tuple_hash *)ct;
 	}
-
+    /* 一个新的连接产生了,调用L4协议的new回调,L4协议必须提供该回调 */
 	if (!l4proto->new(ct, skb, dataoff)) {
 		nf_conntrack_free(ct);
 		pr_debug("init conntrack: can't track with proto module\n");
@@ -693,7 +713,7 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 	}
 
 	nf_ct_acct_ext_add(ct, GFP_ATOMIC);
-
+    /* 根据skb的tuple搜索期望连接链表,检查该新的连接是否是某个已有连接的期望连接 */
 	ecache = tmpl ? nf_ct_ecache_find(tmpl) : NULL;
 	nf_ct_ecache_ext_add(ct, ecache ? ecache->ctmask : 0,
 				 ecache ? ecache->expmask : 0,
@@ -705,6 +725,7 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 		pr_debug("conntrack: expectation arrives ct=%p exp=%p\n",
 			 ct, exp);
 		/* Welcome, Mr. Bond.  We've been expecting you... */
+        /* 是某个连接的期望连接,那么给这个新的连接设置IPS_EXPECTED_BIT标记 */
 		__set_bit(IPS_EXPECTED_BIT, &ct->status);
 		ct->master = exp->master;
 		if (exp->helper) {
@@ -726,7 +747,12 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 		NF_CT_STAT_INC(net, new);
 	}
 
+    /* 无论是否是期望连接,此时一个新的连接跟踪信息块产生了，先将其加入到net->ct.unconfirmed
+     * 链表,skb离开连接跟踪子系统时,如果该skb没有被防火墙丢掉,那么skb会被连接跟踪
+     * 子系统的confirmed钩子捕获,那时会对该连接跟踪信息块确认并将其加入到全局哈希表中
+     */
 	/* Overload tuple linked list to put us in unconfirmed list. */
+    /* 将节点加入uncomfirmed hash表 */
 	hlist_nulls_add_head_rcu(&ct->tuplehash[IP_CT_DIR_ORIGINAL].hnnode,
 		       &net->ct.unconfirmed);
 
@@ -742,8 +768,12 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 }
 
 /* On success, returns conntrack ptr, sets skb->nfct and ctinfo */
+/* 根据数据包在conntrack表中查找连接,如果找到了连接,则将该连接的地址保存在数据的nfct字段之中,如果没有找到连接
+ * 则为数据包生成一个连接,并将连接放在unconfirmed表中,并将连接的地址保存在数据包的nfct字段中
+ */
 static inline struct nf_conn *
-resolve_normal_ct(struct net *net, struct nf_conn *tmpl,
+resolve_normal_ct(struct net *net,
+          struct nf_conn *tmpl, /* 这个值可能为空 */
 		  struct sk_buff *skb,
 		  unsigned int dataoff,
 		  u_int16_t l3num,
@@ -757,7 +787,7 @@ resolve_normal_ct(struct net *net, struct nf_conn *tmpl,
 	struct nf_conntrack_tuple_hash *h;
 	struct nf_conn *ct;
 	u16 zone = tmpl ? nf_ct_zone(tmpl) : NF_CT_DEFAULT_ZONE;
-
+    /* 从报文中提取tuple信息,注意这里的tuple->dst.dir */
 	if (!nf_ct_get_tuple(skb, skb_network_offset(skb),
 			     dataoff, l3num, protonum, &tuple, l3proto,
 			     l4proto)) {
@@ -768,6 +798,7 @@ resolve_normal_ct(struct net *net, struct nf_conn *tmpl,
 	/* look for tuple match */
 	h = nf_conntrack_find_get(net, zone, &tuple);
 	if (!h) {
+        /* 如果没有查找到,则生成一条新的连接,并返回这条连接的tuplehash[0]的地址 */
 		h = init_conntrack(net, tmpl, &tuple, l3proto, l4proto,
 				   skb, dataoff);
 		if (!h)
@@ -776,24 +807,24 @@ resolve_normal_ct(struct net *net, struct nf_conn *tmpl,
 			return (void *)h;
 	}
 	ct = nf_ct_tuplehash_to_ctrack(h);
-
+    /* 我们需要考虑一下这个函数所在的位置nf_conntrack_in,也就是入口处,包括pre_routing以及output */
 	/* It exists; we have (non-exclusive) reference. */
-	if (NF_CT_DIRECTION(h) == IP_CT_DIR_REPLY) {
-		*ctinfo = IP_CT_ESTABLISHED + IP_CT_IS_REPLY;
+	if (NF_CT_DIRECTION(h) == IP_CT_DIR_REPLY) { /* 回复包 */
+		*ctinfo = IP_CT_ESTABLISHED + IP_CT_IS_REPLY; /* 回复包的状态要加上偏移IP_CT_IS_REPLY */
 		/* Please set reply bit if this packet OK */
-		*set_reply = 1;
-	} else {
+		*set_reply = 1; /* 表示接收到了reply */
+	} else { /* 初始方向 */
 		/* Once we've had two way comms, always ESTABLISHED. */
 		if (test_bit(IPS_SEEN_REPLY_BIT, &ct->status)) {
 			pr_debug("nf_conntrack_in: normal packet for %p\n", ct);
 			*ctinfo = IP_CT_ESTABLISHED;
-		} else if (test_bit(IPS_EXPECTED_BIT, &ct->status)) {
+		} else if (test_bit(IPS_EXPECTED_BIT, &ct->status)) { /* 第N个请求包,会走到这里 */
 			pr_debug("nf_conntrack_in: related packet for %p\n",
 				 ct);
 			*ctinfo = IP_CT_RELATED;
 		} else {
 			pr_debug("nf_conntrack_in: new packet for %p\n", ct);
-			*ctinfo = IP_CT_NEW;
+			*ctinfo = IP_CT_NEW; /* 新连接 */
 		}
 		*set_reply = 0;
 	}
@@ -815,7 +846,7 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 	int set_reply = 0;
 	int ret;
 
-	if (skb->nfct) {
+	if (skb->nfct) { /* 如果数据包的nfct字段为空,表示它不属于任何连接 */
 		/* Previously seen (loopback or untracked)?  Ignore. */
 		tmpl = (struct nf_conn *)skb->nfct;
 		if (!nf_ct_is_template(tmpl)) {
@@ -826,7 +857,7 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 	}
 
 	/* rcu_read_lock()ed by nf_hook_slow */
-	l3proto = __nf_ct_l3proto_find(pf);
+	l3proto = __nf_ct_l3proto_find(pf); /* 三层协议对应的连接跟踪class */
 	ret = l3proto->get_l4proto(skb, skb_network_offset(skb),
 				   &dataoff, &protonum);
 	if (ret <= 0) {
@@ -837,7 +868,7 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 		goto out;
 	}
 
-	l4proto = __nf_ct_l4proto_find(pf, protonum);
+	l4proto = __nf_ct_l4proto_find(pf, protonum); /* L4, 大抵是tcp/udp之类 */
 
 	/* It may be an special packet, error, unclean...
 	 * inverse of the return code tells to the netfilter
@@ -884,7 +915,7 @@ nf_conntrack_in(struct net *net, u_int8_t pf, unsigned int hooknum,
 		ret = -ret;
 		goto out;
 	}
-
+    /* 检测到了回复?,设置IPS_SEEN_REPLY_BIT */
 	if (set_reply && !test_and_set_bit(IPS_SEEN_REPLY_BIT, &ct->status))
 		nf_conntrack_event_cache(IPCT_REPLY, ct);
 out:
@@ -912,6 +943,7 @@ EXPORT_SYMBOL_GPL(nf_ct_invert_tuplepr);
 
 /* Alter reply tuple (maybe alter helper).  This is for NAT, and is
    implicitly racy: see __nf_conntrack_confirm */
+/* 更改reply方向的tuple */
 void nf_conntrack_alter_reply(struct nf_conn *ct,
 			      const struct nf_conntrack_tuple *newreply)
 {

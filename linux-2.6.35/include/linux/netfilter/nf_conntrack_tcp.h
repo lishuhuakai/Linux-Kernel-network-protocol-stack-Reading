@@ -4,7 +4,9 @@
 
 #include <linux/types.h>
 
-/* This is exposed to userspace (ctnetlink) */
+/* This is exposed to userspace (ctnetlink)
+ * 向用户层暴露
+ */
 enum tcp_conntrack {
 	TCP_CONNTRACK_NONE,
 	TCP_CONNTRACK_SYN_SENT,

@@ -17,6 +17,7 @@
 #include <net/netfilter/nf_nat_rule.h>
 #include <net/netfilter/nf_nat_protocol.h>
 
+/* 检查端口是否在限制范围之内 */
 bool nf_nat_proto_in_range(const struct nf_conntrack_tuple *tuple,
 			   enum nf_nat_manip_type maniptype,
 			   const union nf_conntrack_man_proto *min,
@@ -41,7 +42,7 @@ bool nf_nat_proto_unique_tuple(struct nf_conntrack_tuple *tuple,
 			       u_int16_t *rover)
 {
 	unsigned int range_size, min, i;
-	__be16 *portptr;
+	__be16 *portptr; /* 端口 */
 	u_int16_t off;
 
 	if (maniptype == IP_NAT_MANIP_SRC)
@@ -83,7 +84,7 @@ bool nf_nat_proto_unique_tuple(struct nf_conntrack_tuple *tuple,
 
 	for (i = 0; i < range_size; i++, off++) {
 		*portptr = htons(min + off % range_size);
-		if (nf_nat_used_tuple(tuple, ct))
+		if (nf_nat_used_tuple(tuple, ct)) /*   如果已经使用了,就要pass掉 */
 			continue;
 		if (!(range->flags & IP_NAT_RANGE_PROTO_RANDOM))
 			*rover = off;

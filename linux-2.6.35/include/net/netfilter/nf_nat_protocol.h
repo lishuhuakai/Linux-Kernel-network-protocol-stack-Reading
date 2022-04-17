@@ -14,6 +14,7 @@ struct nf_nat_protocol {
 
 	/* Translate a packet to the target according to manip type.
 	   Return true if succeeded. */
+	/* 根据操纵类型,将一个包进行转换,如果成功,返回true */
 	bool (*manip_pkt)(struct sk_buff *skb,
 			  unsigned int iphdroff,
 			  const struct nf_conntrack_tuple *tuple,

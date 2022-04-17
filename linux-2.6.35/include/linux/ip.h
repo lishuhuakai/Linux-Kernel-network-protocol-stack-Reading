@@ -99,8 +99,8 @@ struct iphdr {
 	__u8	ttl;
 	__u8	protocol;
 	__sum16	check;
-	__be32	saddr;
-	__be32	daddr;
+	__be32	saddr; /* 源ip */
+	__be32	daddr; /* 目的ip */
 	/*The options start here. */
 };
 

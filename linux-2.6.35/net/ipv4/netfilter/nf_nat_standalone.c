@@ -75,8 +75,8 @@ static void nat_decode_session(struct sk_buff *skb, struct flowi *fl)
 static unsigned int
 nf_nat_fn(unsigned int hooknum,
 	  struct sk_buff *skb,
-	  const struct net_device *in,
-	  const struct net_device *out,
+	  const struct net_device *in, /* 入设备 */
+	  const struct net_device *out, /* 出设备 */
 	  int (*okfn)(struct sk_buff *))
 {
 	struct nf_conn *ct;
@@ -89,7 +89,7 @@ nf_nat_fn(unsigned int hooknum,
 	   and local-out, and nf_nat_out protects post-routing. */
 	NF_CT_ASSERT(!(ip_hdr(skb)->frag_off & htons(IP_MF | IP_OFFSET)));
 
-	ct = nf_ct_get(skb, &ctinfo);
+	ct = nf_ct_get(skb, &ctinfo); /* 获取连接信息 */
 	/* Can't track?  It's not due to stress, or conntrack would
 	   have dropped it.  Hence it's the user's responsibilty to
 	   packet filter it out, or implement conntrack/NAT for that
@@ -124,7 +124,7 @@ nf_nat_fn(unsigned int hooknum,
 				return NF_ACCEPT;
 		}
 		/* Fall thru... (Only ICMPs can be IP_CT_IS_REPLY) */
-	case IP_CT_NEW:
+	case IP_CT_NEW: /* 新连接 */
 
 		/* Seen it before?  This can happen for loopback, retrans,
 		   or local packets.. */

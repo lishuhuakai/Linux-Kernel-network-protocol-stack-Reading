@@ -360,7 +360,7 @@ struct sk_buff {
 
 	void			(*destructor)(struct sk_buff *skb);
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
-	struct nf_conntrack	*nfct;
+	struct nf_conntrack	*nfct; /* 连接追踪信息块 */
 	struct sk_buff		*nfct_reasm;
 #endif
 #ifdef CONFIG_BRIDGE_NETFILTER
@@ -1857,7 +1857,7 @@ static inline void *skb_header_pointer(const struct sk_buff *skb, int offset,
 
 	if (hlen - offset >= len)
 		return skb->data + offset;
-
+    /* 从skb中offset偏移开始的位置,拷贝长度为len的数据到buffer之中 */
 	if (skb_copy_bits(skb, offset, buffer, len) < 0)
 		return NULL;
 

@@ -28,6 +28,7 @@
 static unsigned int nf_ct_udp_timeout __read_mostly = 30*HZ;
 static unsigned int nf_ct_udp_timeout_stream __read_mostly = 180*HZ;
 
+/* 获取udp报文中的tuple信息 */
 static bool udp_pkt_to_tuple(const struct sk_buff *skb,
 			     unsigned int dataoff,
 			     struct nf_conntrack_tuple *tuple)
@@ -63,7 +64,9 @@ static int udp_print_tuple(struct seq_file *s,
 			  ntohs(tuple->dst.u.udp.port));
 }
 
-/* Returns verdict for packet, and may modify conntracktype */
+/* Returns verdict for packet, and may modify conntracktype
+ * 判断是接收还是丢弃这个报文
+ */
 static int udp_packet(struct nf_conn *ct,
 		      const struct sk_buff *skb,
 		      unsigned int dataoff,

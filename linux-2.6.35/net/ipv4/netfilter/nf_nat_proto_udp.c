@@ -19,6 +19,7 @@
 
 static u_int16_t udp_port_rover;
 
+/* 生成唯一的tuple */
 static bool
 udp_unique_tuple(struct nf_conntrack_tuple *tuple,
 		 const struct nf_nat_range *range,
@@ -29,6 +30,7 @@ udp_unique_tuple(struct nf_conntrack_tuple *tuple,
 					 &udp_port_rover);
 }
 
+/* 对报文做修改 */
 static bool
 udp_manip_pkt(struct sk_buff *skb,
 	      unsigned int iphdroff,
@@ -67,7 +69,7 @@ udp_manip_pkt(struct sk_buff *skb,
 		if (!hdr->check)
 			hdr->check = CSUM_MANGLED_0;
 	}
-	*portptr = newport;
+	*portptr = newport; /* 替换udp的端口 */
 	return true;
 }
 

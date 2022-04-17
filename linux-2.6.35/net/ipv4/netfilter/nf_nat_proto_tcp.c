@@ -30,6 +30,7 @@ tcp_unique_tuple(struct nf_conntrack_tuple *tuple,
 					 &tcp_port_rover);
 }
 
+/* 操纵tcp报文 */
 static bool
 tcp_manip_pkt(struct sk_buff *skb,
 	      unsigned int iphdroff,
@@ -63,14 +64,14 @@ tcp_manip_pkt(struct sk_buff *skb,
 		portptr = &hdr->source;
 	} else {
 		/* Get rid of dst ip and dst pt */
-		oldip = iph->daddr;
+		oldip = iph->daddr; /* 目的ip */
 		newip = tuple->dst.u3.ip;
 		newport = tuple->dst.u.tcp.port;
 		portptr = &hdr->dest;
 	}
 
 	oldport = *portptr;
-	*portptr = newport;
+	*portptr = newport; /* 端口进行了替换 */
 
 	if (hdrsize < sizeof(*hdr))
 		return true;

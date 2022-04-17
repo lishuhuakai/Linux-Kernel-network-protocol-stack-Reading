@@ -24,7 +24,7 @@ MODULE_AUTHOR("Netfilter Core Team <coreteam@netfilter.org>");
 MODULE_DESCRIPTION("Xtables: MAC address match");
 MODULE_ALIAS("ipt_mac");
 MODULE_ALIAS("ip6t_mac");
-
+/* 标准匹配,匹配mac */
 static bool mac_mt(const struct sk_buff *skb, struct xt_action_param *par)
 {
 	const struct xt_mac_info *info = par->matchinfo;

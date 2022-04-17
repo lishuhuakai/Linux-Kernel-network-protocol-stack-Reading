@@ -13,7 +13,7 @@ struct netns_ct {
 	unsigned int		expect_count;
 	unsigned int		htable_size;
 	struct kmem_cache	*nf_conntrack_cachep;
-	struct hlist_nulls_head	*hash;
+	struct hlist_nulls_head	*hash; /* hash桶 */
 	struct hlist_head	*expect_hash;
 	struct hlist_nulls_head	unconfirmed;
 	struct hlist_nulls_head	dying;

@@ -26,6 +26,7 @@
 
 /* The protocol-specific manipulable parts of the tuple: always in
    network order! */
+/* 协议指定的部分 */
 union nf_conntrack_man_proto {
 	/* Add other protocols here. */
 	__be16 all;
@@ -59,6 +60,7 @@ struct nf_conntrack_man {
 };
 
 /* This contains the information to distinguish a connection. */
+/* 此结构体包含着区分连接的一些信息 */
 struct nf_conntrack_tuple {
 	struct nf_conntrack_man src;
 
@@ -143,16 +145,16 @@ static inline void nf_ct_dump_tuple(const struct nf_conntrack_tuple *t)
 	((enum ip_conntrack_dir)(h)->tuple.dst.dir)
 
 /* Connections have two entries in the hash table: one for each way */
-struct nf_conntrack_tuple_hash {
+struct nf_conntrack_tuple_hash { /* hash表项 */
 	struct hlist_nulls_node hnnode;
-	struct nf_conntrack_tuple tuple;
+	struct nf_conntrack_tuple tuple; /* 元组信息 */
 };
 
 #endif /* __KERNEL__ */
 
 static inline bool __nf_ct_tuple_src_equal(const struct nf_conntrack_tuple *t1,
 					   const struct nf_conntrack_tuple *t2)
-{ 
+{
 	return (nf_inet_addr_cmp(&t1->src.u3, &t2->src.u3) &&
 		t1->src.u.all == t2->src.u.all &&
 		t1->src.l3num == t2->src.l3num);

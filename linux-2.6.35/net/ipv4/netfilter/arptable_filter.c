@@ -17,6 +17,7 @@ MODULE_DESCRIPTION("arptables filter table");
 #define FILTER_VALID_HOOKS ((1 << NF_ARP_IN) | (1 << NF_ARP_OUT) | \
 			   (1 << NF_ARP_FORWARD))
 
+/* filter表 */
 static const struct xt_table packet_filter = {
 	.name		= "filter",
 	.valid_hooks	= FILTER_VALID_HOOKS,
@@ -41,7 +42,7 @@ static struct nf_hook_ops *arpfilter_ops __read_mostly;
 static int __net_init arptable_filter_net_init(struct net *net)
 {
 	struct arpt_replace *repl;
-	
+
 	repl = arpt_alloc_initial_table(&packet_filter);
 	if (repl == NULL)
 		return -ENOMEM;

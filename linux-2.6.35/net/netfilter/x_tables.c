@@ -70,13 +70,13 @@ static const unsigned int xt_jumpstack_multiplier = 2;
 int
 xt_register_target(struct xt_target *target)
 {
-	u_int8_t af = target->family;
+	u_int8_t af = target->family; /* AF_INT等 */
 	int ret;
 
 	ret = mutex_lock_interruptible(&xt[af].mutex);
 	if (ret != 0)
 		return ret;
-	list_add(&target->list, &xt[af].target);
+	list_add(&target->list, &xt[af].target); /* 加入链表 */
 	mutex_unlock(&xt[af].mutex);
 	return ret;
 }
@@ -151,6 +151,7 @@ xt_unregister_match(struct xt_match *match)
 }
 EXPORT_SYMBOL(xt_unregister_match);
 
+/* 注册匹配项 */
 int
 xt_register_matches(struct xt_match *match, unsigned int n)
 {
@@ -1185,8 +1186,9 @@ static const struct file_operations xt_target_ops = {
 
 /**
  * xt_hook_link - set up hooks for a new table
+ *              - 为新表构建钩子
  * @table:	table with metadata needed to set up hooks
- * @fn:		Hook function
+ * @fn:		Hook function 回调函数
  *
  * This function will take care of creating and registering the necessary
  * Netfilter hooks for XT tables.
@@ -1207,7 +1209,7 @@ struct nf_hook_ops *xt_hook_link(const struct xt_table *table, nf_hookfn *fn)
 	     hook_mask >>= 1, ++hooknum) {
 		if (!(hook_mask & 1))
 			continue;
-		ops[i].hook     = fn;
+		ops[i].hook     = fn; /* 记录下回调函数 */
 		ops[i].owner    = table->me;
 		ops[i].pf       = table->af;
 		ops[i].hooknum  = hooknum;

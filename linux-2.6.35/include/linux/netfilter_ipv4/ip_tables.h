@@ -40,14 +40,14 @@ struct ipt_ip {
 	struct in_addr src, dst;
 	/* Mask for src and dest IP addr */
 	struct in_addr smsk, dmsk;
-	char iniface[IFNAMSIZ], outiface[IFNAMSIZ];
+	char iniface[IFNAMSIZ], outiface[IFNAMSIZ]; /* 输入输出的网络接口 */
 	unsigned char iniface_mask[IFNAMSIZ], outiface_mask[IFNAMSIZ];
 
 	/* Protocol, 0 = ANY */
-	u_int16_t proto;
+	u_int16_t proto; /* 协议, 0 = ANY */
 
 	/* Flags word */
-	u_int8_t flags;
+	u_int8_t flags; /* 标志字段 */
 	/* Inverse flags */
 	u_int8_t invflags;
 };
@@ -76,25 +76,26 @@ struct ipt_ip {
 /* This structure defines each of the firewall rules.  Consists of 3
    parts which are 1) general IP header stuff 2) match specific
    stuff 3) the target to perform if the rule matches */
+/* 这个结构定义了一系列的防火墙规则, */
 struct ipt_entry {
-	struct ipt_ip ip;
+	struct ipt_ip ip; /* 所要匹配的报文的ip头信息 */
 
 	/* Mark with fields that we care about. */
 	unsigned int nfcache;
 
 	/* Size of ipt_entry + matches */
-	u_int16_t target_offset;
+	u_int16_t target_offset; /* 位向量,表示本规则关心报文的什么部分 */
 	/* Size of ipt_entry + matches + target */
-	u_int16_t next_offset;
+	u_int16_t next_offset; /* 下一条规则相对于本规则的偏移,也即本规则所用空间的总和 */
 
 	/* Back pointer */
-	unsigned int comefrom;
+	unsigned int comefrom; /* 规则返回点，标记调用本规则的HOOK号，可用于检查规则的有效性 */
 
 	/* Packet and byte counters. */
-	struct xt_counters counters;
+	struct xt_counters counters; /* 记录该规则处理过的报文数和报文总字节数 */
 
 	/* The matches (if any), then the target. */
-	unsigned char elems[0];
+	unsigned char elems[0]; /*target或者是match的起始位置 */
 };
 
 /*
@@ -175,7 +176,7 @@ struct ipt_replace {
 	unsigned int valid_hooks;
 
 	/* Number of entries */
-	unsigned int num_entries;
+	unsigned int num_entries; /* 条目数 */
 
 	/* Total size of new entries */
 	unsigned int size;

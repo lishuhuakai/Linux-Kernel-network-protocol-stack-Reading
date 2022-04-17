@@ -3,17 +3,18 @@
 /* Connection state tracking for netfilter.  This is separated from,
    but required by, the NAT layer; it can also be used by an iptables
    extension. */
+/* netfilter的连接状态追踪 */
 enum ip_conntrack_info {
 	/* Part of an established connection (either direction). */
 	IP_CT_ESTABLISHED,
 
 	/* Like NEW, but related to an existing connection, or ICMP error
 	   (in either direction). */
-	IP_CT_RELATED,
+	IP_CT_RELATED, /* 类似于NEW,但是和一个已经存在的连接相关联 */
 
 	/* Started a new connection to track (only
            IP_CT_DIR_ORIGINAL); may be a retransmission. */
-	IP_CT_NEW,
+	IP_CT_NEW, /* 开始追踪一个新的连接 */
 
 	/* >= this indicates reply direction */
 	IP_CT_IS_REPLY,
@@ -25,11 +26,11 @@ enum ip_conntrack_info {
 /* Bitset representing status of connection. */
 enum ip_conntrack_status {
 	/* It's an expected connection: bit 0 set.  This bit never changed */
-	IPS_EXPECTED_BIT = 0,
+	IPS_EXPECTED_BIT = 0, /* 如果是期望连接,则设置该bit */
 	IPS_EXPECTED = (1 << IPS_EXPECTED_BIT),
 
 	/* We've seen packets both ways: bit 1 set.  Can be set, not unset. */
-	IPS_SEEN_REPLY_BIT = 1,
+	IPS_SEEN_REPLY_BIT = 1, /* 连接的两个方向上都已经检测到了数据包,设置该bit */
 	IPS_SEEN_REPLY = (1 << IPS_SEEN_REPLY_BIT),
 
 	/* Conntrack should never be early-expired. */
@@ -56,7 +57,7 @@ enum ip_conntrack_status {
 	IPS_SEQ_ADJUST = (1 << IPS_SEQ_ADJUST_BIT),
 
 	/* NAT initialization bits. */
-	IPS_SRC_NAT_DONE_BIT = 7,
+	IPS_SRC_NAT_DONE_BIT = 7, /* 为此连接做SNAT的准备工作已经做好 */
 	IPS_SRC_NAT_DONE = (1 << IPS_SRC_NAT_DONE_BIT),
 
 	IPS_DST_NAT_DONE_BIT = 8,
@@ -66,11 +67,11 @@ enum ip_conntrack_status {
 	IPS_NAT_DONE_MASK = (IPS_DST_NAT_DONE | IPS_SRC_NAT_DONE),
 
 	/* Connection is dying (removed from lists), can not be unset. */
-	IPS_DYING_BIT = 9,
+	IPS_DYING_BIT = 9, /* 当连接从全局链表中被移除之后,会设置该bit,表示该连接跟踪信息块即将被销毁,不应该被访问 */
 	IPS_DYING = (1 << IPS_DYING_BIT),
 
 	/* Connection has fixed timeout. */
-	IPS_FIXED_TIMEOUT_BIT = 10,
+	IPS_FIXED_TIMEOUT_BIT = 10, /* 连接具有固定的超时时间,不可被更新 */
 	IPS_FIXED_TIMEOUT = (1 << IPS_FIXED_TIMEOUT_BIT),
 
 	/* Conntrack is a template */

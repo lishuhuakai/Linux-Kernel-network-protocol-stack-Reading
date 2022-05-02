@@ -681,6 +681,7 @@ static void fib_hash_move(struct hlist_head *new_info_hash,
 	fib_hash_free(old_laddrhash, bytes);
 }
 
+/* 创建网段 */
 struct fib_info *fib_create_info(struct fib_config *cfg)
 {
 	int err;
@@ -773,7 +774,7 @@ struct fib_info *fib_create_info(struct fib_config *cfg)
 	} else {
 		struct fib_nh *nh = fi->fib_nh;
 
-		nh->nh_oif = cfg->fc_oif;
+		nh->nh_oif = cfg->fc_oif; /* 出口 */
 		nh->nh_gw = cfg->fc_gw;
 		nh->nh_flags = cfg->fc_flags;
 #ifdef CONFIG_NET_CLS_ROUTE
@@ -864,7 +865,7 @@ failure:
 
 /* Note! fib_semantic_match intentionally uses  RCU list functions. */
 /* 查找对应的路由表项
- * @param fib_alias组建的链表
+ * @param head fib_alias组建的链表
  * @param flp 匹配条件
  * @param res 查找结果将会放入此结构之中
  */
@@ -902,6 +903,7 @@ int fib_semantic_match(struct list_head *head, const struct flowi *flp,
 				for_nexthops(fi) { /* 遍历nexthop */
 					if (nh->nh_flags & RTNH_F_DEAD) /* 过滤掉已经挂掉的nexthop */
 						continue;
+                    /* 匹配条件对输出接口无要求,或者输出接口恰好匹配 */
 					if (!flp->oif || flp->oif == nh->nh_oif)
 						break;
 				}

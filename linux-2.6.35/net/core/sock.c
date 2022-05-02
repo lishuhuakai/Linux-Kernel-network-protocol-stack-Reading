@@ -406,6 +406,7 @@ struct dst_entry *sk_dst_check(struct sock *sk, u32 cookie)
 }
 EXPORT_SYMBOL(sk_dst_check);
 
+/* socket绑定设备 */
 static int sock_bindtodevice(struct sock *sk, char __user *optval, int optlen)
 {
 	int ret = -ENOPROTOOPT;
@@ -441,7 +442,7 @@ static int sock_bindtodevice(struct sock *sk, char __user *optval, int optlen)
 		struct net_device *dev;
 
 		rcu_read_lock();
-		dev = dev_get_by_name_rcu(net, devname);
+		dev = dev_get_by_name_rcu(net, devname); /* 获取对应的设备 */
 		if (dev)
 			index = dev->ifindex;
 		rcu_read_unlock();

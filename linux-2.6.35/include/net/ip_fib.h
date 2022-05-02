@@ -21,34 +21,34 @@
 #include <net/fib_rules.h>
 
 struct fib_config {
-	u8			fc_dst_len;
+	u8			fc_dst_len; /* 掩码长度 */
 	u8			fc_tos;
 	u8			fc_protocol;
 	u8			fc_scope;
 	u8			fc_type;
 	/* 3 bytes unused */
-	u32			fc_table;
-	__be32			fc_dst;
-	__be32			fc_gw;
-	int			fc_oif;
+	u32			fc_table; /* 路由表id */
+	__be32			fc_dst; /* 目的地 */
+	__be32			fc_gw; /* 网关 */
+	int			fc_oif; /* 出接口索引 */
 	u32			fc_flags;
 	u32			fc_priority;
-	__be32			fc_prefsrc;
+	__be32			fc_prefsrc; /* 首选源地址 */
 	struct nlattr		*fc_mx;
 	struct rtnexthop	*fc_mp;
 	int			fc_mx_len;
 	int			fc_mp_len;
-	u32			fc_flow;
-	u32			fc_nlflags;
+	u32			fc_flow; /* 基于测量路由的分类标签 */
+	u32			fc_nlflags; /* 操作模式 */
 	struct nl_info		fc_nlinfo;
  };
 
 struct fib_info;
-
+/* 路由的下一跳 */
 struct fib_nh {
-	struct net_device	*nh_dev;
+	struct net_device	*nh_dev; /* 输出网络设备 */
 	struct hlist_node	nh_hash;
-	struct fib_info		*nh_parent;
+	struct fib_info		*nh_parent; /* 指向所属的fib_info结构,双向引用 */
 	unsigned		nh_flags;
 	unsigned char		nh_scope;
 #ifdef CONFIG_IP_ROUTE_MULTIPATH
@@ -59,22 +59,29 @@ struct fib_nh {
 	__u32			nh_tclassid;
 #endif
 	int			nh_oif;
-	__be32			nh_gw;
+	__be32			nh_gw; /* 路由项网关地址 */
 };
 
 /*
  * This structure contains data shared by many of routes.
  */
-
+/* fib_info实例记录了路由表项的重要信息,如nexthop */
 struct fib_info {
 	struct hlist_node	fib_hash;
 	struct hlist_node	fib_lhash;
 	struct net		*fib_net;
 	int			fib_treeref;
 	atomic_t		fib_clntref;
-	int			fib_dead;
+	int			fib_dead; /* 标记路由正在被删除 */
 	unsigned		fib_flags;
-	int			fib_protocol;
+    /* fib_protocol取值:
+     * RTPROT_UNSPEC
+     * RTPROT_REDIRECT
+     * RTPROT_KERNEL
+     * RTPROT_BOOT
+     * RTPROT_STATIC ...
+     */
+	int			fib_protocol; /* 路由的协议 */
 	__be32			fib_prefsrc;
 	u32			fib_priority;
 	u32			fib_metrics[RTAX_MAX];
@@ -86,7 +93,7 @@ struct fib_info {
 #ifdef CONFIG_IP_ROUTE_MULTIPATH
 	int			fib_power;
 #endif
-	struct fib_nh		fib_nh[0];
+	struct fib_nh		fib_nh[0]; /* 下一条信息 */
 #define fib_dev		fib_nh[0].nh_dev
 };
 
@@ -144,8 +151,8 @@ struct fib_result_nl {
 #define FIB_RES_OIF(res)		(FIB_RES_NH(res).nh_oif)
 
 struct fib_table {
-	struct hlist_node tb_hlist;
-	u32		tb_id;
+	struct hlist_node tb_hlist; /* 可能会存在很多张路由表,为了方便管理,将所有路由表连接起来,构成链表 */
+	u32		tb_id; /* 路由表标识 */
 	int		tb_default;
 	unsigned char	tb_data[0];
 };

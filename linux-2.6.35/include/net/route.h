@@ -62,7 +62,17 @@ struct rtable {
 	struct in_device	*idev; /* 输出网络设备的ip配置块 */
 
 	int			rt_genid;
+    /* RTCF_BROADCAST 路由的目的地址是一个广播地址
+     * RTCF_MULTICAST 路由的目的地址是一个多播地址
+     * RTCF_LOCAL 路由的目的地址是一个本地地址
+     * RTCF_DIRECTSRC 不正确的源地址
+     */
 	unsigned		rt_flags; /* 用于标识路由表项的一些特征和标志 */
+    /* rt_type可能的取值入下:
+     * RTN_UNSPEC 定义一个未初始化的值
+     * RTN_LOCAL 目的地址是本地地址
+     * RTN_UNICAST 路由是一条到单播地址的路由
+     */
 	__u16			rt_type;  /* 路由表项的类型 */
 
 	__be32			rt_dst;	/* Path destination	*/
@@ -73,6 +83,7 @@ struct rtable {
 	__be32			rt_gateway;
 
 	/* Miscellaneous cached information */
+    /* 首选源地址 */
 	__be32			rt_spec_dst; /* RFC1122 specific destination */
 	struct inet_peer	*peer; /* long-living peer info */
 };

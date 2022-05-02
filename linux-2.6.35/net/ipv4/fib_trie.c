@@ -1223,9 +1223,11 @@ int fib_table_insert(struct fib_table *tb, struct fib_config *cfg)
 	/* Now fa, if non-NULL, points to the first fib alias
 	 * with the same keys [prefix,tos,priority], if such key already
 	 * exists or to the node before which we will insert new one.
+	 * 现在如果fa非空,并且指向第一个fib alias实例,它具有相同的key[perfix, tos, priority],
 	 *
 	 * If fa is NULL, we will need to allocate a new one and
 	 * insert to the head of f.
+	 * 如果fa为NULL,我们需要创建一个fib alias实例,并且插入
 	 *
 	 * If f is NULL, no fib node matched the destination key
 	 * and we need to allocate a new one of those as well.
@@ -1236,7 +1238,7 @@ int fib_table_insert(struct fib_table *tb, struct fib_config *cfg)
 		struct fib_alias *fa_first, *fa_match;
 
 		err = -EEXIST;
-		if (cfg->fc_nlflags & NLM_F_EXCL)
+		if (cfg->fc_nlflags & NLM_F_EXCL) /* 已经存在,而且不允许更改,则返回 */
 			goto out;
 
 		/* We have 2 goals:
@@ -1260,7 +1262,7 @@ int fib_table_insert(struct fib_table *tb, struct fib_config *cfg)
 			}
 		}
 
-		if (cfg->fc_nlflags & NLM_F_REPLACE) {
+		if (cfg->fc_nlflags & NLM_F_REPLACE) { /* 如果存在,则替换 */
 			struct fib_info *fi_drop;
 			u8 state;
 

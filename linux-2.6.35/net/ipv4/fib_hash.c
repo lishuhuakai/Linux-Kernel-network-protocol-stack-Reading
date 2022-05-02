@@ -47,23 +47,32 @@
 static struct kmem_cache *fn_hash_kmem __read_mostly;
 static struct kmem_cache *fn_alias_kmem __read_mostly;
 
+/* fib_node代表网络号(网段),需要注意的是,网段相同,其他参数不同的路由表项共享同一个fib_node实例
+ *
+ */
 struct fib_node {
 	struct hlist_node	fn_hash;
+    /* 指向fib_alias结构体实例构成的链表,这些fib_alias实例共享同一个fib_node */
 	struct list_head	fn_alias;
-	__be32			fn_key;
+	__be32			fn_key; /* 由ip地址和路由项的netmask与操作之后得到,被用作查找路由表时的搜索条件 */
 	struct fib_alias        fn_embedded_alias;
 };
 
 struct fn_zone {
+    /* 为了方便管理,将活动(路由表项不为空)的zone链接在一起,构成链表,链表头部存储在fn_hash数据结构的fn_zone_list字段中 */
 	struct fn_zone		*fz_next;	/* Next not empty zone	*/
+    /* 指向存储该zone中路由项的散列表 */
 	struct hlist_head	*fz_hash;	/* Hash table pointer	*/
+    /* 在该zone的散列表中fib_node实例的数目 */
 	int			fz_nent;	/* Number of entries	*/
-
+    /* 表示散列表fz_hash的容量以及散列表桶的数目 */
 	int			fz_divisor;	/* Hash divisor		*/
+    /* 其值为fz_divisor-1,用来计算散列表的关键值 */
 	u32			fz_hashmask;	/* (fz_divisor - 1)	*/
 #define FZ_HASHMASK(fz)		((fz)->fz_hashmask)
-
+    /* 网络掩码fz_mask的长度,在代码中有些地方也用prefixlen来表示,例如,网络掩码255.255.255.0所对应的fz_order为24 */
 	int			fz_order;	/* Zone order		*/
+    /* 用fz_order构造得到的网络掩码,比如fz_order为3,则fz_mask为224.0.0.0 */
 	__be32			fz_mask;
 #define FZ_MASK(fz)		((fz)->fz_mask)
 };
@@ -243,6 +252,7 @@ fn_new_zone(struct fn_hash *table, int z)
 	return fz;
 }
 
+/* 路由查找 */
 int fib_table_lookup(struct fib_table *tb,
 		     const struct flowi *flp, struct fib_result *res)
 {
@@ -251,11 +261,12 @@ int fib_table_lookup(struct fib_table *tb,
 	struct fn_hash *t = (struct fn_hash *)tb->tb_data;
 
 	read_lock(&fib_hash_lock);
+    /* 最长匹配 */
 	for (fz = t->fn_zone_list; fz; fz = fz->fz_next) {
 		struct hlist_head *head;
 		struct hlist_node *node;
 		struct fib_node *f;
-		__be32 k = fz_key(flp->fl4_dst, fz);
+		__be32 k = fz_key(flp->fl4_dst, fz); /* 计算hash值 */
 
 		head = &fz->fz_hash[fn_hash(k, fz)];
 		hlist_for_each_entry(f, node, head, fn_hash) {
@@ -358,7 +369,7 @@ static struct fib_node *fib_find_node(struct fn_zone *fz, __be32 key)
 	struct hlist_head *head = &fz->fz_hash[fn_hash(key, fz)];
 	struct hlist_node *node;
 	struct fib_node *f;
-
+    /* 查找匹配的网段 */
 	hlist_for_each_entry(f, node, head, fn_hash) {
 		if (f->fn_key == key)
 			return f;
@@ -545,6 +556,7 @@ out:
 	return err;
 }
 
+/* 删除路由 */
 int fib_table_delete(struct fib_table *tb, struct fib_config *cfg)
 {
 	struct fn_hash *table = (struct fn_hash *)tb->tb_data;
@@ -555,7 +567,7 @@ int fib_table_delete(struct fib_table *tb, struct fib_config *cfg)
 
 	if (cfg->fc_dst_len > 32)
 		return -EINVAL;
-
+    /* 获取指定掩码长度的zone */
 	if ((fz  = table->fn_zones[cfg->fc_dst_len]) == NULL)
 		return -ESRCH;
 
@@ -571,7 +583,7 @@ int fib_table_delete(struct fib_table *tb, struct fib_config *cfg)
 	if (!f)
 		fa = NULL;
 	else
-		fa = fib_find_alias(&f->fn_alias, cfg->fc_tos, 0);
+		fa = fib_find_alias(&f->fn_alias, cfg->fc_tos, 0); /* 根据tos以及优先级匹配路由表项 */
 	if (!fa)
 		return -ESRCH;
 
@@ -590,7 +602,7 @@ int fib_table_delete(struct fib_table *tb, struct fib_config *cfg)
 		    (!cfg->fc_protocol ||
 		     fi->fib_protocol == cfg->fc_protocol) &&
 		    fib_nh_match(cfg, fi) == 0) {
-			fa_to_delete = fa;
+			fa_to_delete = fa; /* 匹配成功 */
 			break;
 		}
 	}
@@ -767,6 +779,7 @@ int fib_table_dump(struct fib_table *tb, struct sk_buff *skb,
 	return skb->len;
 }
 
+/* 路由表的初始化 */
 void __init fib_hash_init(void)
 {
 	fn_hash_kmem = kmem_cache_create("ip_fib_hash", sizeof(struct fib_node),

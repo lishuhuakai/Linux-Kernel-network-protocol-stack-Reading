@@ -5,11 +5,18 @@
 #include <linux/list.h>
 #include <net/ip_fib.h>
 
+/* fib_alias实例代表一条路由表项 */
 struct fib_alias {
 	struct list_head	fa_list;
-	struct fib_info		*fa_info;
-	u8			fa_tos;
-	u8			fa_type;
+	struct fib_info		*fa_info; /* 记录着如何处理与该路由相匹配的数据报的信息 */
+	u8			fa_tos; /* 路由的服务类型比特位字段 */
+    /* fa_type 常用值:
+     * RTN_LOCAL 目的地址为本地接口
+     * RTN_UNICAST 该路由是一条到单播的直连/非直连路由
+     * RTN_MULTICAST 目的地址是一个多播地址
+     * RTN_BROADCAST 目的地址是一个广播地址,匹配的输入报文以广播方式送往本地,匹配的输出报文以广播方式发送出去
+     */
+	u8			fa_type; /* 路由表项类型 */
 	u8			fa_scope;
 	u8			fa_state;
 #ifdef CONFIG_IP_FIB_TRIE

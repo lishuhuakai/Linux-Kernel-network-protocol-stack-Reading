@@ -4180,7 +4180,7 @@ int dev_set_allmulti(struct net_device *dev, int inc)
 		}
 	}
 	if (dev->flags ^ old_flags) {
-		dev_change_rx_flags(dev, IFF_ALLMULTI);
+		dev_change_rx_flags(dev, IFF_ALLMULTI); /* 接收组播报文 */
 		dev_set_rx_mode(dev);
 	}
 	return 0;

@@ -864,6 +864,7 @@ out:
 	return done;
 }
 
+/* 选择一个合适的源地址 */
 __be32 inet_select_addr(const struct net_device *dev, __be32 dst, int scope)
 {
 	__be32 addr = 0;
@@ -874,7 +875,7 @@ __be32 inet_select_addr(const struct net_device *dev, __be32 dst, int scope)
 	in_dev = __in_dev_get_rcu(dev);
 	if (!in_dev)
 		goto no_in_dev;
-
+    /* 遍历接口的ip */
 	for_primary_ifa(in_dev) {
 		if (ifa->ifa_scope > scope)
 			continue;

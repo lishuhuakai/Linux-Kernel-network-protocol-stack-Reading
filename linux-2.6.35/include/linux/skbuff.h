@@ -453,6 +453,7 @@ static inline struct dst_entry *skb_dst(const struct sk_buff *skb)
  *
  * Sets skb dst, assuming a reference was taken on dst and should
  * be released by skb_dst_drop()
+ * 设置报文的目的路由
  */
 static inline void skb_dst_set(struct sk_buff *skb, struct dst_entry *dst)
 {

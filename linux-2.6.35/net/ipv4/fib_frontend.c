@@ -608,6 +608,7 @@ errout:
 	return err;
 }
 
+/* 通过netlink添加路由 */
 static int inet_rtm_newroute(struct sk_buff *skb, struct nlmsghdr *nlh, void *arg)
 {
 	struct net *net = sock_net(skb->sk);
@@ -732,7 +733,7 @@ void fib_add_ifaddr(struct in_ifaddr *ifa)
 	__be32 addr = ifa->ifa_local;
 	__be32 prefix = ifa->ifa_address&mask;
 
-	if (ifa->ifa_flags&IFA_F_SECONDARY) {
+	if (ifa->ifa_flags & IFA_F_SECONDARY) {
 		prim = inet_ifa_byprefix(in_dev, prefix, mask);
 		if (prim == NULL) {
 			printk(KERN_WARNING "fib_add_ifaddr: bug: prim == NULL\n");
@@ -744,14 +745,14 @@ void fib_add_ifaddr(struct in_ifaddr *ifa)
 
 	if (!(dev->flags&IFF_UP))
 		return;
-
+    /* 这里为了复用代码,直接使用了netlink接口 */
 	/* Add broadcast address, if it is explicitly assigned. */
 	if (ifa->ifa_broadcast && ifa->ifa_broadcast != htonl(0xFFFFFFFF))
 		fib_magic(RTM_NEWROUTE, RTN_BROADCAST, ifa->ifa_broadcast, 32, prim);
 
-	if (!ipv4_is_zeronet(prefix) && !(ifa->ifa_flags&IFA_F_SECONDARY) &&
+	if (!ipv4_is_zeronet(prefix) && !(ifa->ifa_flags & IFA_F_SECONDARY) &&
 	    (prefix != addr || ifa->ifa_prefixlen < 32)) {
-		fib_magic(RTM_NEWROUTE, dev->flags&IFF_LOOPBACK ? RTN_LOCAL :
+		fib_magic(RTM_NEWROUTE, dev->flags & IFF_LOOPBACK ? RTN_LOCAL :
 			  RTN_UNICAST, prefix, ifa->ifa_prefixlen, prim);
 
 		/* Add network specific broadcasts, when it takes a sense */
@@ -950,7 +951,7 @@ static int fib_netdev_event(struct notifier_block *this, unsigned long event, vo
 	struct net_device *dev = ptr;
 	struct in_device *in_dev = __in_dev_get_rtnl(dev);
 
-	if (event == NETDEV_UNREGISTER) {
+	if (event == NETDEV_UNREGISTER) { /* 网络设备注销 */
 		fib_disable_ip(dev, 2, -1);
 		return NOTIFY_DONE;
 	}

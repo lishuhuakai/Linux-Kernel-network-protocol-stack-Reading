@@ -181,22 +181,32 @@ static inline int ip_mr_init(void)
 /* 虚拟接口 */
 struct vif_device {
 	struct net_device 	*dev;			/* Device we are using -- 该虚拟接口对应的物理网络设备 */
-	unsigned long	bytes_in,bytes_out;
+	unsigned long	bytes_in,bytes_out; /* 通过该虚拟接口输入和输出的组播报文总字节数 */
 	unsigned long	pkt_in,pkt_out;		/* Statistics 			*/
 	unsigned long	rate_limit;		/* Traffic shaping (NI) 	*/
 	unsigned char	threshold;		/* TTL threshold 		*/
 	unsigned short	flags;			/* Control flags 		*/
+    /* 当采用物理网络设备方式时,local为网络设备的ip地址,remote则无效
+     * 当采用ip-ip隧道方式时,local为隧道起点地址,remote为隧道终点地址
+     */
 	__be32		local,remote;		/* Addresses(remote for tunnels)*/
+    /* 对应物理网络设备的索引 */
 	int		link;			/* Physical interface index	*/
 };
 
 #define VIFF_STATIC 0x8000
-/* Multicast Forwarding Cache -- 组播转发缓存 */
+/* Multicast Forwarding Cache -- 组播转发缓存
+ * 你也可以认为它是 组播转发路由
+ */
 struct mfc_cache {
 	struct list_head list;
 	__be32 mfc_mcastgrp;	    /* Group the entry belongs to -- 组播报文的组播地址	*/
 	__be32 mfc_origin;			/* Source of packet -- 组播发送方的ip地址 		*/
 	vifi_t mfc_parent;			/* Source interface	-- 虚拟接口在vif_table数组中的索引	*/
+    /* mfc_flags取值:
+     *  MFC_STATIC 静态创建组播转发缓存,不是由mrouted进程创建,因此mrouted进程不能操作它
+     *  MFC_NOTIFY 通知用户进程的路由缓存,路由已经发生了更改
+     */
 	int mfc_flags;				/* Flags on line -- 组播转发缓存标志		*/
 
 	union {

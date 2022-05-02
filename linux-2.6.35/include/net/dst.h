@@ -46,7 +46,7 @@ struct dst_entry {
 	short			error;
 	short			obsolete;
 	int			flags;
-#define DST_HOST		1
+#define DST_HOST		1 /* 报文需要输入本机 */
 #define DST_NOXFRM		2
 #define DST_NOPOLICY		4
 #define DST_NOHASH		8
@@ -67,12 +67,13 @@ struct dst_entry {
 #else
 	void			*__pad1;
 #endif
+    /* 下面两个函数非常重要,影响着报文的转发 */
 	int			(*input)(struct sk_buff*);
 	int			(*output)(struct sk_buff*);
 
 	struct  dst_ops	        *ops;
 
-	u32			metrics[RTAX_MAX];
+	u32			metrics[RTAX_MAX]; /* 多种度量值 */
 
 #ifdef CONFIG_NET_CLS_ROUTE
 	__u32			tclassid;
@@ -164,6 +165,7 @@ static inline void dst_hold(struct dst_entry * dst)
 	atomic_inc(&dst->__refcnt);
 }
 
+/* dst被使用,更新其引用计数,lastuse记录的时间戳 */
 static inline void dst_use(struct dst_entry *dst, unsigned long time)
 {
 	dst_hold(dst);

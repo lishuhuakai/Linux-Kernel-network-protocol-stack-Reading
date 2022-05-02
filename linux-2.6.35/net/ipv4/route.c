@@ -1127,13 +1127,14 @@ restart:
 	rthp = &rt_hash_table[hash].chain;
 
 	spin_lock_bh(rt_hash_lock_addr(hash));
-	while ((rth = *rthp) != NULL) {
-		if (rt_is_expired(rth)) {
+	while ((rth = *rthp) != NULL) { /* 遍历hash键上的路由缓存 */
+		if (rt_is_expired(rth)) { /* 如果过期,需要及时移除 */
 			*rthp = rth->u.dst.rt_next;
 			rt_free(rth);
 			continue;
 		}
 		if (compare_keys(&rth->fl, &rt->fl) && compare_netns(rth, rt)) {
+            /* 没有找到的话,要添加至缓存之中 */
 			/* Put it first */
 			*rthp = rth->u.dst.rt_next;
 			/*
@@ -1206,6 +1207,9 @@ restart:
 
 	/* Try to bind route to arp only if it is output
 	   route or unicast forwarding path.
+	 */
+	/* 对于本地生成的输出路由和单播转发路由,需要arp来解析下一跳的二层地址,因此
+     * 需要绑定到该路由下一跳的arp缓存,而转发目的地为广播,多播,本机地址的路由,无需arp
 	 */
 	if (rt->rt_type == RTN_UNICAST || rt->fl.iif == 0) {
 		int err = arp_bind_neighbour(&rt->u.dst);
@@ -1880,7 +1884,7 @@ static int ip_route_input_mc(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	rth->u.dst.obsolete = -1;
 
 	atomic_set(&rth->u.dst.__refcnt, 1);
-	rth->u.dst.flags= DST_HOST;
+	rth->u.dst.flags= DST_HOST; /* 目的地址是本机 */
 	if (IN_DEV_CONF_GET(in_dev, NOPOLICY))
 		rth->u.dst.flags |= DST_NOPOLICY;
 	rth->fl.fl4_dst	= daddr;
@@ -1916,6 +1920,7 @@ static int ip_route_input_mc(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 
 	in_dev_put(in_dev);
 	hash = rt_hash(daddr, saddr, dev->ifindex, rt_genid(dev_net(dev)));
+    /* 将路由缓存插入hash */
 	return rt_intern_hash(hash, rth, NULL, skb, dev->ifindex);
 
 e_nobufs:
@@ -1959,8 +1964,12 @@ static void ip_handle_martian_source(struct net_device *dev,
 }
 
 /*
+ * @param skb 输入的用来查询输入路由缓存项的报文
  * @param res 路由的查找结果
  * @param in_dev 输出设备
+ * @param daddr 待创建路由缓存项的目的地址
+ * @param saddr 待创建路由缓存项的源地址
+ * @param result 用于返回成功创建的路由缓存项
  */
 static int __mkroute_input(struct sk_buff *skb,
 			   struct fib_result *res,
@@ -2180,7 +2189,7 @@ static int ip_route_input_slow(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 		goto local_input; /* 发送到本机 */
 	}
 
-	if (!IN_DEV_FORWARD(in_dev))
+	if (!IN_DEV_FORWARD(in_dev)) /* 系统禁止转发 */
 		goto e_hostunreach;
 	if (res.type != RTN_UNICAST)
 		goto martian_destination;
@@ -2233,7 +2242,7 @@ local_input:
 	rth->u.dst.tclassid = itag;
 #endif
 	rth->rt_iif	=
-	rth->fl.iif	= dev->ifindex;
+	rth->fl.iif	= dev->ifindex; /* 输入接口 */
 	rth->u.dst.dev	= net->loopback_dev;
 	dev_hold(rth->u.dst.dev);
 	rth->idev	= in_dev_get(rth->u.dst.dev);
@@ -2307,6 +2316,7 @@ int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 	hash = rt_hash(daddr, saddr, iif, rt_genid(net));
 
 	rcu_read_lock();
+    /* 查找路由缓存项 */
 	for (rth = rcu_dereference(rt_hash_table[hash].chain); rth;
 	     rth = rcu_dereference(rth->u.dst.rt_next)) {
 		if ((((__force u32)rth->fl.fl4_dst ^ (__force u32)daddr) |
@@ -2321,7 +2331,7 @@ int ip_route_input_common(struct sk_buff *skb, __be32 daddr, __be32 saddr,
 				dst_use_noref(&rth->u.dst, jiffies);
 				skb_dst_set_noref(skb, &rth->u.dst);
 			} else {
-				dst_use(&rth->u.dst, jiffies);
+				dst_use(&rth->u.dst, jiffies); /* 更新最后一次被使用的时间戳 */
 				skb_dst_set(skb, &rth->u.dst);
 			}
 			RT_CACHE_STAT_INC(in_hit);
@@ -2344,13 +2354,13 @@ skip_cache:
 	   Note, that multicast routers are not affected, because
 	   route cache entry is created eventually.
 	 */
-	if (ipv4_is_multicast(daddr)) {
+	if (ipv4_is_multicast(daddr)) { /* 组播 */
 		struct in_device *in_dev;
 
 		rcu_read_lock();
 		if ((in_dev = __in_dev_get_rcu(dev)) != NULL) {
 			int our = ip_check_mc(in_dev, daddr, saddr,
-				ip_hdr(skb)->protocol);
+				ip_hdr(skb)->protocol); /* 本机是否要接收这个组播报文 */
 			if (our
 #ifdef CONFIG_IP_MROUTE
 				||
@@ -2385,8 +2395,8 @@ static int __mkroute_output(struct rtable **result,
 	if (ipv4_is_loopback(fl->fl4_src) && !(dev_out->flags&IFF_LOOPBACK))
 		return -EINVAL;
 
-	if (fl->fl4_dst == htonl(0xFFFFFFFF))
-		res->type = RTN_BROADCAST;
+	if (fl->fl4_dst == htonl(0xFFFFFFFF)) =
+		res->type = RTN_BROADCAST; /* 广播 */
 	else if (ipv4_is_multicast(fl->fl4_dst))
 		res->type = RTN_MULTICAST; /* 多播 */
 	else if (ipv4_is_lbcast(fl->fl4_dst) || ipv4_is_zeronet(fl->fl4_dst))
@@ -2724,7 +2734,7 @@ int __ip_route_output_key(struct net *net, struct rtable **rp,
 
 	if (!rt_caching(net))
 		goto slow_output;
-
+    /* 首先查找路由缓存 */
 	hash = rt_hash(flp->fl4_dst, flp->fl4_src, flp->oif, rt_genid(net));
 
 	rcu_read_lock_bh();
@@ -2742,7 +2752,7 @@ int __ip_route_output_key(struct net *net, struct rtable **rp,
 			dst_use(&rth->u.dst, jiffies);
 			RT_CACHE_STAT_INC(out_hit);
 			rcu_read_unlock_bh();
-			*rp = rth;
+			*rp = rth; /* 找到了缓存 */
 			return 0;
 		}
 		RT_CACHE_STAT_INC(out_hlist_search);

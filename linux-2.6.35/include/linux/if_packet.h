@@ -12,7 +12,7 @@ struct sockaddr_pkt {
 struct sockaddr_ll {
 	unsigned short	sll_family;
 	__be16		sll_protocol;
-	int		sll_ifindex;
+	int		sll_ifindex; /* 接收设备的id */
 	unsigned short	sll_hatype;
 	unsigned char	sll_pkttype;
 	unsigned char	sll_halen;
@@ -64,8 +64,8 @@ struct tpacket_auxdata {
 };
 
 /* Rx ring - header status */
-#define TP_STATUS_KERNEL	0x0
-#define TP_STATUS_USER		0x1
+#define TP_STATUS_KERNEL	0x0 /* 内存区域kernel正在使用 */
+#define TP_STATUS_USER		0x1 /* 内存区域可以交由用户态使用 */
 #define TP_STATUS_COPY		0x2
 #define TP_STATUS_LOSING	0x4
 #define TP_STATUS_CSUMNOTREADY	0x8
@@ -123,8 +123,11 @@ enum tpacket_versions {
 
 struct tpacket_req {
 	unsigned int	tp_block_size;	/* Minimal size of contiguous block */
+    /* 块的个数 */
 	unsigned int	tp_block_nr;	/* Number of blocks */
+    /* 帧的大小 */
 	unsigned int	tp_frame_size;	/* Size of frame */
+    /* 帧的总数 */
 	unsigned int	tp_frame_nr;	/* Total number of frames */
 };
 

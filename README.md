@@ -45,6 +45,6 @@ kernel版本为 2.6.35
 - [x] proc文件系统
 - [x] 流控(tc)
 - [x] lacp
-- [ ] netfilter
-- [ ] 路由
+- [x] netfilter
+- [x] 路由
 - [ ] tcp协议再次加深理解

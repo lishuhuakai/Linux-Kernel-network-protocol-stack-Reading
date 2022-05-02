@@ -1463,13 +1463,13 @@ static struct in_device *ip_mc_find_dev(struct net *net, struct ip_mreqn *imr)
 		return idev;
 	}
 	if (imr->imr_address.s_addr) {
-		dev = ip_dev_find(net, imr->imr_address.s_addr);
+		dev = ip_dev_find(net, imr->imr_address.s_addr);/* 通过ip来查找设备 */
 		if (!dev)
 			return NULL;
 		dev_put(dev);
 	}
 
-	if (!dev && !ip_route_output_key(net, &rt, &fl)) {
+	if (!dev && !ip_route_output_key(net, &rt, &fl)) { /* 根据出口来查找设备 */
 		dev = rt->u.dst.dev;
 		ip_rt_put(rt);
 	}
@@ -1874,6 +1874,7 @@ int ip_mc_join_group(struct sock *sk , struct ip_mreqn *imr)
 	iml->sflist = NULL;
 	iml->sfmode = MCAST_EXCLUDE;
 	rcu_assign_pointer(inet->mc_list, iml);
+    /* 将对应的网络接口加入addr对应的多播组 */
 	ip_mc_inc_group(in_dev, addr);
 	err = 0;
 done:
@@ -2400,6 +2401,7 @@ void ip_mc_drop_socket(struct sock *sk)
 /* 非常重要的函数,用于判断是否要接收组播报文
  * @param mc_addr 组播地址
  * @param src_addr 组播源地址
+ * @param proto 协议
  */
 int ip_check_mc(struct in_device *in_dev, __be32 mc_addr, __be32 src_addr, u16 proto)
 {
@@ -2408,7 +2410,7 @@ int ip_check_mc(struct in_device *in_dev, __be32 mc_addr, __be32 src_addr, u16 p
 	int rv = 0;
 
 	read_lock(&in_dev->mc_list_lock);
-	for (im=in_dev->mc_list; im; im=im->next) {
+	for (im=in_dev->mc_list; im; im=im->next) { /* 遍历接口加入的组播组,参考ip_mc_join_group */
 		if (im->multiaddr == mc_addr)
 			break;
 	}

@@ -237,6 +237,7 @@ static int ip_finish_output(struct sk_buff *skb)
 }
 
 /* 组播报文的发送
+ * @param skb 待发送的组播报文
  */
 int ip_mc_output(struct sk_buff *skb)
 {
@@ -256,7 +257,7 @@ int ip_mc_output(struct sk_buff *skb)
 	 *	Multicasts are looped back for other local users
 	 */
 
-	if (rt->rt_flags&RTCF_MULTICAST) {
+	if (rt->rt_flags & RTCF_MULTICAST) {
 		if (sk_mc_loop(sk)
 #ifdef CONFIG_IP_MROUTE
 		/* Small optimization: do not loopback not local frames,
@@ -287,7 +288,7 @@ int ip_mc_output(struct sk_buff *skb)
 		}
 	}
 
-	if (rt->rt_flags&RTCF_BROADCAST) { /* 输出路由类型为广播类型 */
+	if (rt->rt_flags & RTCF_BROADCAST) { /* 输出路由类型为广播类型 */
 		struct sk_buff *newskb = skb_clone(skb, GFP_ATOMIC);
 		if (newskb)
 			NF_HOOK(NFPROTO_IPV4, NF_INET_POST_ROUTING, newskb,

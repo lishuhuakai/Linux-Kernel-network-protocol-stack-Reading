@@ -37,6 +37,7 @@
 #define	IFF_RUNNING	0x40		/* interface RFC2863 OPER_UP	*/
 #define	IFF_NOARP	0x80		/* no ARP protocol		*/
 #define	IFF_PROMISC	0x100		/* receive all packets		*/
+/* 接收组播报文 */
 #define	IFF_ALLMULTI	0x200		/* receive all multicast packets*/
 
 #define IFF_MASTER	0x400		/* master of a load balancer 	*/

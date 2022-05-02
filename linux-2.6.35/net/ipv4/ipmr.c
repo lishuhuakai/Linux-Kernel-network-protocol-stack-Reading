@@ -79,6 +79,7 @@ struct mr_table {
 	struct timer_list	ipmr_expire_timer;
 	struct list_head	mfc_unres_queue; /* 临时组播转发缓存项 */
 	struct list_head	mfc_cache_array[MFC_LINES];
+    /* 最多描述32个虚拟接口 */
 	struct vif_device	vif_table[MAXVIFS];
 	int			maxvif;
 	atomic_t		cache_resolve_queue_len;
@@ -146,7 +147,7 @@ static struct mr_table *ipmr_get_table(struct net *net, u32 id)
 	}
 	return NULL;
 }
-
+/* 查找多播路由表 */
 static int ipmr_fib_lookup(struct net *net, struct flowi *flp,
 			   struct mr_table **mrt)
 {
@@ -368,6 +369,7 @@ static void ipmr_del_tunnel(struct net_device *dev, struct vifctl *v)
 	}
 }
 
+/* 构建隧道 */
 static
 struct net_device *ipmr_new_tunnel(struct net *net, struct vifctl *v)
 {
@@ -471,6 +473,7 @@ static void reg_vif_setup(struct net_device *dev)
 	dev->features		|= NETIF_F_NETNS_LOCAL;
 }
 
+/* 注册网络设备 */
 static struct net_device *ipmr_reg_vif(struct net *net, struct mr_table *mrt)
 {
 	struct net_device *dev;
@@ -488,7 +491,7 @@ static struct net_device *ipmr_reg_vif(struct net *net, struct mr_table *mrt)
 		return NULL;
 
 	dev_net_set(dev, net);
-
+    /* 一旦设备注册,就可以通过ifconfig命令看到 */
 	if (register_netdevice(dev)) {
 		free_netdev(dev);
 		return NULL;
@@ -505,7 +508,7 @@ static struct net_device *ipmr_reg_vif(struct net *net, struct mr_table *mrt)
 	IPV4_DEVCONF(in_dev->cnf, RP_FILTER) = 0;
 	rcu_read_unlock();
 
-	if (dev_open(dev))
+	if (dev_open(dev)) /* 启用设备 */
 		goto failure;
 
 	dev_hold(dev);
@@ -663,7 +666,7 @@ static void ipmr_update_thresholds(struct mr_table *mrt, struct mfc_cache *cache
 	cache->mfc_un.res.minvif = MAXVIFS;
 	cache->mfc_un.res.maxvif = 0;
 	memset(cache->mfc_un.res.ttls, 255, MAXVIFS);
-
+    /* 遍历所有的虚拟口 */
 	for (vifi = 0; vifi < mrt->maxvif; vifi++) {
 		if (VIF_EXISTS(mrt, vifi) &&
 		    ttls[vifi] && ttls[vifi] < 255) {
@@ -1002,6 +1005,8 @@ ipmr_cache_unresolved(struct mr_table *mrt, vifi_t vifi, struct sk_buff *skb)
 
 		/*
 		 *	Reflect first query at mrouted.
+		 * 向组播路由守护进程发送一个IGMPMSG_NOCACHE类型的报告,通知组播路由守护进程来处理该未确定
+		 * 组播路由缓存.
 		 */
 		err = ipmr_cache_report(mrt, skb, vifi, IGMPMSG_NOCACHE);
 		if (err < 0) {
@@ -1062,8 +1067,10 @@ static int ipmr_mfc_delete(struct mr_table *mrt, struct mfcctl *mfc)
 	return -ENOENT;
 }
 
-/* 组播转发缓存的创建
+/* 组播转发缓存的创建 -- 多播路由的创建
  * @param mrtsock 表明进行配置的是不是组播路由协议守护进程
+ * @param mfc 待创建组播转换缓存的信息,用mfcctl结构描述,该结构的字段与mfc_cache结构的字段是对应的.
+ * @param mrt 多播路由表
  */
 static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
 			struct mfcctl *mfc, int mrtsock)
@@ -1116,6 +1123,9 @@ static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
 	/*
 	 *	Check to see if we resolved a queued list. If so we
 	 *	need to send on the frames and tidy up.
+	 * 一旦添加了新的组播路由,那么就要检查那些没有转发成功的报文是否能够转发.
+	 * 在临时组播转发缓存队列mfc_unres_queue中查找是否存在相同的缓存项,如果
+	 * 存在,则转发缓存在临时组播转换缓存中的组播报文,否则释放该临时组播转发缓存
 	 */
 	found = false;
 	spin_lock_bh(&mfc_unres_lock);
@@ -1541,7 +1551,7 @@ static void ipmr_queue_xmit(struct net *net, struct mr_table *mrt,
 			    struct sk_buff *skb, struct mfc_cache *c, int vifi)
 {
 	const struct iphdr *iph = ip_hdr(skb);
-	struct vif_device *vif = &mrt->vif_table[vifi];
+	struct vif_device *vif = &mrt->vif_table[vifi]; /* 获得虚拟接口 */
 	struct net_device *dev;
 	struct rtable *rt;
 	int    encap = 0;
@@ -1560,7 +1570,7 @@ static void ipmr_queue_xmit(struct net *net, struct mr_table *mrt,
 	}
 #endif
 
-	if (vif->flags&VIFF_TUNNEL) {
+	if (vif->flags & VIFF_TUNNEL) { /* 根据隧道终点ip地址查找路由 */
 		struct flowi fl = { .oif = vif->link,
 				    .nl_u = { .ip4_u =
 					      { .daddr = vif->remote,
@@ -1570,8 +1580,8 @@ static void ipmr_queue_xmit(struct net *net, struct mr_table *mrt,
 		if (ip_route_output_key(net, &rt, &fl))
 			goto out_free;
 		encap = sizeof(struct iphdr);
-	} else {
-		struct flowi fl = { .oif = vif->link,
+	} else { /* 根据报文目的地址查找路由表项 */
+		struct flowi fl = { .oif = vif->link, /* 匹配输出接口 */
 				    .nl_u = { .ip4_u =
 					      { .daddr = iph->daddr,
 						.tos = RT_TOS(iph->tos) } },
@@ -1637,6 +1647,7 @@ out_free:
 	kfree_skb(skb);
 }
 
+/* 查找虚拟接口 */
 static int ipmr_find_vif(struct mr_table *mrt, struct net_device *dev)
 {
 	int ct;
@@ -1651,7 +1662,8 @@ static int ipmr_find_vif(struct mr_table *mrt, struct net_device *dev)
 /* "local" means that we should preserve one skb (for local delivery) */
 /* 处理组播报文
  * @param skb 待处理的报文
- * @param cache 组播缓存项
+ * @param cache 组播缓存项 -- 组播路由
+ * @param mrt 组播路由表
  */
 static int ip_mr_forward(struct net *net, struct mr_table *mrt,
 			 struct sk_buff *skb, struct mfc_cache *cache,
@@ -1708,9 +1720,10 @@ static int ip_mr_forward(struct net *net, struct mr_table *mrt,
 	mrt->vif_table[vif].bytes_in += skb->len;
 
 	/*
-	 *	Forward the frame
+	 *	Forward the frame -- 向各个虚拟接口转发组播报文
 	 */
-	for (ct = cache->mfc_un.res.maxvif-1; ct >= cache->mfc_un.res.minvif; ct--) {
+	for (ct = cache->mfc_un.res.maxvif - 1; ct >= cache->mfc_un.res.minvif; ct--) {
+        /* 报文只能从阈值小于报文TTL的虚拟接口中输出 */
 		if (ip_hdr(skb)->ttl > cache->mfc_un.res.ttls[ct]) {
 			if (psend != -1) {
 				struct sk_buff *skb2 = skb_clone(skb, GFP_ATOMIC);
@@ -1754,7 +1767,7 @@ int ip_mr_input(struct sk_buff *skb)
 	/* Packet is looped back after forward, it should not be
 	   forwarded second time, but still can be delivered locally.
 	 */
-	if (IPCB(skb)->flags&IPSKB_FORWARDED) /* 报文已经转发过了 */
+	if (IPCB(skb)->flags & IPSKB_FORWARDED) /* 报文已经转发过了 */
 		goto dont_forward;
 
 	err = ipmr_fib_lookup(net, &skb_rtable(skb)->fl, &mrt);
@@ -1763,11 +1776,11 @@ int ip_mr_input(struct sk_buff *skb)
 		return err;
 	}
 
-	if (!local) {
+	if (!local) { /* 如果报文不需要到本机 */
 		    if (IPCB(skb)->opt.router_alert) {
 			    if (ip_call_ra_chain(skb))
 				    return 0;
-		    } else if (ip_hdr(skb)->protocol == IPPROTO_IGMP){
+		    } else if (ip_hdr(skb)->protocol == IPPROTO_IGMP) {
 			    /* IGMPv1 (and broken IGMPv2 implementations sort of
 			       Cisco IOS <= 11.2(8)) do not put router alert
 			       option to IGMP packets destined to routable
@@ -1786,6 +1799,7 @@ int ip_mr_input(struct sk_buff *skb)
 	}
 
 	read_lock(&mrt_lock);
+    /* 在组播路由表中查找缓存项 */
 	cache = ipmr_cache_find(mrt, ip_hdr(skb)->saddr, ip_hdr(skb)->daddr);
 
 	/*
@@ -1794,7 +1808,7 @@ int ip_mr_input(struct sk_buff *skb)
 	if (cache == NULL) { /* 没有找到缓存项 */
 		int vif;
 
-		if (local) {
+		if (local) { /* 输入到本机 */
 			struct sk_buff *skb2 = skb_clone(skb, GFP_ATOMIC);
 			ip_local_deliver(skb);
 			if (skb2 == NULL) {
@@ -1803,9 +1817,9 @@ int ip_mr_input(struct sk_buff *skb)
 			}
 			skb = skb2;
 		}
-
+        /* 查找虚拟接口 */
 		vif = ipmr_find_vif(mrt, skb->dev);
-		if (vif >= 0) {
+		if (vif >= 0) { /* 可以找到虚拟口 */
 			int err2 = ipmr_cache_unresolved(mrt, vif, skb);
 			read_unlock(&mrt_lock);
 
@@ -1936,6 +1950,10 @@ drop:
 }
 #endif
 
+/*
+ * @param skb 待发送的数据报
+ * @param mrt 组播路由表
+ */
 static int __ipmr_fill_mroute(struct mr_table *mrt, struct sk_buff *skb,
 			      struct mfc_cache *c, struct rtmsg *rtm)
 {

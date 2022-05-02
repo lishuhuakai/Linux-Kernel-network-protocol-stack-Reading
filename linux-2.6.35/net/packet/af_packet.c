@@ -163,8 +163,8 @@ static int packet_set_ring(struct sock *sk, struct tpacket_req *req,
 		int closing, int tx_ring);
 
 struct packet_ring_buffer {
-	char			**pg_vec;
-	unsigned int		head;
+	char			**pg_vec; /* 数组 */
+	unsigned int		head; /* 当前可用的地址 */
 	unsigned int		frames_per_block;
 	unsigned int		frame_size;
 	unsigned int		frame_max;
@@ -184,9 +184,9 @@ static void packet_flush_mclist(struct sock *sk);
 struct packet_sock {
 	/* struct sock has to be the first member of packet_sock */
 	struct sock		sk;
-	struct tpacket_stats	stats;
-	struct packet_ring_buffer	rx_ring;
-	struct packet_ring_buffer	tx_ring;
+	struct tpacket_stats	stats; /* 报文统计信息 */
+	struct packet_ring_buffer	rx_ring; /* 接收缓存   */
+	struct packet_ring_buffer	tx_ring; /* 发送缓存  */
 	int			copy_thresh;
 	spinlock_t		bind_lock;
 	struct mutex		pg_vec_lock;
@@ -198,7 +198,7 @@ struct packet_sock {
 	__be16			num;
 	struct packet_mclist	*mclist;
 	atomic_t		mapped;
-	enum tpacket_versions	tp_version;
+	enum tpacket_versions	tp_version; /* 最新版本已经是v3了 */
 	unsigned int		tp_hdrlen;
 	unsigned int		tp_reserve;
 	unsigned int		tp_loss:1;
@@ -289,6 +289,7 @@ static void *packet_lookup_frame(struct packet_sock *po,
 	return h.raw;
 }
 
+/* 当前帧 */
 static inline void *packet_current_frame(struct packet_sock *po,
 		struct packet_ring_buffer *rb,
 		int status)
@@ -296,6 +297,7 @@ static inline void *packet_current_frame(struct packet_sock *po,
 	return packet_lookup_frame(po, rb, rb->head, status);
 }
 
+/* 上一个帧 */
 static inline void *packet_previous_frame(struct packet_sock *po,
 		struct packet_ring_buffer *rb,
 		int status)
@@ -638,6 +640,7 @@ drop:
 	return 0;
 }
 
+
 static int tpacket_rcv(struct sk_buff *skb, struct net_device *dev,
 		       struct packet_type *pt, struct net_device *orig_dev)
 {
@@ -717,13 +720,14 @@ static int tpacket_rcv(struct sk_buff *skb, struct net_device *dev,
 	}
 
 	spin_lock(&sk->sk_receive_queue.lock);
+    /* 在buffer中找一块空闲的内存 */
 	h.raw = packet_current_frame(po, &po->rx_ring, TP_STATUS_KERNEL);
 	if (!h.raw)
 		goto ring_is_full;
 	packet_increment_head(&po->rx_ring);
 	po->stats.tp_packets++;
 	if (copy_skb) {
-		status |= TP_STATUS_COPY;
+		status |= TP_STATUS_COPY; /* 正在拷贝 */
 		__skb_queue_tail(&sk->sk_receive_queue, copy_skb);
 	}
 	if (!po->stats.tp_drops)
@@ -763,18 +767,18 @@ static int tpacket_rcv(struct sk_buff *skb, struct net_device *dev,
 	default:
 		BUG();
 	}
-
+    /* 填充头部信息 */
 	sll = h.raw + TPACKET_ALIGN(hdrlen);
 	sll->sll_halen = dev_parse_header(skb, sll->sll_addr);
 	sll->sll_family = AF_PACKET;
 	sll->sll_hatype = dev->type;
-	sll->sll_protocol = skb->protocol;
+	sll->sll_protocol = skb->protocol; /* 协议类型 */
 	sll->sll_pkttype = skb->pkt_type;
 	if (unlikely(po->origdev))
 		sll->sll_ifindex = orig_dev->ifindex;
 	else
 		sll->sll_ifindex = dev->ifindex;
-
+    /* 设置报文的状态 */
 	__packet_set_status(po, h.raw, status);
 	smp_mb();
 	{
@@ -788,7 +792,7 @@ static int tpacket_rcv(struct sk_buff *skb, struct net_device *dev,
 			p_start++;
 		}
 	}
-
+    /* 注意这里,这里的数据大小是0 */
 	sk->sk_data_ready(sk, 0);
 
 drop_n_restore:
@@ -926,6 +930,7 @@ static int tpacket_fill_skb(struct packet_sock *po, struct sk_buff *skb,
 	return tp_len;
 }
 
+/* 发送数据 */
 static int tpacket_snd(struct packet_sock *po, struct msghdr *msg)
 {
 	struct socket *sock;
@@ -980,6 +985,7 @@ static int tpacket_snd(struct packet_sock *po, struct msghdr *msg)
 		size_max = dev->mtu + reserve;
 
 	do {
+        /* 从缓存之中取出帧 */
 		ph = packet_current_frame(po, &po->tx_ring,
 				TP_STATUS_SEND_REQUEST);
 
@@ -1886,6 +1892,7 @@ static void packet_flush_mclist(struct sock *sk)
 	rtnl_unlock();
 }
 
+/* 设置socket的相关属性 */
 static int
 packet_setsockopt(struct socket *sock, int level, int optname, char __user *optval, unsigned int optlen)
 {
@@ -2314,12 +2321,12 @@ static char **alloc_pg_vec(struct tpacket_req *req, int order)
 	char **pg_vec;
 	int i;
 
-	pg_vec = kzalloc(block_nr * sizeof(char *), GFP_KERNEL);
+	pg_vec = kzalloc(block_nr * sizeof(char *), GFP_KERNEL); /* 先分配二维数组 */
 	if (unlikely(!pg_vec))
 		goto out;
 
 	for (i = 0; i < block_nr; i++) {
-		pg_vec[i] = alloc_one_pg_vec_page(order);
+		pg_vec[i] = alloc_one_pg_vec_page(order); /* 然后分配内存块 */
 		if (unlikely(!pg_vec[i]))
 			goto out_free_pgvec;
 	}
@@ -2333,6 +2340,7 @@ out_free_pgvec:
 	goto out;
 }
 
+/* 设置缓冲区 */
 static int packet_set_ring(struct sock *sk, struct tpacket_req *req,
 		int closing, int tx_ring)
 {
@@ -2389,6 +2397,7 @@ static int packet_set_ring(struct sock *sk, struct tpacket_req *req,
 			goto out;
 
 		err = -ENOMEM;
+        /* 尽量让内存块大小为2^n * PAGE, n就是这里的order */
 		order = get_order(req->tp_block_size);
 		pg_vec = alloc_pg_vec(req, order);
 		if (unlikely(!pg_vec))
@@ -2430,11 +2439,11 @@ static int packet_set_ring(struct sock *sk, struct tpacket_req *req,
 		spin_unlock_bh(&rb_queue->lock);
 
 		order = XC(rb->pg_vec_order, order);
-		req->tp_block_nr = XC(rb->pg_vec_len, req->tp_block_nr);
+		req->tp_block_nr = XC(rb->pg_vec_len, req->tp_block_nr); /* 块总数 */
 
 		rb->pg_vec_pages = req->tp_block_size/PAGE_SIZE;
 		po->prot_hook.func = (po->rx_ring.pg_vec) ?
-						tpacket_rcv : packet_rcv;
+						tpacket_rcv : packet_rcv; /* 替换接收函数 */
 		skb_queue_purge(rb_queue);
 #undef XC
 		if (atomic_read(&po->mapped))
@@ -2460,6 +2469,7 @@ out:
 	return err;
 }
 
+/* 将内核空间的缓冲区映射到用户空间 */
 static int packet_mmap(struct file *file, struct socket *sock,
 		struct vm_area_struct *vma)
 {
